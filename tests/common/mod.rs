@@ -74,10 +74,11 @@ pub fn build_wasm(dir: &str, name: &str, abi: bool) -> Vec<u8> {
     let built = out.join(format!("{name}.wasm"));
     if std::fs::metadata(&built).and_then(|m| m.modified()).map_or(false, |m| m >= newest_source(dir)) {
         let w = std::fs::read(&built).unwrap();
+        assert_host_panic(name, &w);
         g.insert(name.to_string(), w.clone());
         return w;
     }
-    let mut args = vec!["near", "build", "non-reproducible-wasm", "--manifest-path"];
+    let mut args = vec!["near", "build", "non-reproducible-wasm", "--env", NEAR_RUSTFLAGS, "--manifest-path"];
     let manifest = root_dir().join(dir).join("Cargo.toml");
     let manifest = manifest.to_string_lossy().to_string();
     args.push(&manifest);
@@ -88,8 +89,19 @@ pub fn build_wasm(dir: &str, name: &str, abi: bool) -> Vec<u8> {
     let st = Command::new("cargo").args(&args).status().expect("cargo-near is not installed");
     assert!(st.success(), "cargo near build failed for {dir}");
     let w = std::fs::read(out.join(format!("{name}.wasm"))).expect("wasm missing after build");
+    assert_host_panic(name, &w);
     g.insert(name.to_string(), w.clone());
     w
+}
+
+/// cargo-near sets RUSTFLAGS itself, which hides `.cargo/config.toml`; the `near` cfg
+/// selects the on-chain panic_utf8, sha256 and ripemd160 host functions in near-sdk.
+pub const NEAR_RUSTFLAGS: &str = "RUSTFLAGS=--cfg near -C link-arg=-s";
+
+fn assert_host_panic(name: &str, w: &[u8]) {
+    if name == "cachet" {
+        assert!(w.windows(10).any(|x| x == b"panic_utf8"), "cachet.wasm lacks the panic_utf8 import: built without --cfg near");
+    }
 }
 
 pub fn fixture_wasm(name: &str) -> Vec<u8> {

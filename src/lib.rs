@@ -532,16 +532,17 @@ impl Cachet {
     /// signer's own request timeout has certainly passed.
     pub fn recover(&mut self, token_id: TokenId) {
         let mut note = self.owned_idle(&token_id);
-        require!(
-            env::block_height() >= note.pending_since + RECOVER_AFTER_BLOCKS,
-            "request may still be pending"
-        );
-        note.state = match note.state {
+        let prior = match note.state {
             State::Attesting => State::Minted,
             State::Unsealing => State::Sealed,
             State::Resigning | State::Finalizing => State::Unsealed,
             _ => panic_msg("note is not mid-request"),
         };
+        require!(
+            env::block_height() >= note.pending_since + RECOVER_AFTER_BLOCKS,
+            "request may still be pending"
+        );
+        note.state = prior;
         self.notes.insert(token_id, note);
     }
 
@@ -679,6 +680,15 @@ impl Cachet {
         Some(btc::hex_encode(&note.sweep(note.fee).signed_tx(&note.signature)))
     }
 
+    /// Puts the note view in `metadata.extra` so markets read the state without a second call.
+    fn with_note(&self, mut token: Token) -> Token {
+        let view = self.note(token.token_id.clone());
+        if let (Some(meta), Some(view)) = (token.metadata.as_mut(), view) {
+            meta.extra = near_sdk::serde_json::to_string(&view).ok();
+        }
+        token
+    }
+
     fn view(token_id: &str, owner_id: AccountId, note: &Note) -> NoteView {
         NoteView {
             token_id: token_id.to_string(),
@@ -773,11 +783,7 @@ impl NonFungibleTokenCore for Cachet {
     }
 
     fn nft_token(&self, token_id: TokenId) -> Option<Token> {
-        let mut token = self.tokens.nft_token(token_id.clone())?;
-        if let (Some(meta), Some(view)) = (token.metadata.as_mut(), self.note(token_id)) {
-            meta.extra = near_sdk::serde_json::to_string(&view).ok();
-        }
-        Some(token)
+        self.tokens.nft_token(token_id).map(|t| self.with_note(t))
     }
 }
 
@@ -829,7 +835,7 @@ impl NonFungibleTokenEnumeration for Cachet {
     }
 
     fn nft_tokens(&self, from_index: Option<U128>, limit: Option<u64>) -> Vec<Token> {
-        self.tokens.nft_tokens(from_index, limit)
+        self.tokens.nft_tokens(from_index, limit).into_iter().map(|t| self.with_note(t)).collect()
     }
 
     fn nft_supply_for_owner(&self, account_id: AccountId) -> U128 {
@@ -837,7 +843,7 @@ impl NonFungibleTokenEnumeration for Cachet {
     }
 
     fn nft_tokens_for_owner(&self, account_id: AccountId, from_index: Option<U128>, limit: Option<u64>) -> Vec<Token> {
-        self.tokens.nft_tokens_for_owner(account_id, from_index, limit)
+        self.tokens.nft_tokens_for_owner(account_id, from_index, limit).into_iter().map(|t| self.with_note(t)).collect()
     }
 }
 
