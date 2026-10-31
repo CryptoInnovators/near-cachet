@@ -10,9 +10,13 @@ export CACHET_NO_ABI=1
 SANDBOX="cargo test --test sandbox --"
 GIFT="cargo test --test gift_and_lock --"
 UNIT="cargo test --lib --"
+PAPER="cargo test --test paper_design --"
 OUT=target/mutation
 mkdir -p "$OUT"
 want=("$@")
+CUR_FILE=""; CUR_ORIG=""
+restore() { [ -n "$CUR_FILE" ] && [ -f "$CUR_ORIG" ] && cp "$CUR_ORIG" "$CUR_FILE"; CUR_FILE=""; }
+trap restore EXIT INT TERM HUP
 
 mut() { # id file perl-expression test-command guard
   local id="$1" file="$2" expr="$3" cmd="$4" guard="$5"
@@ -20,11 +24,11 @@ mut() { # id file perl-expression test-command guard
     local hit=0 w; for w in "${want[@]}"; do [ "$w" = "$id" ] && hit=1; done
     [ $hit = 1 ] || return 0
   fi
-  cp "$file" "$OUT/$id.orig"
+  cp "$file" "$OUT/$id.orig"; CUR_FILE="$file"; CUR_ORIG="$OUT/$id.orig"
   perl -0pi -e "$expr" "$file"
   if cmp -s "$file" "$OUT/$id.orig"; then echo "$id | $guard | MUTATION DID NOT APPLY"; return 0; fi
   $cmd > "$OUT/$id.red.log" 2>&1; local red=$?
-  cp "$OUT/$id.orig" "$file"
+  restore
   $cmd > "$OUT/$id.green.log" 2>&1; local green=$?
   echo "$id | $guard | red=$red green=$green | $(grep -E 'panicked at|^test result' "$OUT/$id.red.log" | head -1)"
 }
@@ -54,3 +58,7 @@ mut M22 src/lib.rs 's/\| \(SignOp::Resign, State::Unsealed\) => Ok/| (SignOp::Re
 mut M23 src/lib.rs 's/env::block_height\(\) >= note\.pending_since \+ RECOVER_AFTER_BLOCKS/true/' "$SANDBOX in_flight_sign_blocks_transfer" "recover waits out the signer timeout"
 mut M24 src/lib.rs 's/note\.state = prior;/note.state = pending;/' "$SANDBOX failed_sign_returns_the_note_to_sealed" "a failed sign rolls the note back"
 mut M25 src/lib.rs 's/\(SignOp::Unseal, State::Sealed\) \| \(SignOp::Resign, State::Unsealed\) => Ok/(SignOp::Unseal, _) | (SignOp::Resign, State::Unsealed) => Ok/' "$UNIT signing_is_reachable_from_exactly_two" "sign reachable only from the two permitted states"
+mut M26 src/btc.rs 's/if stripped\.len\(\) == 64 \{/if false \&\& stripped.len() == 64 {/' "$PAPER attest_and_finalize_reject_a_64_byte" "attest and finalize reject a 64-byte witness-stripped transaction"
+mut M27 src/btc.rs 's/if stripped\.len\(\) == 64 \{/if false \&\& stripped.len() == 64 {/' "$UNIT rejects_a_64_byte" "64-byte rule in the parser (unit)"
+mut M28 src/lib.rs 's/(let Some\(pubkey\) = key else \{\n\s+)Self::refund\(&owner_id, deposit\.0\);/$1/' "$PAPER a_failed_derivation_mints_no_note" "failed derivation refunds the deposit and mints nothing"
+mut M29 src/lib.rs 's/let Some\(pubkey\) = key else \{/let Some(pubkey) = key.or(Some([7u8; 64])) else {/' "$PAPER a_failed_derivation_mints_no_note" "a note exists only after the derived key came back"
