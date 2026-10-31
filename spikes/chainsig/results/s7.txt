@@ -1,0 +1,46 @@
+ INFO Unsigned transaction:
+ |    signer_id:    cachet-spike-1031.testnet
+ |    receiver_id:  cachet-spike-1031.testnet
+ |    actions:
+ |       -- function call:      
+ |                       method name:  sign
+ |                       args:         {
+ |                                       "path": "cachet/1/0",
+ |                                       "payload_hex": "68e10395686ed0a2f0317700da7ddb9b17258a7de40a438167dceea683d8fc2c",
+ |                                       "signer": "v1.signer-prod.testnet"
+ |                                     }
+ |                       gas:          300.0 Tgas
+ |                       deposit:      1 yoctoNEAR
+ INFO Your transaction was signed successfully.
+ |    Public key: ed25519:2XJYgosCF9jUjvzVB1UKkh3aVu4XJKNE58B5etnL9AYs
+ |    Signature:  ed25519:45tvEgVCNXsGmFwc871NdwRjmHGVy4j44DRULLZqpWedgk281Wri99URWGJCy9ufkVhHkxX7HyTKDmX4azLqdjq5
+ INFO Function execution logs ------------
+ |    Logs [cachet-spike-1031.testnet]:   No logs
+ |    Logs [v1.signer-prod.testnet]:
+ |      sign: predecessor=AccountId("cachet-spike-1031.testnet"), request=SignRequestArgs { path: "cachet/1/0", payload: Ecdsa(BoundedVec { inner: [104, 225, 3, 149, 104, 110, 208, 162, 240, 49, 119, 0, 218, 125, 219, 155, 23, 37, 138, 125, 228, 10, 67, 129, 103, 220, 238, 166, 131, 216, 252, 44], witness: NonEmpty(()) }), domain_id: DomainId(0) }
+ |    Logs [v1.signer-prod.testnet]:   No logs
+ |    Logs [cachet-spike-1031.testnet]:   No logs
+ |    Logs [cachet-spike-1031.testnet]:   No logs
+ |    ------------------------------------
+ INFO Function execution return value (printed to stdout):
+{
+  "big_r": {
+    "affine_point": "021ae82d39248b54c878db58f090be3a8e978c84d3865f3452b1de75d93b65d055"
+  },
+  "recovery_id": 0,
+  "s": {
+    "scalar": "6d9c645ac229b9cace3348c3ce62a133855f2a2afb46f5e37502f9ce3d1fdfb7"
+  },
+  "scheme": "Secp256k1"
+}
+ INFO 
+ |    The "sign" call to <cachet-spike-1031.testnet> on behalf of <cachet-spike-1031.testnet> succeeded.
+ |    Gas burned: 10.1 Tgas
+ |    Transaction fee: 0.0009592073305443 NEAR
+ |    Transaction ID: DaxH3JyBoZh7LmgT8UgnTjgRZEsmaTdYW19dHpjdyP1y
+ |    To see the transaction in the transaction explorer, please open this url in your browser:
+ |    https://explorer.testnet.near.org/transactions/DaxH3JyBoZh7LmgT8UgnTjgRZEsmaTdYW19dHpjdyP1y
+Here is your console command if you need to script it or re-run:
+    near contract call-function as-transaction cachet-spike-1031.testnet sign json-args '{"signer":"v1.signer-prod.testnet","path":"cachet/1/0","payload_hex":"68e10395686ed0a2f0317700da7ddb9b17258a7de40a438167dceea683d8fc2c"}' prepaid-gas '300.0 Tgas' attached-deposit '1 yoctoNEAR' sign-as cachet-spike-1031.testnet network-config testnet sign-with-keychain send
+`near` CLI has a new update available 0.20.0 →  0.30.1
+To update `near` CLI use: near extensions self-update

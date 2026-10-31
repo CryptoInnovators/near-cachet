@@ -1,0 +1,33 @@
+ INFO Unsigned transaction:
+ |    signer_id:    cachet-spike-1031.testnet
+ |    receiver_id:  cachet-spike-1031.testnet
+ |    actions:
+ |       -- function call:      
+ |                       method name:  derive
+ |                       args:         {
+ |                                       "path": "cachet/1/0",
+ |                                       "signer": "v1.signer-prod.testnet"
+ |                                     }
+ |                       gas:          30.0 Tgas
+ |                       deposit:      0 NEAR
+ INFO Your transaction was signed successfully.
+ |    Public key: ed25519:2XJYgosCF9jUjvzVB1UKkh3aVu4XJKNE58B5etnL9AYs
+ |    Signature:  ed25519:4CbHqwwatvfU5QdJD7TAyCcQgtTvfYHmW41Pvfwo9c6eFH1XWD27pCsrwXMMTcvBw8RGNehcWN9ZXoQ3JjhZARdQ
+ INFO Function execution logs ------------
+ |    Logs [cachet-spike-1031.testnet]:   No logs
+ |    Logs [v1.signer-prod.testnet]:   No logs
+ |    Logs [cachet-spike-1031.testnet]:   No logs
+ |    ------------------------------------
+ INFO Function execution return value (printed to stdout):
+"secp256k1:5FJrb7umzFk9pUGkoYDDa29oGAPHZD6DVH5qRRhmzR1ZdnedcZBGWXidjNYSK7ovK8R1gc7zaHh3rsNmcoTvLSQx"
+ INFO 
+ |    The "derive" call to <cachet-spike-1031.testnet> on behalf of <cachet-spike-1031.testnet> succeeded.
+ |    Gas burned: 7.4 Tgas
+ |    Transaction fee: 0.0007122758172767 NEAR
+ |    Transaction ID: 5fyjttQggYV5hMavVLgaHnam3Gsi4UMd9Ak7tBfvyXE4
+ |    To see the transaction in the transaction explorer, please open this url in your browser:
+ |    https://explorer.testnet.near.org/transactions/5fyjttQggYV5hMavVLgaHnam3Gsi4UMd9Ak7tBfvyXE4
+Here is your console command if you need to script it or re-run:
+    near contract call-function as-transaction cachet-spike-1031.testnet derive json-args '{"signer":"v1.signer-prod.testnet","path":"cachet/1/0"}' prepaid-gas '30.0 Tgas' attached-deposit '0 NEAR' sign-as cachet-spike-1031.testnet network-config testnet sign-with-keychain send
+`near` CLI has a new update available 0.20.0 →  0.30.1
+To update `near` CLI use: near extensions self-update

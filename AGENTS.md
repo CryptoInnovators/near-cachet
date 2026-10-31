@@ -13,7 +13,7 @@ Cachet: sealed bitcoin notes as NEP-171 NFTs on NEAR. Rust contract in `src/`, n
 ## Commands
 - `source scripts/env.sh` then `cargo test --lib` (unit and property tests).
 - `./scripts/fetch-fixtures.sh` then `cargo test --test sandbox --test gift_and_lock --test intents`.
-- `cargo near build non-reproducible-wasm` builds `target/near/cachet.wasm` and its ABI.
+- `cargo near build non-reproducible-wasm --env 'RUSTFLAGS=--cfg near -C link-arg=-s'` builds `target/near/cachet.wasm` and its ABI. The `--env` is required: cargo-near sets RUSTFLAGS itself and hides `.cargo/config.toml`, and without `--cfg near` the wasm loses `panic_utf8` and every revert message.
 - `./scripts/mutate.sh` breaks each guard in turn and expects a red test.
 
 ## Rules
