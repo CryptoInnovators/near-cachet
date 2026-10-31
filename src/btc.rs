@@ -225,6 +225,9 @@ pub fn parse_tx(raw: &[u8]) -> Result<ParsedTx, &'static str> {
     stripped.extend_from_slice(&raw[..4]);
     stripped.extend_from_slice(&raw[body_start..body_end]);
     stripped.extend_from_slice(&raw[locktime_start..]);
+    if stripped.len() == 64 {
+        return Err("64-byte transaction");
+    }
     Ok(ParsedTx { txid: sha256d(&stripped), inputs, outputs })
 }
 
@@ -602,6 +605,28 @@ mod tests {
         let l = serialize(&stripped);
         assert_ne!(l, raw);
         assert_eq!(parse_tx(&l).unwrap().txid, parse_tx(&raw).unwrap().txid);
+    }
+
+    /// Paper 1 (WTSC25): a 64-byte Merkle inner node parses as a 64-byte transaction.
+    #[test]
+    fn rejects_a_64_byte_witness_stripped_transaction() {
+        let mut raw = vec![1, 0, 0, 0, 1];
+        raw.extend_from_slice(&[7u8; 32]);
+        raw.extend_from_slice(&0u32.to_le_bytes());
+        raw.push(0);
+        raw.extend_from_slice(&u32::MAX.to_le_bytes());
+        raw.push(1);
+        raw.extend_from_slice(&5000u64.to_le_bytes());
+        raw.extend_from_slice(&[4, 0xaa, 0xbb, 0xcc, 0xdd]);
+        raw.extend_from_slice(&0u32.to_le_bytes());
+        assert_eq!(raw.len(), 64);
+        assert_eq!(parse_tx(&raw), Err("64-byte transaction"));
+        let script_len_at = 4 + 1 + 32 + 4 + 1 + 4 + 1 + 8;
+        let mut other = raw.clone();
+        other[script_len_at] = 5;
+        other.insert(script_len_at + 1, 0xee);
+        assert_eq!(other.len(), 65);
+        assert!(parse_tx(&other).is_ok(), "65-byte neighbour must still parse");
     }
 
     #[test]
