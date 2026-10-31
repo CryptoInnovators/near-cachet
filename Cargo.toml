@@ -1,0 +1,48 @@
+[package]
+name = "cachet"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Sealed bitcoin notes as NEP-171 NFTs, signed by NEAR chain signatures"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+
+[dependencies]
+near-sdk = { version = "5.30.0", features = ["legacy", "unstable"] }
+near-contract-standards = { version = "5.30.0", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+ripemd = { version = "0.1", default-features = false }
+bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+near-workspaces = { version = "0.24.0", features = ["unstable"] }
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+bitcoin = { version = "0.32", features = ["rand-std"] }
+k256 = { version = "0.13", features = ["ecdsa", "sha256"] }
+sha3 = "0.10"
+hex = "0.4"
+proptest = "1"
+ed25519-dalek = "2"
+near-sdk = { version = "5.30.0", features = ["legacy", "unstable", "unit-testing"] }
+
+[workspace]
+members = ["fixtures/signer", "fixtures/market"]
+exclude = ["spikes"]
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+
+[package.metadata.near.reproducible_build]
+image = "sourcescan/cargo-near:0.16.0-rust-1.86.0"
+container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked"]

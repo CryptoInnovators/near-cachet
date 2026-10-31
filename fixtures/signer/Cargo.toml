@@ -1,0 +1,17 @@
+[package]
+name = "cachet-signer-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Test harness that speaks the v1.signer ABI with known keys so sandbox tests can check real ECDSA signatures"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+near-sdk = "5.30.0"
+k256 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdsa", "sha256"] }
+sha2 = { version = "0.10", default-features = false }
+sha3 = { version = "0.10", default-features = false }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+bs58 = { version = "0.5", default-features = false, features = ["alloc"] }

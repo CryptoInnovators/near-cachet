@@ -1,0 +1,12 @@
+[package]
+name = "cachet-market-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Test harness NFT receiver that holds, returns or re-enters on nft_on_transfer, standing in for a market escrow in sandbox tests"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+near-sdk = "5.30.0"
