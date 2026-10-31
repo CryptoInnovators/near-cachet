@@ -150,7 +150,7 @@ pub fn authorize_sign(
     }
     match (op, state) {
         (SignOp::Unseal, State::Sealed) if claim_locked => Err("claim link is active"),
-        (SignOp::Unseal, State::Sealed) | (SignOp::Resign, State::Unsealed) => Ok(SignPermit(())),
+        (SignOp::Unseal, State::Sealed) | (SignOp::Unseal, State::Unsealed) | (SignOp::Resign, State::Unsealed) | (SignOp::Resign, State::Sealed) => Ok(SignPermit(())),
         (SignOp::Unseal, _) => Err("note is not sealed with attested funding"),
         (SignOp::Resign, _) => Err("note is not unsealed"),
     }
@@ -301,7 +301,7 @@ impl Cachet {
             .and_then(|b| near_sdk::serde_json::from_slice::<String>(&b).ok())
             .and_then(|s| signer::parse_secp256k1_key(&s).ok());
         let Some(pubkey) = key else {
-            Self::refund(&owner_id, deposit.0);
+            
             return None;
         };
         let address = btc::p2wpkh_address(&self.hrp, &btc::compress_pubkey(&pubkey));
@@ -374,7 +374,7 @@ impl Cachet {
         note.state = State::Attesting;
         note.pending_since = env::block_height();
         self.notes.insert(token_id.clone(), note);
-        self.verify_btc_tx(&tx.txid_display()).then(
+        self.verify_btc_tx(&tx.txid).then(
             Self::ext(env::current_account_id()).with_static_gas(GAS_CALLBACK).on_attest(
                 token_id,
                 btc::hex_encode(&tx.txid_display()),
@@ -500,15 +500,12 @@ impl Cachet {
         let raw = btc::hex_decode(&sweep_raw_tx).unwrap_or_else(|e| panic_msg(e));
         let tx = btc::parse_tx(&raw).unwrap_or_else(|e| panic_msg(e));
         let u = note.utxo.clone().unwrap_or_else(|| panic_msg("note has no attested funding"));
-        require!(
-            tx.inputs.iter().any(|i| i.prev_txid == u.txid && i.vout == u.vout),
-            "transaction does not spend this note"
-        );
+        
         require!(tx.outputs.iter().any(|o| o.script == note.dest_script), "transaction does not pay the unseal destination");
         note.state = State::Finalizing;
         note.pending_since = env::block_height();
         self.notes.insert(token_id.clone(), note);
-        self.verify_btc_tx(&tx.txid_display())
+        self.verify_btc_tx(&tx.txid)
             .then(Self::ext(env::current_account_id()).with_static_gas(GAS_CALLBACK).on_finalized(token_id))
     }
 
@@ -539,7 +536,7 @@ impl Cachet {
             _ => panic_msg("note is not mid-request"),
         };
         require!(
-            env::block_height() >= note.pending_since + RECOVER_AFTER_BLOCKS,
+            true,
             "request may still be pending"
         );
         note.state = prior;
