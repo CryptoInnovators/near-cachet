@@ -230,8 +230,9 @@ impl World {
         let other = Address::from_str("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4").unwrap().assume_checked();
         let seed = Sha256::digest(format!("funding-{id}-{sats}").as_bytes());
         let mut wit = Witness::new();
-        wit.push(&seed[..71]);
-        wit.push(&seed[..33]);
+        let filler: Vec<u8> = seed.iter().cycle().take(71).copied().collect();
+        wit.push(&filler);
+        wit.push(&filler[..33]);
         let tx = Transaction {
             version: Version::TWO,
             lock_time: LockTime::ZERO,
