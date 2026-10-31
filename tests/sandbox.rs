@@ -73,8 +73,8 @@ async fn lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract() {
     let f = w.fund(&id, 100_000, 6).await;
     let r = w.attest(&w.alice, &id, &f).await;
     assert!(r.is_success(), "{}", fail_text(&r));
-    assert_eq!(r.json::<bool>().unwrap(), true);
     println!("GAS attest {:.1} Tgas", tgas(r.total_gas_burnt));
+    assert_eq!(r.json::<bool>().unwrap(), true);
     let n = w.note(&id).await.unwrap();
     assert_eq!(n["state"], "Sealed");
     assert_eq!(n["utxo"]["sats"], 100_000);
@@ -84,8 +84,8 @@ async fn lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract() {
 
     let r = w.unseal(&w.alice, &id, DEST, 10).await;
     assert!(r.is_success(), "{}", fail_text(&r));
-    assert_eq!(r.json::<bool>().unwrap(), true);
     println!("GAS unseal {:.1} Tgas", tgas(r.total_gas_burnt));
+    assert_eq!(r.json::<bool>().unwrap(), true);
     assert_eq!(w.state(&id).await, "Unsealed");
     let log = w.sign_log().await;
     assert_eq!(log.len(), 1, "exactly one sign call");
@@ -112,8 +112,8 @@ async fn lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract() {
     w.confirm(&tx.compute_txid().to_string(), 6).await;
     let r = fin(hex::encode(serialize(&tx))).await;
     assert!(r.is_success(), "{}", fail_text(&r));
-    assert_eq!(r.json::<bool>().unwrap(), true);
     println!("GAS finalize {:.1} Tgas", tgas(r.total_gas_burnt));
+    assert_eq!(r.json::<bool>().unwrap(), true);
     assert!(w.note(&id).await.is_none());
     assert!(w.owner(&id).await.is_none());
     let supply: String = w.worker.view(w.cachet.id(), "nft_total_supply").await.unwrap().json().unwrap();

@@ -36,23 +36,53 @@ pub fn root_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// Newest mtime among the sources a package build depends on.
+fn newest_source(dir: &str) -> std::time::SystemTime {
+    let mut newest = std::time::UNIX_EPOCH;
+    let base = root_dir().join(dir);
+    let mut stack = vec![base.join("src"), base.join("Cargo.toml")];
+    if dir != "." {
+        stack.push(root_dir().join("Cargo.lock"));
+    }
+    while let Some(p) = stack.pop() {
+        if p.file_name().map_or(false, |n| n.to_string_lossy().starts_with("._")) {
+            continue;
+        }
+        let md = std::fs::metadata(&p).unwrap();
+        if md.is_dir() {
+            for e in std::fs::read_dir(&p).unwrap() {
+                stack.push(e.unwrap().path());
+            }
+        } else {
+            newest = newest.max(md.modified().unwrap());
+        }
+    }
+    newest
+}
+
 static BUILT: OnceLock<Mutex<HashMap<String, Vec<u8>>>> = OnceLock::new();
 
 /// Builds `dir` with cargo-near once per process and returns the wasm.
 pub fn build_wasm(dir: &str, name: &str, abi: bool) -> Vec<u8> {
     let map = BUILT.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut g = map.lock().unwrap();
+    let mut g = map.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(w) = g.get(name) {
         return w.clone();
     }
     let out = root_dir().join("target/wasm");
     std::fs::create_dir_all(&out).unwrap();
+    let built = out.join(format!("{name}.wasm"));
+    if std::fs::metadata(&built).and_then(|m| m.modified()).map_or(false, |m| m >= newest_source(dir)) {
+        let w = std::fs::read(&built).unwrap();
+        g.insert(name.to_string(), w.clone());
+        return w;
+    }
     let mut args = vec!["near", "build", "non-reproducible-wasm", "--manifest-path"];
     let manifest = root_dir().join(dir).join("Cargo.toml");
     let manifest = manifest.to_string_lossy().to_string();
     args.push(&manifest);
     args.extend(["--out-dir", out.to_str().unwrap()]);
-    if !abi {
+    if !abi || std::env::var_os("CACHET_NO_ABI").is_some() {
         args.push("--no-abi");
     }
     let st = Command::new("cargo").args(&args).status().expect("cargo-near is not installed");

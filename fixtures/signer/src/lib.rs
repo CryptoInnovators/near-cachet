@@ -6,42 +6,37 @@
 use k256::ecdsa::{signature::hazmat::PrehashSigner, RecoveryId, Signature, SigningKey};
 use k256::elliptic_curve::{sec1::ToEncodedPoint, PrimeField};
 use k256::{ProjectivePoint, Scalar};
-use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::serde::Serialize;
 use near_sdk::store::LookupMap;
 use near_sdk::{env, near, require, AccountId, Gas, GasWeight, PanicOnDefault, Promise, PromiseOrValue};
 use sha2::{Digest, Sha256};
 use sha3::Sha3_256;
 
-#[derive(Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json])]
 pub enum Payload {
     Ecdsa(String),
 }
 
-#[derive(Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json])]
 pub struct SignArgs {
     pub path: String,
     pub payload_v2: Payload,
     pub domain_id: u32,
 }
 
-#[derive(Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json])]
 pub struct BitcoinRequest {
     pub tx_id: String,
     pub confirmations: u64,
     pub extractors: Vec<String>,
 }
 
-#[derive(Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json])]
 pub enum ForeignChainRequest {
     Bitcoin(BitcoinRequest),
 }
 
-#[derive(Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json])]
 pub struct VerifyArgs {
     pub request: ForeignChainRequest,
     pub domain_id: u32,
@@ -73,15 +68,15 @@ pub struct VerifyResponse {
     signature: SignatureResponse,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
 pub struct ChainTx {
     pub block_hash: String,
     pub confirmations: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
 pub struct SignCall {
     pub predecessor: AccountId,
     pub path: String,
