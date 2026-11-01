@@ -3,14 +3,14 @@
 //! the test, so sandbox tests can verify the signatures it returns with an independent
 //! secp256k1 implementation. Only the sandbox ever deploys this.
 
-use k256::ecdsa::{signature::hazmat::PrehashSigner, RecoveryId, Signature, SigningKey};
+use k256::ecdsa::{RecoveryId, Signature, SigningKey};
 use k256::elliptic_curve::{sec1::ToEncodedPoint, PrimeField};
 use k256::{ProjectivePoint, Scalar};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use near_sdk::serde::Serialize;
 use near_sdk::store::LookupMap;
 use near_sdk::{env, near, require, AccountId, Gas, GasWeight, PanicOnDefault, Promise, PromiseOrValue};
-use sha2::{Digest, Sha256};
-use sha3::Sha3_256;
+use sha3::{Digest, Sha3_256};
 
 #[near(serializers = [json])]
 pub enum Payload {
@@ -22,25 +22,6 @@ pub struct SignArgs {
     pub path: String,
     pub payload_v2: Payload,
     pub domain_id: u32,
-}
-
-#[near(serializers = [json])]
-pub struct BitcoinRequest {
-    pub tx_id: String,
-    pub confirmations: u64,
-    pub extractors: Vec<String>,
-}
-
-#[near(serializers = [json])]
-pub enum ForeignChainRequest {
-    Bitcoin(BitcoinRequest),
-}
-
-#[near(serializers = [json])]
-pub struct VerifyArgs {
-    pub request: ForeignChainRequest,
-    pub domain_id: u32,
-    pub payload_version: u8,
 }
 
 #[derive(Serialize)]
@@ -61,17 +42,22 @@ pub enum SignatureResponse {
     Secp256k1 { big_r: AffinePoint, s: ScalarHex, recovery_id: u8 },
 }
 
-#[derive(Serialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct VerifyResponse {
-    payload_hash: String,
-    signature: SignatureResponse,
-}
-
 #[near(serializers = [borsh, json])]
 #[derive(Clone)]
 pub struct ChainTx {
     pub block_hash: String,
+    pub confirmations: u64,
+}
+
+#[near(serializers = [borsh])]
+#[derive(Clone)]
+pub struct ProofArgsV2 {
+    pub tx_id: [u8; 32],
+    pub tx_block_blockhash: [u8; 32],
+    pub tx_index: u64,
+    pub merkle_proof: Vec<[u8; 32]>,
+    pub coinbase_tx_id: [u8; 32],
+    pub coinbase_merkle_proof: Vec<[u8; 32]>,
     pub confirmations: u64,
 }
 
@@ -90,7 +76,8 @@ pub struct Fixture {
     roots: LookupMap<u32, [u8; 32]>,
     txs: LookupMap<String, ChainTx>,
     sign_log: Vec<SignCall>,
-    verify_calls: u64,
+    lc_calls: u64,
+    lc_last_args: String,
     fail_sign: bool,
     wrong_hash: bool,
     high_s: bool,
@@ -136,22 +123,6 @@ fn respond(sk: &Scalar, hash: &[u8; 32], high_s: bool) -> SignatureResponse {
     }
 }
 
-/// Borsh of `ForeignTxSignPayload::V1 { request: Bitcoin(..), values: [BlockHash] }`, the
-/// layout near/mpc hashes in `compute_msg_hash`.
-pub fn bitcoin_payload_hash(tx_id: &[u8; 32], confirmations: u64, block_hash: &[u8; 32]) -> [u8; 32] {
-    let mut b = vec![0u8]; // ForeignTxSignPayload::V1
-    b.push(3); // ForeignChainRpcRequest::Bitcoin
-    b.extend_from_slice(tx_id);
-    b.extend_from_slice(&confirmations.to_le_bytes());
-    b.extend_from_slice(&1u32.to_le_bytes()); // extractors.len
-    b.push(0); // BitcoinExtractor::BlockHash
-    b.extend_from_slice(&1u32.to_le_bytes()); // values.len
-    b.push(0); // ExtractedValue::BitcoinExtractedValue
-    b.push(0); // BitcoinExtractedValue::BlockHash
-    b.extend_from_slice(block_hash);
-    Sha256::digest(&b).into()
-}
-
 fn hex32(s: &str) -> [u8; 32] {
     hex::decode(s).expect("hex").try_into().expect("32 bytes")
 }
@@ -159,11 +130,10 @@ fn hex32(s: &str) -> [u8; 32] {
 #[near]
 impl Fixture {
     #[init]
-    pub fn new(sign_root: String, foreign_root: String) -> Self {
+    pub fn new(sign_root: String) -> Self {
         let mut roots = LookupMap::new(b"r".to_vec());
         roots.insert(0, hex32(&sign_root));
-        roots.insert(3, hex32(&foreign_root));
-        Self { roots, txs: LookupMap::new(b"t".to_vec()), sign_log: vec![], verify_calls: 0, fail_sign: false, wrong_hash: false, high_s: false, hang_sign: false }
+        Self { roots, txs: LookupMap::new(b"t".to_vec()), sign_log: vec![], lc_calls: 0, lc_last_args: String::new(), fail_sign: false, wrong_hash: false, high_s: false, hang_sign: false }
     }
 
     pub fn derived_public_key(&self, path: String, predecessor: Option<AccountId>, domain_id: Option<u32>) -> String {
@@ -200,19 +170,16 @@ impl Fixture {
         env::panic_str("fixture: yield timed out")
     }
 
-    #[payable]
-    pub fn verify_foreign_transaction(&mut self, request: VerifyArgs) -> VerifyResponse {
-        require!(env::attached_deposit().as_yoctonear() >= 1, "deposit at least 1 yocto");
-        require!(env::prepaid_gas().as_tgas() >= 15, "attach at least 15 Tgas");
-        require!(request.domain_id == 3 && request.payload_version == 1, "fixture: domain 3 payload v1 only");
-        let ForeignChainRequest::Bitcoin(r) = request.request;
-        require!(r.extractors == ["BlockHash"], "fixture: BlockHash extractor only");
-        let tx = self.txs.get(&r.tx_id).cloned().unwrap_or_else(|| env::panic_str("TransactionNotFound"));
-        require!(tx.confirmations >= r.confirmations, "NotEnoughBlockConfirmations");
-        self.verify_calls += 1;
-        let ph = bitcoin_payload_hash(&hex32(&r.tx_id), r.confirmations, &hex32(&tx.block_hash));
-        let root = scalar(self.roots.get(&3).unwrap());
-        VerifyResponse { payload_hash: hex::encode(ph), signature: respond(&root, &ph, false) }
+    pub fn verify_transaction_inclusion_v2(&mut self, #[serializer(borsh)] args: ProofArgsV2) -> bool {
+        self.lc_calls += 1;
+        self.lc_last_args = STANDARD.encode(near_sdk::borsh::to_vec(&args).unwrap());
+        let txid = hex::encode(reversed(args.tx_id));
+        let tx = self.txs.get(&txid).unwrap_or_else(|| env::panic_str("block does not belong to the current main chain"));
+        if hex32(&tx.block_hash) != reversed(args.tx_block_blockhash) {
+            return false;
+        }
+        require!(tx.confirmations >= args.confirmations, "Not enough blocks confirmed");
+        true
     }
 
     pub fn set_tx(&mut self, txid: String, block_hash: String, confirmations: u64) {
@@ -230,9 +197,18 @@ impl Fixture {
         self.sign_log.clone()
     }
 
-    pub fn verify_calls(&self) -> u64 {
-        self.verify_calls
+    pub fn lc_calls(&self) -> u64 {
+        self.lc_calls
     }
+
+    pub fn lc_last_args(&self) -> String {
+        self.lc_last_args.clone()
+    }
+}
+
+fn reversed(mut bytes: [u8; 32]) -> [u8; 32] {
+    bytes.reverse();
+    bytes
 }
 
 
@@ -274,14 +250,4 @@ mod tests {
         assert_ne!(derive(LIVE_ROOT, "other.testnet", "cachet/1/0"), LIVE_DERIVED);
     }
 
-    #[test]
-    fn bitcoin_payload_hash_reproduces_the_live_mainnet_attestation() {
-        // mainnet tx EFq8tUeeSMVCATrkbmyWs5VrtgM4nrFjUaTgC2RwJSDQ: Bitcoin tx 58ee37.. at
-        // 1 confirmation in block 00000000000000000001fadaf3f8591e071c202762193cf78e389ea691f2ecab,
-        // response payload_hash 67d5b3ab8340bd07bf8d17a44d7b8080aba42449ce5fc272c4378eadd25220ba
-        let txid: [u8; 32] = hex::decode("58ee376171bcc4e2cc040c13848d420b5eaf2f634872055b0a08c1fc2ec6453c").unwrap().try_into().unwrap();
-        let block: [u8; 32] = hex::decode("00000000000000000001fadaf3f8591e071c202762193cf78e389ea691f2ecab").unwrap().try_into().unwrap();
-        assert_eq!(hex::encode(bitcoin_payload_hash(&txid, 1, &block)), "67d5b3ab8340bd07bf8d17a44d7b8080aba42449ce5fc272c4378eadd25220ba");
-        assert_ne!(hex::encode(bitcoin_payload_hash(&txid, 2, &block)), "67d5b3ab8340bd07bf8d17a44d7b8080aba42449ce5fc272c4378eadd25220ba");
-    }
 }

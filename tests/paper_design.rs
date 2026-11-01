@@ -27,21 +27,21 @@ fn tx_of_64_bytes() -> String {
     hex::encode(raw)
 }
 
-async fn verify_calls(w: &World) -> u64 {
-    w.worker.view(w.signer.id(), "verify_calls").await.unwrap().json().unwrap()
+async fn lc_calls(w: &World) -> u64 {
+    w.worker.view(w.signer.id(), "lc_calls").await.unwrap().json().unwrap()
 }
 
 #[tokio::test]
 async fn attest_and_finalize_reject_a_64_byte_transaction_before_asking_the_signer() {
     let w = World::new(2).await;
     let (id, _) = w.sealed_note(&w.alice, 60_000).await;
-    let spent = verify_calls(&w).await;
-    assert!(spent > 0, "the honest attest did reach verify_foreign_transaction");
+    let spent = lc_calls(&w).await;
+    assert!(spent > 0, "the honest attest did reach the Bitcoin light client");
     let minted = w.mint(&w.alice).await;
     let r = w
         .alice
         .call(w.cachet.id(), "attest")
-        .args_json(json!({"token_id": minted, "raw_tx": tx_of_64_bytes(), "vout": 0}))
+        .args_json(json!({"token_id": minted, "raw_tx": tx_of_64_bytes(), "vout": 0, "proof": inclusion_proof(&"00".repeat(32))}))
         .max_gas()
         .transact()
         .await
@@ -52,14 +52,14 @@ async fn attest_and_finalize_reject_a_64_byte_transaction_before_asking_the_sign
     let r = w
         .bob
         .call(w.cachet.id(), "finalize")
-        .args_json(json!({"token_id": id, "sweep_raw_tx": tx_of_64_bytes()}))
+        .args_json(json!({"token_id": id, "sweep_raw_tx": tx_of_64_bytes(), "proof": inclusion_proof(&"00".repeat(32))}))
         .max_gas()
         .transact()
         .await
         .unwrap();
     assert_reverts(&r, "64-byte transaction");
     assert_eq!(w.state(&id).await, "Unsealed");
-    assert_eq!(verify_calls(&w).await, spent, "no 64-byte attempt reached the signer");
+    assert_eq!(lc_calls(&w).await, spent, "no 64-byte attempt reached the light client");
 }
 
 #[tokio::test]
@@ -70,7 +70,7 @@ async fn a_failed_derivation_mints_no_note_and_shows_no_address() {
     let orphan = orphan.deploy(&wasm).await.unwrap().unwrap();
     orphan
         .call("new")
-        .args_json(json!({"signer_id": "no-signer.test.near", "hrp": "bc", "confirmations": 2}))
+        .args_json(json!({"signer_id": "no-signer.test.near", "hrp": "bc", "confirmations": 2, "btc_light_client": w.signer.id()}))
         .transact()
         .await
         .unwrap()

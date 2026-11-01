@@ -156,7 +156,7 @@ impl World {
         let signer = signer.deploy(&signer_wasm).await.unwrap().unwrap();
         signer
             .call("new")
-            .args_json(json!({"sign_root": sk_from_label("cachet test sign root"), "foreign_root": sk_from_label("cachet test foreign root")}))
+            .args_json(json!({"sign_root": sk_from_label("cachet test sign root")}))
             .transact()
             .await
             .unwrap()
@@ -166,7 +166,7 @@ impl World {
         let cachet = cachet.deploy(&cachet_wasm).await.unwrap().unwrap();
         cachet
             .call("new")
-            .args_json(json!({"signer_id": signer.id(), "hrp": "bc", "confirmations": confirmations}))
+            .args_json(json!({"signer_id": signer.id(), "hrp": "bc", "confirmations": confirmations, "btc_light_client": signer.id()}))
             .transact()
             .await
             .unwrap()
@@ -266,7 +266,16 @@ impl World {
 
     pub async fn attest(&self, who: &Account, id: &str, f: &Funding) -> ExecutionFinalResult {
         who.call(self.cachet.id(), "attest")
-            .args_json(json!({"token_id": id, "raw_tx": f.raw_hex, "vout": f.vout}))
+            .args_json(json!({"token_id": id, "raw_tx": f.raw_hex, "vout": f.vout, "proof": inclusion_proof(&f.txid)}))
+            .max_gas()
+            .transact()
+            .await
+            .unwrap()
+    }
+
+    pub async fn finalize(&self, who: &Account, id: &str, raw: String, txid: &str) -> ExecutionFinalResult {
+        who.call(self.cachet.id(), "finalize")
+            .args_json(json!({"token_id": id, "sweep_raw_tx": raw, "proof": inclusion_proof(txid)}))
             .max_gas()
             .transact()
             .await
@@ -301,6 +310,16 @@ impl World {
             .await
             .unwrap()
     }
+}
+
+pub fn inclusion_proof(txid: &str) -> Value {
+    json!({
+        "block_hash": hex::encode(Sha256::digest(txid.as_bytes())),
+        "tx_index": 1,
+        "merkle_proof": ["00".repeat(32)],
+        "coinbase_tx_id": "11".repeat(32),
+        "coinbase_merkle_proof": ["22".repeat(32)]
+    })
 }
 
 pub const DEST: &str = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";

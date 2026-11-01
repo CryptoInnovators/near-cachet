@@ -6,6 +6,7 @@
 //! call on an attested, unspent slot.
 
 pub mod btc;
+pub mod light_client;
 pub mod signer;
 
 use near_contract_standards::non_fungible_token::approval::NonFungibleTokenApproval;
@@ -26,10 +27,7 @@ use near_sdk::{
 };
 use std::collections::HashMap;
 
-use signer::{
-    ext_signer, BitcoinRequest, ForeignChainRequest, Payload, SignArgs, SignatureResponse,
-    VerifyArgs, VerifyResponse, DOMAIN_FOREIGN_TX, DOMAIN_SIGN, PAYLOAD_VERSION_V1,
-};
+use signer::{ext_signer, Payload, SignArgs, SignatureResponse, DOMAIN_SIGN};
 
 const GAS_DERIVE: Gas = Gas::from_tgas(10);
 const GAS_MINT_CALLBACK: Gas = Gas::from_tgas(25);
@@ -91,7 +89,7 @@ pub struct Utxo {
     pub txid: [u8; 32],
     pub vout: u32,
     pub sats: u64,
-    pub attestation: [u8; 32],
+    pub block_hash: [u8; 32],
 }
 
 #[near(serializers = [borsh])]
@@ -172,7 +170,7 @@ pub struct UtxoView {
     pub txid: String,
     pub vout: u32,
     pub sats: u64,
-    pub attestation_payload_hash: String,
+    pub block_hash: String,
 }
 
 #[near(serializers = [json])]
@@ -201,6 +199,7 @@ pub struct NoteView {
     pub sweep: Option<SweepView>,
     pub claim: Option<ClaimView>,
     pub in_transfer: bool,
+    pub pending_since: u64,
 }
 
 #[near(serializers = [json])]
@@ -208,6 +207,7 @@ pub struct Config {
     pub signer_id: AccountId,
     pub hrp: String,
     pub confirmations: u64,
+    pub btc_light_client: AccountId,
 }
 
 fn path_of(token_id: &str, slot: u32) -> String {
@@ -226,16 +226,16 @@ pub struct Cachet {
     notes: LookupMap<TokenId, Note>,
     next_id: u64,
     signer_id: AccountId,
+    btc_light_client: AccountId,
     hrp: String,
     confirmations: u64,
 }
 
 #[near]
 impl Cachet {
-    /// `hrp` is the bech32 prefix of the Bitcoin network the notes live on (`bc`, `tb`,
-    /// `bcrt`). The contract has no owner and no setters: these three values are final.
+    /// The contract has no owner and no setters: these network trust roots are final.
     #[init]
-    pub fn new(signer_id: AccountId, hrp: String, confirmations: u64) -> Self {
+    pub fn new(signer_id: AccountId, hrp: String, confirmations: u64, btc_light_client: AccountId) -> Self {
         require!(matches!(hrp.as_str(), "bc" | "tb" | "bcrt"), "hrp must be bc, tb or bcrt");
         require!((1..=100).contains(&confirmations), "confirmations must be 1 to 100");
         let me = env::current_account_id();
@@ -262,6 +262,7 @@ impl Cachet {
             notes: LookupMap::new(Key::Notes),
             next_id: 1,
             signer_id,
+            btc_light_client,
             hrp,
             confirmations,
         }
@@ -270,7 +271,12 @@ impl Cachet {
     // ---- views ----
 
     pub fn config(&self) -> Config {
-        Config { signer_id: self.signer_id.clone(), hrp: self.hrp.clone(), confirmations: self.confirmations }
+        Config {
+            signer_id: self.signer_id.clone(),
+            hrp: self.hrp.clone(),
+            confirmations: self.confirmations,
+            btc_light_client: self.btc_light_client.clone(),
+        }
     }
 
     pub fn note(&self, token_id: TokenId) -> Option<NoteView> {
@@ -373,9 +379,8 @@ impl Cachet {
 
     /// Binds a Bitcoin funding output to the note. `raw_tx` is the funding transaction in
     /// hex; the contract checks that output `vout` pays this note's address, reads the
-    /// amount from the bytes, and asks the MPC network (domain 3) to confirm that the
-    /// transaction id is on Bitcoin with the configured confirmations.
-    pub fn attest(&mut self, token_id: TokenId, raw_tx: String, vout: u32) -> Promise {
+    /// amount from the bytes, and asks the Bitcoin light client to verify its inclusion.
+    pub fn attest(&mut self, token_id: TokenId, raw_tx: String, vout: u32, proof: light_client::InclusionProof) -> Promise {
         let mut note = self.owned_idle(&token_id);
         require!(note.state == State::Minted, "note is not awaiting funding");
         let raw = btc::hex_decode(&raw_tx).unwrap_or_else(|e| panic_msg(e));
@@ -384,30 +389,33 @@ impl Cachet {
         require!(out.script == btc::p2wpkh_script(&note.pubkey33()), "output does not pay this note");
         require!(out.value >= MIN_NOTE_SATS, "funding below 1000 sats");
         let sats = out.value;
+        let args = light_client::proof_args_v2(tx.txid, &proof, self.confirmations).unwrap_or_else(|e| panic_msg(e));
         note.state = State::Attesting;
         note.pending_since = env::block_height();
         self.notes.insert(token_id.clone(), note);
-        self.verify_btc_tx(&tx.txid_display()).then(
+        light_client::verify(self.btc_light_client.clone(), args).then(
             Self::ext(env::current_account_id()).with_static_gas(GAS_CALLBACK).on_attest(
                 token_id,
                 btc::hex_encode(&tx.txid_display()),
                 vout,
                 sats,
+                proof.block_hash,
             ),
         )
     }
 
     #[private]
-    pub fn on_attest(&mut self, token_id: TokenId, txid: String, vout: u32, sats: u64) -> bool {
+    pub fn on_attest(&mut self, token_id: TokenId, txid: String, vout: u32, sats: u64, block_hash: String) -> bool {
         let Some(mut note) = self.notes.get(&token_id).cloned() else { return false };
         if note.state != State::Attesting {
             return false;
         }
-        let proof = Self::verify_result();
+        let included = light_client::included(0);
         let txid = btc::hex_32(&txid).map(btc::reversed);
-        match (proof, txid) {
-            (Some(attestation), Ok(txid)) => {
-                note.utxo = Some(Utxo { txid, vout, sats, attestation });
+        let block_hash = btc::hex_32(&block_hash).map(btc::reversed);
+        match (included, txid, block_hash) {
+            (true, Ok(txid), Ok(block_hash)) => {
+                note.utxo = Some(Utxo { txid, vout, sats, block_hash });
                 note.state = State::Sealed;
             }
             _ => note.state = State::Minted,
@@ -507,7 +515,7 @@ impl Cachet {
 
     /// Anyone. Proves that a confirmed Bitcoin transaction spent the note's UTXO to the
     /// unseal destination, then burns the note.
-    pub fn finalize(&mut self, token_id: TokenId, sweep_raw_tx: String) -> Promise {
+    pub fn finalize(&mut self, token_id: TokenId, sweep_raw_tx: String, proof: light_client::InclusionProof) -> Promise {
         let mut note = self.notes.get(&token_id).cloned().unwrap_or_else(|| panic_msg("unknown note"));
         require!(note.state == State::Unsealed && !note.in_transfer, "note is not unsealed");
         let raw = btc::hex_decode(&sweep_raw_tx).unwrap_or_else(|e| panic_msg(e));
@@ -518,10 +526,11 @@ impl Cachet {
             "transaction does not spend this note"
         );
         require!(tx.outputs.iter().any(|o| o.script == note.dest_script), "transaction does not pay the unseal destination");
+        let args = light_client::proof_args_v2(tx.txid, &proof, self.confirmations).unwrap_or_else(|e| panic_msg(e));
         note.state = State::Finalizing;
         note.pending_since = env::block_height();
         self.notes.insert(token_id.clone(), note);
-        self.verify_btc_tx(&tx.txid_display())
+        light_client::verify(self.btc_light_client.clone(), args)
             .then(Self::ext(env::current_account_id()).with_static_gas(GAS_CALLBACK).on_finalized(token_id))
     }
 
@@ -531,7 +540,7 @@ impl Cachet {
         if note.state != State::Finalizing {
             return false;
         }
-        if Self::verify_result().is_some() {
+        if light_client::included(0) {
             self.burn(&token_id);
             true
         } else {
@@ -655,28 +664,6 @@ impl Cachet {
             })
     }
 
-    fn verify_btc_tx(&self, display_txid: &[u8; 32]) -> Promise {
-        ext_signer::ext(self.signer_id.clone())
-            .with_attached_deposit(ONE_YOCTO)
-            .with_static_gas(GAS_SIGNER)
-            .verify_foreign_transaction(VerifyArgs {
-                request: ForeignChainRequest::Bitcoin(BitcoinRequest {
-                    tx_id: btc::hex_encode(display_txid),
-                    confirmations: self.confirmations,
-                    extractors: vec!["BlockHash".to_string()],
-                }),
-                domain_id: DOMAIN_FOREIGN_TX,
-                payload_version: PAYLOAD_VERSION_V1,
-            })
-    }
-
-    /// Payload hash of a successful `verify_foreign_transaction` promise result.
-    fn verify_result() -> Option<[u8; 32]> {
-        let bytes = env::promise_result_checked(0, MAX_PROMISE_RESULT).ok()?;
-        let r: VerifyResponse = near_sdk::serde_json::from_slice(&bytes).ok()?;
-        btc::hex_32(&r.payload_hash).ok()
-    }
-
     /// DER signature for the pending sighash, accepted only if it recovers to the note key.
     fn signature_for(note: &Note, resp: SignatureResponse) -> Option<Vec<u8>> {
         let SignatureResponse::Secp256k1 { big_r, s, recovery_id } = resp else { return None };
@@ -722,7 +709,7 @@ impl Cachet {
                 txid: btc::hex_encode(&btc::reversed(u.txid)),
                 vout: u.vout,
                 sats: u.sats,
-                attestation_payload_hash: btc::hex_encode(&u.attestation),
+                block_hash: btc::hex_encode(&btc::reversed(u.block_hash)),
             }),
             sweep: (!note.dest_script.is_empty()).then(|| SweepView {
                 destination_script: btc::hex_encode(&note.dest_script),
@@ -735,6 +722,7 @@ impl Cachet {
                 locked: note.claim_locked(),
             }),
             in_transfer: note.in_transfer,
+            pending_since: note.pending_since,
         }
     }
 

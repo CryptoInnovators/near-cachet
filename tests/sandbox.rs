@@ -4,7 +4,7 @@
 mod common;
 
 use bitcoin::absolute::LockTime;
-use bitcoin::consensus::serialize;
+use bitcoin::consensus::{deserialize, serialize};
 use bitcoin::hashes::Hash;
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::transaction::Version;
@@ -80,7 +80,7 @@ async fn lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract() {
     assert_eq!(n["utxo"]["sats"], 100_000);
     assert_eq!(n["utxo"]["vout"], 1);
     assert_eq!(n["utxo"]["txid"], f.txid.as_str());
-    assert_eq!(n["utxo"]["attestation_payload_hash"].as_str().unwrap().len(), 64);
+    assert_eq!(n["utxo"]["block_hash"].as_str().unwrap().len(), 64);
 
     let r = w.unseal(&w.alice, &id, DEST, 10).await;
     assert!(r.is_success(), "{}", fail_text(&r));
@@ -100,16 +100,19 @@ async fn lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract() {
     assert_reverts(&w.transfer(&w.alice, &id, w.bob.id().as_str()).await, "cannot move in this state");
 
     // the sweep must be confirmed on Bitcoin before finalize
+    let sweep_txid = tx.compute_txid().to_string();
     let fin = |raw: String| {
         let w = w.clone();
         let id = id.clone();
-        async move { w.bob.call(w.cachet.id(), "finalize").args_json(json!({"token_id": id, "sweep_raw_tx": raw})).max_gas().transact().await.unwrap() }
+        let txid = sweep_txid.clone();
+        async move { w.finalize(&w.bob, &id, raw, &txid).await }
     };
+    w.confirm(&sweep_txid, 1).await;
     let r = fin(hex::encode(serialize(&tx))).await;
     assert!(r.is_success());
     assert_eq!(r.json::<bool>().unwrap(), false, "unconfirmed sweep is not accepted");
     assert_eq!(w.state(&id).await, "Unsealed");
-    w.confirm(&tx.compute_txid().to_string(), 6).await;
+    w.confirm(&sweep_txid, 6).await;
     let r = fin(hex::encode(serialize(&tx))).await;
     assert!(r.is_success(), "{}", fail_text(&r));
     println!("GAS finalize {:.1} Tgas", tgas(r.total_gas_burnt));
@@ -176,8 +179,8 @@ async fn attest_rejects_tx_paying_another_address_and_bad_vout() {
     assert_reverts(&r, "output does not pay this note");
     assert_eq!(w.state(&id).await, "Minted");
     assert!(w.note(&id).await.unwrap()["utxo"].is_null());
-    let v: u64 = w.worker.view(w.signer.id(), "verify_calls").await.unwrap().json().unwrap();
-    assert_eq!(v, 0, "no MPC call was made for a transaction that cannot belong to the note");
+    let v: u64 = w.worker.view(w.signer.id(), "lc_calls").await.unwrap().json().unwrap();
+    assert_eq!(v, 0, "no light-client call was made for a transaction that cannot belong to the note");
 }
 
 fn clone_funding(f: &Funding) -> Funding {
@@ -339,7 +342,10 @@ async fn finalize_guards() {
     let fin = |id: &str, raw: String| {
         let w = w.clone();
         let id = id.to_string();
-        async move { w.carol.call(w.cachet.id(), "finalize").args_json(json!({"token_id": id, "sweep_raw_tx": raw})).max_gas().transact().await.unwrap() }
+        async move {
+            let tx: Transaction = deserialize(&hex::decode(&raw).unwrap()).unwrap();
+            w.finalize(&w.carol, &id, raw, &tx.compute_txid().to_string()).await
+        }
     };
     assert_reverts(&fin(&id, f.raw_hex.clone()).await, "note is not unsealed");
     assert!(w.unseal(&w.alice, &id, DEST, 10).await.json::<bool>().unwrap());
@@ -374,7 +380,7 @@ async fn finalize_requires_the_sweep_to_pay_the_unseal_destination() {
         }],
     };
     w.confirm(&tx.compute_txid().to_string(), 6).await;
-    let r = w.carol.call(w.cachet.id(), "finalize").args_json(json!({"token_id": id, "sweep_raw_tx": hex::encode(serialize(&tx))})).max_gas().transact().await.unwrap();
+    let r = w.finalize(&w.carol, &id, hex::encode(serialize(&tx)), &tx.compute_txid().to_string()).await;
     assert_reverts(&r, "transaction does not pay the unseal destination");
     assert!(w.note(&id).await.is_some(), "note survives");
 }
