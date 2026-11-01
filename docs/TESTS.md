@@ -6,23 +6,23 @@ Commands:
 
 ```
 ./scripts/test.sh                      # fetch fixtures, then cargo test --workspace --no-fail-fast
-./scripts/mutate.sh                    # all 30 rows
+./scripts/mutate.sh                    # all 34 rows
 ./scripts/mutate.sh M26                # one row
 ```
 
-The mutation rows below were produced by the `mutation` workflow (`.github/workflows/mutation.yml`, GitHub Actions run 41285131135, ubuntu-latest, four parallel jobs, conclusion success) at commit `59a6eb9`, then copied from the job logs. The full test run at that commit is `ci` run 41285123641, conclusion success: 15 unit, 19 `sandbox`, 10 `gift_and_lock`, 3 `intents`, 2 `paper_design`, 2 `web_parity` tests.
+The mutation rows below were produced by the `mutation` workflow (`.github/workflows/mutation.yml`, GitHub Actions run 41290436563, ubuntu-latest, five parallel jobs, conclusion success) at commit `27bffe4`, then copied from the job logs. The full test run at that commit is `ci` run 41290145879, conclusion success: 15 unit, 19 `sandbox`, 10 `gift_and_lock`, 3 `intents`, 2 `paper_design`, 3 `review_fixes`, 2 `web_parity` tests.
 
 ## Methods and the tests that gate them
 
 | Method | Sandbox tests | Mutation rows |
 |---|---|---|
-| `mint_note` | `mint_requires_a_storage_deposit_and_refunds_the_rest`, `token_ids_are_never_reused_after_a_burn`, `a_failed_derivation_mints_no_note_and_shows_no_address` | M28, M29 |
+| `mint_note` | `mint_requires_a_storage_deposit_and_refunds_the_rest`, `token_ids_are_never_reused_after_a_burn`, `a_failed_derivation_mints_no_note_and_shows_no_address`, `the_mint_deposit_funds_every_later_byte_a_note_can_grow` | M28, M29, M33, M34 |
 | `attest` | `lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract`, `attest_rejects_tx_paying_another_address_and_bad_vout`, `attest_rejects_a_raw_tx_that_does_not_hash_to_a_confirmed_txid`, `attest_waits_for_the_configured_confirmations`, `attest_is_owner_only_once_only_and_bounded`, `attest_and_finalize_reject_a_64_byte_transaction_before_asking_the_signer` | M05, M06, M07, M08, M19, M26 |
 | `unseal` | `non_owner_unseal_reverts_and_never_reaches_sign`, `double_unseal_reverts`, `unseal_before_attestation_reverts`, `unseal_input_validation`, `signature_over_the_wrong_hash_is_rejected_by_ecrecover`, `high_s_signatures_are_folded_to_low_s_and_still_verify`, `failed_sign_returns_the_note_to_sealed_and_retry_works` | M01, M10, M11, M17, M18, M24 |
 | `resign` | `resign_changes_only_the_fee_and_only_for_the_owner` | M22 |
 | `finalize` | `finalize_guards`, `finalize_requires_the_sweep_to_pay_the_unseal_destination`, `lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract` | M12, M13, M21 |
-| `create_claim`, `claim`, `cancel_claim` | `claim_link_moves_a_sealed_note_once_and_binds_the_receiver`, `after_expiry_the_sender_can_cancel_or_unseal`, `expired_link_still_claims_until_the_owner_acts`, `selling_the_note_kills_the_claim_link`, `unsealed_note_cannot_be_gifted_or_claimed`, `the_signature_made_by_the_web_page_moves_the_note` | M03, M14, M15 |
-| `recover` | `in_flight_sign_blocks_transfer_and_second_unseal_until_the_signer_times_out` | M23 |
+| `create_claim`, `claim`, `cancel_claim` | `claim_clears_the_old_owners_approvals`, `claim_link_moves_a_sealed_note_once_and_binds_the_receiver`, `after_expiry_the_sender_can_cancel_or_unseal`, `expired_link_still_claims_until_the_owner_acts`, `selling_the_note_kills_the_claim_link`, `unsealed_note_cannot_be_gifted_or_claimed`, `the_signature_made_by_the_web_page_moves_the_note` | M03, M14, M15, M31 |
+| `recover` | `in_flight_sign_blocks_transfer_and_second_unseal_until_the_signer_times_out`, `a_note_whose_signature_became_public_is_never_resealed` | M23, M32 |
 | `nft_transfer`, `nft_transfer_call` | `unsealed_and_minted_transfers_follow_the_state_table`, `a_note_held_by_an_escrow_cannot_be_unsealed_by_the_seller`, `a_receiver_cannot_unseal_from_inside_nft_on_transfer`, `escrow_that_returns_the_note_hands_it_back`, `unsealed_note_cannot_be_listed` | M02, M04 |
 | sale through `intents.near` | `real_intents_near_holds_a_sealed_note_and_nobody_can_unseal_it`, `a_signed_token_diff_trade_hands_the_unseal_right_to_the_buyer`, `a_seller_who_withdraws_before_execution_voids_the_trade` (the mainnet `intents.near` and `wrap.near` code, fetched by `view_code`) | M30 |
 | signing permit | `signing_is_reachable_from_exactly_three_configurations_in_two_states`, `source_has_one_signer_sign_call_site_behind_a_permit` | M25 |
@@ -57,10 +57,14 @@ M21 | finalize burns only after the sweep is attested | red=101 green=0 | thread
 M22 | resign only after unseal | red=101 green=0 | thread 'resign_changes_only_the_fee_and_only_for_the_owner' panicked at tests/sandbox.rs:17:5:
 M23 | recover waits out the signer timeout | red=101 green=0 | thread 'in_flight_sign_blocks_transfer_and_second_unseal_until_the_signer_times_out' panicked at tests/sandbox.rs:17:5:
 M24 | a failed sign rolls the note back | red=101 green=0 | thread 'failed_sign_returns_the_note_to_sealed_and_retry_works' panicked at tests/sandbox.rs:246:5:
-M25 | sign reachable only from the two permitted states | red=101 green=0 | thread 'tests::signing_is_reachable_from_exactly_three_configurations_in_two_states' panicked at src/lib.rs:894:9:
+M25 | sign reachable only from the two permitted states | red=101 green=0 | thread 'tests::signing_is_reachable_from_exactly_three_configurations_in_two_states' panicked at src/lib.rs:915:9:
 M26 | attest and finalize reject a 64-byte witness-stripped transaction | red=101 green=0 | thread 'attest_and_finalize_reject_a_64_byte_transaction_before_asking_the_signer' panicked at tests/paper_design.rs:11:5:
 M27 | 64-byte rule in the parser (unit) | red=101 green=0 | thread 'btc::tests::rejects_a_64_byte_witness_stripped_transaction' panicked at src/btc.rs:623:9:
 M28 | failed derivation refunds the deposit and mints nothing | red=101 green=0 | thread 'a_failed_derivation_mints_no_note_and_shows_no_address' panicked at tests/paper_design.rs:88:5:
 M29 | a note exists only after the derived key came back | red=101 green=0 | thread 'a_failed_derivation_mints_no_note_and_shows_no_address' panicked at tests/paper_design.rs:82:5:
 M30 | after an intents.near sale only the buyer can unseal | red=101 green=0 | thread 'a_signed_token_diff_trade_hands_the_unseal_right_to_the_buyer' panicked at tests/intents.rs:226:5:
+M31 | claim clears NEP-178 approvals | red=101 green=0 | thread 'claim_clears_the_old_owners_approvals' panicked at tests/review_fixes.rs:76:5:
+M32 | recover never re-seals an unsealing note | red=101 green=0 | thread 'a_note_whose_signature_became_public_is_never_resealed' panicked at tests/review_fixes.rs:177:5:
+M33 | mint prefunds the note storage growth | red=101 green=0 | thread 'the_mint_deposit_funds_every_later_byte_a_note_can_grow' panicked at tests/review_fixes.rs:109:5:
+M34 | mint charges the note record itself | red=101 green=0 | thread 'the_mint_deposit_funds_every_later_byte_a_note_can_grow' panicked at tests/review_fixes.rs:109:5:
 ```

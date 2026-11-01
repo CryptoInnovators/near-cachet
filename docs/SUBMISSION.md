@@ -11,7 +11,7 @@ Product: Cachet is a NEP-171 NFT contract on NEAR where each note owns a native 
 
 How NEAR fits: Chain Signatures gives a contract its own bitcoin keys and a bitcoin confirmation check with no bridge pool and no oracle. The contract has no owner method and no setters; v1.signer.sign has one call site, behind a permit that only the owner check issues. The trust root is the NEAR MPC signer threshold.
 
-Tests: sandbox suites against real mainnet bitcoin transactions and the mainnet intents.near code, and a mutation script that breaks each of 25 guards and expects a red test.
+Tests: sandbox suites against real mainnet bitcoin transactions and the mainnet intents.near code, and a mutation script that breaks each of 34 guards and expects a red test.
 ```
 
 ## tracks
