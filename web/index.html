@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cachet: sealed bitcoin notes on NEAR</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>Cachet: sealed bitcoin notes on NEAR</h1>
+  <p class="sub">Each note is a NEAR NFT that owns a native Bitcoin address. The address is derived by the NEAR MPC signer (v1.signer). Funding stays at that address while the note changes hands.</p>
+
+  <div class="panel">
+    <h2>NEAR mainnet block</h2>
+    <p class="what">You are seeing the current NEAR mainnet block height and its timestamp, read at page load.</p>
+    <div id="block" class="mono">loading...</div>
+  </div>
+
+  <div class="panel">
+    <h2>Contract account</h2>
+    <p class="what">You are seeing whether the note contract account exists on NEAR mainnet. Enter an account id, or leave blank to check cachet.near.</p>
+    <div class="row">
+      <input id="contract" placeholder="contract account id, e.g. cachet.near">
+      <button id="checkAcct" class="secondary">Check account</button>
+    </div>
+    <div id="acct" class="mono">loading...</div>
+  </div>
+
+  <div class="panel">
+    <h2>Derived Bitcoin address for a note path</h2>
+    <p class="what">You are seeing the BTC address derived by v1.signer for the path cachet/&lt;token&gt;/&lt;slot&gt;, with the contract as predecessor. The address links to mempool.space.</p>
+    <div class="row">
+      <input id="token" placeholder="token id, e.g. 1">
+      <input id="slot" placeholder="slot, e.g. 0">
+      <button id="derive">Derive address</button>
+    </div>
+    <div id="derived" class="mono">not configured</div>
+    <div id="mempool" class="small"></div>
+  </div>
+
+  <div class="panel">
+    <h2>v1.signer account</h2>
+    <p class="what">You are seeing the account that holds the MPC root key behind every note address.</p>
+    <div id="signer" class="mono">loading...</div>
+  </div>
+
+  <div class="panel">
+    <h2>Address on mempool.space</h2>
+    <p class="what">You are seeing live chain data for the derived address from mempool.space, read after derivation.</p>
+    <div id="mpdata" class="mono">no address yet</div>
+  </div>
+
+  <footer>Static page. No framework, no build step. Data is read live from public endpoints at page load.</footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
