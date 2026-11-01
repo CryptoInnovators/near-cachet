@@ -12,6 +12,7 @@ use near_contract_standards::non_fungible_token::approval::NonFungibleTokenAppro
 use near_contract_standards::non_fungible_token::core::{NonFungibleTokenCore, NonFungibleTokenResolver};
 use near_contract_standards::non_fungible_token::enumeration::NonFungibleTokenEnumeration;
 use near_contract_standards::non_fungible_token::events::{NftBurn, NftMint, NftTransfer};
+use near_contract_standards::non_fungible_token::refund_approved_account_ids;
 use near_contract_standards::non_fungible_token::metadata::{
     NFTContractMetadata, NonFungibleTokenMetadataProvider, TokenMetadata, NFT_METADATA_SPEC,
 };
@@ -46,6 +47,16 @@ pub const MIN_CLAIM_BLOCKS: u64 = 3_600;
 pub const MAX_CLAIM_BLOCKS: u64 = 3_000_000;
 /// The signer drops a yielded request after 200 blocks; recovery waits twice that.
 pub const RECOVER_AFTER_BLOCKS: u64 = 400;
+/// Bytes a note can still add after mint: the attested UTXO (76), a 34-byte destination
+/// script and a 72-byte DER signature.
+const LATE_GROWTH_BYTES: u64 = 76 + 34 + 72;
+/// Bytes a transfer to a new owner can add: a 64-byte owner id replacing a shorter one in
+/// `owner_by_id`, plus a fresh per-owner token set keyed by a 64-byte account id (measured
+/// at 144 bytes for a 13-byte id).
+const OWNER_CHURN_BYTES: u64 = 64 + 200;
+/// Charged on top of the bytes a mint writes, so no later callback can run the contract's
+/// balance below its storage stake.
+pub const NOTE_STORAGE_RESERVE_BYTES: u64 = LATE_GROWTH_BYTES + OWNER_CHURN_BYTES;
 
 #[derive(BorshStorageKey)]
 #[near(serializers = [borsh])]
@@ -344,7 +355,9 @@ impl Cachet {
                 pending_since: 0,
             },
         );
-        let used = env::storage_usage().saturating_sub(before) as u128;
+        // `store::LookupMap` writes lazily; without the flush the note record is not in `used`.
+        self.notes.flush();
+        let used = env::storage_usage().saturating_sub(before) as u128 + NOTE_STORAGE_RESERVE_BYTES as u128;
         let cost = used * env::storage_byte_cost().as_yoctonear();
         if cost > deposit.0 {
             self.burn(&token_id);
@@ -528,14 +541,17 @@ impl Cachet {
         }
     }
 
-    /// Owner only. Returns a note stuck in an in-flight state to its prior state once the
-    /// signer's own request timeout has certainly passed.
+    /// Owner only. Returns a note stuck in an in-flight state once the
+    /// signer's own request timeout has certainly passed: attesting goes back to Minted,
+    /// signing and finalizing states go to Unsealed.
     pub fn recover(&mut self, token_id: TokenId) {
         let mut note = self.owned_idle(&token_id);
         let prior = match note.state {
             State::Attesting => State::Minted,
-            State::Unsealing => State::Sealed,
-            State::Resigning | State::Finalizing => State::Unsealed,
+            // The signer may have signed even though `on_signed` never committed, and its
+            // result is public in the signer's receipt. The unseal destination stays bound
+            // and the note stays frozen: `resign` stores a signature, `finalize` burns it.
+            State::Unsealing | State::Resigning | State::Finalizing => State::Unsealed,
             _ => panic_msg("note is not mid-request"),
         };
         require!(
@@ -590,6 +606,11 @@ impl Cachet {
         require!(old != new_owner, "note already belongs to that account");
         note.claim_key = None;
         self.notes.insert(token_id.clone(), note);
+        // `internal_transfer_unguarded` leaves NEP-178 approvals in place; the old owner's
+        // approved accounts must not outlive the claim.
+        if let Some(approved) = self.tokens.approvals_by_id.as_mut().and_then(|a| a.remove(&token_id)) {
+            refund_approved_account_ids(old.clone(), &approved).detach();
+        }
         self.tokens.internal_transfer_unguarded(&token_id, &old, &new_owner);
         NftTransfer {
             old_owner_id: &old,

@@ -12,6 +12,7 @@ GIFT="cargo test --test gift_and_lock --"
 UNIT="cargo test --lib --"
 PAPER="cargo test --test paper_design --"
 INTENTS="cargo test --test intents --"
+REVIEW="cargo test --test review_fixes --"
 OUT=target/mutation
 mkdir -p "$OUT"
 want=("$@")
@@ -64,3 +65,7 @@ mut M27 src/btc.rs 's/if stripped\.len\(\) == 64 \{/if false \&\& stripped.len()
 mut M28 src/lib.rs 's/(let Some\(pubkey\) = key else \{\n\s+)Self::refund\(&owner_id, deposit\.0\);/$1/' "$PAPER a_failed_derivation_mints_no_note" "failed derivation refunds the deposit and mints nothing"
 mut M29 src/lib.rs 's/let Some\(pubkey\) = key else \{/let Some(pubkey) = key.or(Some([7u8; 64])) else {/' "$PAPER a_failed_derivation_mints_no_note" "a note exists only after the derived key came back"
 mut M30 src/lib.rs 's/if !caller_is_owner \{/if false \&\& !caller_is_owner {/' "$INTENTS a_signed_token_diff_trade" "after an intents.near sale only the buyer can unseal"
+mut M31 src/lib.rs 's/if let Some\(approved\) = self\.tokens\.approvals_by_id\.as_mut\(\)\.and_then\(\|a\| a\.remove\(&token_id\)\) \{/if let Some(approved) = None::<std::collections::HashMap<AccountId, u64>> {/' "$REVIEW claim_clears_the_old_owners_approvals" "claim clears NEP-178 approvals"
+mut M32 src/lib.rs 's/State::Unsealing \| State::Resigning \| State::Finalizing => State::Unsealed,/State::Unsealing => State::Sealed,\n            State::Resigning | State::Finalizing => State::Unsealed,/' "$REVIEW a_note_whose_signature_became_public" "recover never re-seals an unsealing note"
+mut M33 src/lib.rs 's/ \+ NOTE_STORAGE_RESERVE_BYTES as u128;/;/' "$REVIEW the_mint_deposit_funds_every_later" "mint prefunds the note storage growth"
+mut M34 src/lib.rs 's/\n        self\.notes\.flush\(\);//' "$REVIEW the_mint_deposit_funds_every_later" "mint charges the note record itself"

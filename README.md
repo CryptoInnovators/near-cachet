@@ -48,8 +48,8 @@ The address derivation is checked against the `bitcoin` crate and the contract b
 | Minted | `mint_note` callback with the derived key | `attest` |
 | Attesting | `attest` | MPC confirms: Sealed. Fails or times out: Minted (`recover` after 400 blocks) |
 | Sealed | funding attested | `unseal` (owner), `create_claim`, transfer, listing |
-| Unsealing | `unseal` | signature recovers to the note key: Unsealed. Otherwise Sealed |
-| Unsealed | sweep signed | `resign` (owner, fee only), `finalize` |
+| Unsealing | `unseal` | signature recovers to the note key: Unsealed. The signer reports a failure: Sealed. No callback lands: `recover` after 400 blocks freezes the note at Unsealed with its destination, because the signature may already be public |
+| Unsealed | sweep signed, or recovered from an unanswered unseal | `resign` (owner, fee only), `finalize` |
 | Finalizing | `finalize` with the confirmed sweep | burn |
 
 `authorize_sign` is the only function that issues a `SignPermit`, and `request_signature` is the only caller of `v1.signer.sign`. A unit test enumerates every combination of operation, state, owner, in-transfer and claim-lock and asserts exactly three can sign. A source test asserts one `.sign(` call site.
@@ -58,14 +58,14 @@ The address derivation is checked against the `bitcoin` crate and the contract b
 
 | Method | Who | Effect |
 |---|---|---|
-| `mint_note` | anyone, 0.02 NEAR minimum | derives the key, mints, shows the address only after the receipt succeeds |
+| `mint_note` | anyone, 0.02 NEAR minimum | derives the key, mints, shows the address only after the receipt succeeds; the deposit also prefunds every byte the note can add later, so a callback never meets an empty storage balance |
 | `attest(token_id, raw_tx, vout)` | owner | parses the raw transaction, rejects any whose witness-stripped form is 64 bytes, checks the output pays the note, asks MPC domain 3 to confirm the txid |
 | `unseal(token_id, btc_dest, fee_rate)` | owner | signs a one-input BIP143 sweep through domain 0, low-S, verified by `ecrecover` against the note key before it is stored |
 | `resign(token_id, fee_rate)` | owner | same sweep to the same destination at a new fee |
 | `finalize(token_id, sweep_raw_tx)` | anyone | burns the note after MPC confirms a Bitcoin transaction that spends the UTXO to the unseal destination |
 | `create_claim`, `claim`, `cancel_claim` | owner, link holder | gift by link: an ed25519 key registered on the note; `claim` accepts only a signature over `cachet-claim:<contract>:<token>:<new owner>` |
-| `recover` | owner | returns a note stuck in an in-flight state after the signer's own 200 block timeout |
-| `nft_transfer`, `nft_transfer_call` | owner | only Minted and Sealed notes move; a transfer clears any claim key; a note held by an escrow cannot be unsealed by its seller or by the receiver |
+| `recover` | owner | after the signer's own 200 block timeout: Attesting returns to Minted, Unsealing, Resigning and Finalizing land on Unsealed (frozen, destination kept) |
+| `nft_transfer`, `nft_transfer_call` | owner | only Minted and Sealed notes move; a transfer clears any claim key; `claim` also clears NEP-178 approvals and refunds them to the previous owner; a note held by an escrow cannot be unsealed by its seller or by the receiver |
 
 ## Trust roots
 
