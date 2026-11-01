@@ -24,4 +24,8 @@ impl Probe {
         let args = format!(r#"{{"request":{request_json}}}"#);
         Promise::new(signer).function_call("verify_foreign_transaction", args.into_bytes(), NearToken::from_yoctonear(1), Gas::from_tgas(250))
     }
+
+    pub fn lc_verify(&self, light_client: AccountId, args: Vec<u8>) -> Promise {
+        Promise::new(light_client).function_call("verify_transaction_inclusion_v2", args, NearToken::from_yoctonear(0), Gas::from_tgas(30))
+    }
 }

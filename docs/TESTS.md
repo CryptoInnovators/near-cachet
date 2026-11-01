@@ -6,11 +6,11 @@ Commands:
 
 ```
 ./scripts/test.sh                      # fetch fixtures, then cargo test --workspace --no-fail-fast
-./scripts/mutate.sh                    # all 34 rows
+./scripts/mutate.sh                    # all 36 rows
 ./scripts/mutate.sh M26                # one row
 ```
 
-The mutation rows below were produced by the `mutation` workflow (`.github/workflows/mutation.yml`, GitHub Actions run 41290436563, ubuntu-latest, five parallel jobs, conclusion success) at commit `27bffe4`, then copied from the job logs. The full test run at that commit is `ci` run 41290145879, conclusion success: 15 unit, 19 `sandbox`, 10 `gift_and_lock`, 3 `intents`, 2 `paper_design`, 3 `review_fixes`, 2 `web_parity` tests.
+The original rows M01 to M34 were produced by mutation workflow run 41290436563 at commit `27bffe4`. Wave 5 rows M08, M19, M21, M35 and M36 were re-run by workflow run 41332375472, conclusion success. The full workspace check at commit `a5e10ba` is CI run 41330410217, conclusion success.
 
 ## Methods and the tests that gate them
 
@@ -40,7 +40,7 @@ M04 | transfers only in Minted and Sealed | red=101 green=0 | thread 'unsealed_a
 M05 | attest output must pay the note address | red=101 green=0 | thread 'attest_rejects_tx_paying_another_address_and_bad_vout' panicked at tests/sandbox.rs:17:5:
 M06 | attest dust floor | red=101 green=0 | thread 'attest_is_owner_only_once_only_and_bounded' panicked at tests/sandbox.rs:17:5:
 M07 | owner-only note actions | red=101 green=0 | thread 'attest_is_owner_only_once_only_and_bounded' panicked at tests/sandbox.rs:17:5:
-M08 | failed MPC attestation credits nothing | red=101 green=0 | thread 'attest_rejects_a_raw_tx_that_does_not_hash_to_a_confirmed_txid' panicked at tests/sandbox.rs:199:5:
+M08 | failed light-client proof credits nothing | red=101 green=0 | thread 'an_unknown_tx_leaves_the_note_minted' panicked at tests/attest_light_client.rs:35:5:
 M09 | txid hashes the witness-stripped bytes | red=101 green=0 | thread 'btc::tests::parses_real_mainnet_txs_to_their_published_txid' panicked at src/btc.rs:586:13:
 M10 | signature must recover to the note key | red=101 green=0 | thread 'signature_over_the_wrong_hash_is_rejected_by_ecrecover' panicked at tests/sandbox.rs:260:5:
 M11 | low-S normalization | red=101 green=0 | thread 'high_s_signatures_are_folded_to_low_s_and_still_verify' panicked at tests/sandbox.rs:271:5:
@@ -51,9 +51,9 @@ M15 | a transfer kills the claim link | red=101 green=0 | thread 'selling_the_no
 M16 | BIP143 commits to the input amount | red=101 green=0 | thread 'btc::tests::sighash_matches_bitcoin_crate_bip143' panicked at src/btc.rs:694:9:
 M17 | sweep output above dust | red=101 green=0 | thread 'unseal_input_validation' panicked at tests/sandbox.rs:19:5:
 M18 | a second unseal is refused | red=101 green=0 | thread 'double_unseal_reverts' panicked at tests/sandbox.rs:17:5:
-M19 | MPC is asked about the explorer-order txid | red=101 green=0 | thread 'lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract' panicked at tests/sandbox.rs:77:5:
+M19 | light client receives the contract txid in internal byte order | red=101 green=0 | thread 'the_light_client_gets_the_contracts_own_txid' panicked at tests/attest_light_client.rs:66:98:
 M20 | bech32 checksum | red=101 green=0 | thread 'btc::tests::bip173_vector_address' panicked at src/btc.rs:550:9:
-M21 | finalize burns only after the sweep is attested | red=101 green=0 | thread 'lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract' panicked at tests/sandbox.rs:110:5:
+M21 | finalize burns only after inclusion is proven | red=101 green=0 | thread 'an_unconfirmed_sweep_cannot_park_a_note' panicked at tests/attest_light_client.rs:52:5:
 M22 | resign only after unseal | red=101 green=0 | thread 'resign_changes_only_the_fee_and_only_for_the_owner' panicked at tests/sandbox.rs:17:5:
 M23 | recover waits out the signer timeout | red=101 green=0 | thread 'in_flight_sign_blocks_transfer_and_second_unseal_until_the_signer_times_out' panicked at tests/sandbox.rs:17:5:
 M24 | a failed sign rolls the note back | red=101 green=0 | thread 'failed_sign_returns_the_note_to_sealed_and_retry_works' panicked at tests/sandbox.rs:246:5:
@@ -71,7 +71,7 @@ M34 | mint charges the note record itself | red=101 green=0 | thread 'the_mint_d
 
 ## Wave 5 focused unit mutation checks
 
-These two rows ran locally with `./scripts/mutate.sh M35 M36`. Each test failed with its guard removed, then passed after restoration.
+These two rows ran locally with `./scripts/mutate.sh M35 M36` and in mutation workflow run 41332375472. Each test failed with its guard removed, then passed after restoration.
 
 ```
 M35 | proof branches have equal depth | red=101 green=0 | thread 'light_client::tests::proof_args_v2_refuses_mismatched_branches' panicked at src/light_client.rs:90:54:

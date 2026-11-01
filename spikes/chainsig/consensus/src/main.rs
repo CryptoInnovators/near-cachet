@@ -2,8 +2,8 @@
 //! with libbitcoinconsensus, the script engine Bitcoin Core runs.
 //!
 //!   consensus address <near key> <hrp>
-//!   consensus sighash <near key> <sats> <dest> <rate>
-//!   consensus verify  <near key> <sats> <dest> <rate> <signature response json>
+//!   consensus sighash <near key> <txid:vout> <sats> <dest> <rate>
+//!   consensus verify  <near key> <txid:vout> <sats> <dest> <rate> <signature response json>
 
 #[path = "../../../../src/btc.rs"]
 #[allow(dead_code)]
@@ -17,12 +17,17 @@ fn key(s: &str) -> [u8; 33] {
     btc::compress_pubkey(&raw.try_into().expect("64 bytes"))
 }
 
-fn sweep(pk: [u8; 33], sats: u64, dest: &str, rate: u64) -> btc::Sweep {
+fn outpoint(value: &str) -> Result<([u8; 32], u32), &'static str> {
+    let (txid, vout) = value.split_once(':').ok_or("outpoint must be txid:vout")?;
+    if vout.contains(':') { return Err("outpoint must be txid:vout"); }
+    Ok((btc::reversed(btc::hex_32(txid)?), vout.parse().map_err(|_| "invalid vout")?))
+}
+
+fn sweep(pk: [u8; 33], outpoint_text: &str, sats: u64, dest: &str, rate: u64) -> btc::Sweep {
     let hrp = dest.split('1').next().unwrap();
     let script = btc::address_to_script(hrp, dest).unwrap();
-    // a fixed fake funding outpoint: consensus verification only needs its scriptPubKey and amount
-    let prev = btc::sha256(b"cachet spike funding tx");
-    btc::Sweep { prev_txid: prev, vout: 0, amount: sats, pubkey: pk, dest_script: script.clone(), fee: btc::sweep_fee(rate, script.len()).unwrap() }
+    let (prev_txid, vout) = outpoint(outpoint_text).unwrap();
+    btc::Sweep { prev_txid, vout, amount: sats, pubkey: pk, dest_script: script.clone(), fee: btc::sweep_fee(rate, script.len()).unwrap() }
 }
 
 fn main() {
@@ -33,13 +38,13 @@ fn main() {
             println!("{}", btc::p2wpkh_address(&a[3], &pk));
         }
         "sighash" => {
-            let s = sweep(key(&a[2]), a[3].parse().unwrap(), &a[4], a[5].parse().unwrap());
+            let s = sweep(key(&a[2]), &a[3], a[4].parse().unwrap(), &a[5], a[6].parse().unwrap());
             println!("{}", btc::hex_encode(&s.sighash()));
         }
         "verify" => {
             let pk = key(&a[2]);
-            let s = sweep(pk, a[3].parse().unwrap(), &a[4], a[5].parse().unwrap());
-            let v: serde_json::Value = serde_json::from_str(&a[6]).unwrap();
+            let s = sweep(pk, &a[3], a[4].parse().unwrap(), &a[5], a[6].parse().unwrap());
+            let v: serde_json::Value = serde_json::from_str(&a[7]).unwrap();
             let big_r = btc::hex_decode(v["big_r"]["affine_point"].as_str().unwrap()).unwrap();
             let r: [u8; 32] = big_r[1..].try_into().unwrap();
             let sc = btc::hex_32(v["s"]["scalar"].as_str().unwrap()).unwrap();
@@ -55,7 +60,7 @@ fn main() {
             worse.fee += 1;
             let bad: Transaction = bitcoin::consensus::deserialize(&worse.signed_tx(&btc::der_signature(&r, &sc))).unwrap();
             assert!(bad.verify(|_| Some(spent.clone())).is_err(), "tampered sweep must not verify");
-            println!("CONSENSUS OK txid {} vsize {} fee {} tampered_rejected true", tx.compute_txid(), tx.vsize(), s.fee);
+            println!("CONSENSUS OK txid {} input {}:{} vsize {} fee {} tampered_rejected true", tx.compute_txid(), a[3].split(':').next().unwrap(), s.vout, tx.vsize(), s.fee);
             println!("{}", btc::hex_encode(&raw));
         }
         _ => panic!("unknown command"),

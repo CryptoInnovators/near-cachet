@@ -21,11 +21,19 @@ Read with `get_available_foreign_chains`, `get_foreign_chains_configs` and `allo
 | `v1.signer-prod.testnet` | 3.18.0 | 275572265 | 0 CaitSith Sign, 1 Frost Sign, 2 CKD, 3 CaitSith ForeignTx, threshold 11 | Foreign chains: Solana, Base, Bnb, Arbitrum, Abstract, Starknet, Polygon, HyperEvm, Aptos, Sui, Avalanche, Fogo. Domain 3 is exercised here with Base Sepolia |
 | `v1.signer` mainnet | 3.17.0 | 222394250 | same four domains, threshold 11, 16 participants | Bitcoin is a foreign chain: 12 of the 17 node configs list it, one provider (`https://bitcoin-rpc.publicnode.com`), quorum 1 |
 
-Bitcoin attestation targets mainnet `v1.signer`. `spikes/chainsig/mainnet-attest.sh <account>` measures it with three requests (a confirmed transaction, an all-zero tx id, and `confirmations: 99999`) and moves no bitcoin; it costs about 0.01 NEAR of gas from the account passed in.
+The older domain 3 probe above is separate from Cachet's Bitcoin confirmation path. Cachet now uses the Omni Bridge Bitcoin light client for attestation and finalization, and domain 0 signing for the sweep.
+
+## Wave 5 testnet light-client check, 2026-11-01
+
+`python3 .progress/design/lcprobe.py testnet https://rpc.testnet.fastnear.com btc-client-v4.testnet --txid 1f00d154dd629c3c42efa43d496234dc9094cf0fd25e2fde17b5aeec22f683de --confirmations 2` used the measured testnet vector from Bitcoin block 5259426, block hash `000000000000020e792f25d54c3cb663d2f7bf1d5f3b86fbf5198626b82d307e`. It had 54 confirmations at the time of the run. At NEAR blocks 275775260 and 275775261, the light client returned `true` for the proof, `false` for a txid with one hex digit changed, and `Not enough blocks confirmed` for one confirmation beyond the current depth. The command exits nonzero if any of those three outcomes changes.
+
+The byte-order check was mutation-tested against the live vector. Removing the display-to-internal byte reversal made the positive inclusion assertion fail. Restoring the reversal made all three assertions pass. The debug consensus runner also produced a 32-byte sighash from the supplied real txid and vout, and rejected a malformed txid.
+
+The real testnet3 sweep used probe `cachet-probe-1101.cachet-spike-1031.testnet`, created at NEAR block 275778882. Its funding output was 10,000 sats at Bitcoin block 5,259,588. The probe signed the BIP143 sighash through `v1.signer-prod.testnet`; the debug consensus runner accepted the signed spend and rejected the same signature with a one-satoshi fee change. Sweep `2418c7f777747831e8a07d536f952988e7096e4c1766b944949adfba1f2159e1` confirmed at Bitcoin block 5,259,596. At tip 5,259,597, `lcprobe.py --txid <sweep> --confirmations 2` returned `true`, returned `false` for a one-digit txid change, and failed closed for one extra confirmation. The light-client receipt for the probe's cross-contract `lc_verify` call used 1.941 Tgas and returned `true`. After confirmation, the funding address had zero balance. Transaction hashes and NEAR block heights are in `docs/EVIDENCE.md`.
 
 ## What the sandbox suites cover instead
 
-`fixtures/signer` speaks this ABI with known keys, including the `payload_hash` plus `signature` response measured above, and `tests/` drives every note method against it. Wire shapes in `src/signer.rs` are the ones measured here: the sign request, the signature response, the verify envelope and the response.
+`fixtures/signer` provides the domain 0 signature response and implements the light-client inclusion ABI for tests. Wire shapes in `src/signer.rs` cover the sign request and signature response.
 
 ## Reproduce
 
