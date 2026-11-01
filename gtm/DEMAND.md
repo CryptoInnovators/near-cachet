@@ -73,3 +73,82 @@ Why adjacent: a strong objection that validates the trust problem Cachet must an
 - Reddit pages returned login or 403 responses through Jina and direct curl. No Reddit user is counted.
 - X search did not return a usable non-team, non-judge exact-fit person. No X user is counted.
 - The mirror files WEDGE-GTM.md and DEMAND.md were absent at the requested paths.
+
+## Wave 4 additions (2026-11-01 UTC)
+
+Every X URL resolved through cdn.syndication.twimg.com on 2026-11-01 and the quoted text, date and counts come from that JSON. Reddit and Hacker News pages were opened in full with Exa fetch. Exact means the person states the job: hand or gift Bitcoin without a recipient wallet or a courier. Adjacent means the post shows the limits of today's bearer options.
+
+### Exact fit
+
+#### Mark Moss, `@1MarkMoss`, 2025-12-23
+
+Source: https://x.com/1MarkMoss/status/2003254719440126173 (1,695 likes, 128 replies).
+
+Verbatim: “Here's the issue with Bitcoin gifts: 1. Kids under 18 can't legally have a River or Swan account. 2. Hardware wallets are like a hundred bucks, so that makes no sense if you're giving less than that. 3. And little kids don't even have phones.”
+
+Why outside: a Bitcoin educator with a large audience, no NEAR link. Exact pain: gifting Bitcoin to a minor with no account, device or hardware wallet; his workaround was a printed seed and QR in a picture frame, then deleting the wallet app.
+
+#### `apmd-fl`, r/Bitcoin, 2026-05-19
+
+Source: https://www.reddit.com/r/Bitcoin/comments/1ti4dyi/is_their_a_real_bitcoin_gift_card/ (2 points, 9 comments).
+
+Verbatim: “I'm new to Bitcoin and I'm just wondering if there is a gift card I could get or something like that?”
+
+Why outside: a new user, no product link. Exact pain: a giftable Bitcoin object. The replies are a seed phrase in a new wallet (`2xfun`) or a physical device (`OwnConflict5118`: “Opendime, Satcard, or denarium could be like a gift card”).
+
+### Adjacent
+
+#### `vlovich123`, Hacker News, 2024-02-03
+
+Source: https://news.ycombinator.com/item?id=39241095
+
+Verbatim: “opendime is a one time use bearer bond that costs ~$10 per device. It cannot be used like cash - you have to transfer the full amount ... This thing requires gas fees to transfer onto and off the card + the cost of the card itself”.
+
+Why adjacent: a critique of physical bearer devices. `asystole` replies in the same thread that Opendime “is designed to be passed between people many times and spent on-chain once”, so the one-time claim is disputed; the cost and full-amount limits stand.
+
+#### `0xoucan`, 2026-10-09
+
+Source: https://x.com/0xoucan/status/2108680424038060114 (10 likes).
+
+Verbatim: “What happens when the weakest link is no longer the hardware or firmware, but everything surrounding it? Shipping companies. Logistics providers. Authorized resellers.”
+
+Why adjacent: names courier and reseller trust as the weak link of physical bearer and hardware wallets.
+
+#### `coinjoined`, 2026-08-09
+
+Source: https://x.com/coinjoined/status/2086256795014615534
+
+Verbatim: “Might have to mail them an old Opendime and make them pinky-promise not to take the Bitcoin.”
+
+Why adjacent: shows a bearer stick being sent by mail on trust because there is no other way to hand value across distance without an on-chain transaction.
+
+#### `citlayik`, 2026-10-28
+
+Source: https://x.com/citlayik/status/2115495671101088168
+
+Verbatim: “we can technically build small 3d printed, pcb, bitcoin bearer USB sticks that are literally physical cash (think opendime) and they're spendable and easily redeemable instantly over spark/ark/lightning.”
+
+Why adjacent: asks for a faster bearer instrument that redeems instantly.
+
+#### `MinimalStructur`, 2026-10-30
+
+Source: https://x.com/MinimalStructur/status/2116126634441142682
+
+Verbatim: “Cashu is custodial, but I like it better for agents because it limits what they can spend.”
+
+Why adjacent: states the custody objection to the main digital bearer alternative while accepting it for small amounts.
+
+### Rival or seller evidence excluded from the user count
+
+- `KYVORAWALLET` (https://x.com/KYVORAWALLET/status/2115261865035186405, 2026-10-28) says Cashu and Fedimint “are custodial underneath”; the account sells a wallet.
+- `newonpolsia` (https://x.com/newonpolsia/status/2115955507982975265, 2026-10-29) built Wishsat; `DCreativTechguy` (https://x.com/DCreativTechguy/status/2039146364148256839, 2026-04-01) promotes BitGifty; `callebtc` (https://x.com/callebtc/status/2113418171902197866, 2026-10-22) announces BitNotes for Cashu.
+- `mfatalay` (https://www.reddit.com/r/Bitcoin/comments/1vwgs15/gifting_bitcoin_a_paper_wallet_tempate/, 2026-08-23) wants a physical gift “generated with strict security” but is promoting his own SignerOS template. The top reply, “DO NOT GENERATE WALLETS IN STRANGE OFFLINE REPOS PEOPLE”, is the trust objection a browser-derived address must survive.
+
+### Wave 4 search and fetch log
+
+- grokweb returned nine candidate X posts; each id was re-resolved with cdn.syndication.twimg.com. The Reddit block noted above (login or 403) did not recur: `treg crawl4ai.reddit.search.posts` with sort `relevance`, a subreddit and window `year` returned posts, and Exa fetch opened the full threads.
+- `treg crawl4ai.hackernews.search.stories` returned zero rows for sentence queries and old threads for two or three word queries, so the Hacker News addition is one comment.
+
+### Wave 4 verdict
+
+Exact-fit outside people for the gift and bearer job: now five (the three Hacker News people above plus Mark Moss and `apmd-fl`). Nobody asked for an NFT that owns Bitcoin; the evidence is for the job, not the instrument.
