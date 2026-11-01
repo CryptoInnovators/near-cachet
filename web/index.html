@@ -1,58 +1,117 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cachet: sealed bitcoin notes on NEAR</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Read a Cachet Bitcoin note on NEAR mainnet: the derived P2WPKH address, the note record, and the contract access keys.">
+  <title>Cachet, Bitcoin notes on NEAR</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
-  <h1>Cachet: sealed bitcoin notes on NEAR</h1>
-  <p class="sub">Each note is a NEAR NFT that owns a native Bitcoin address. The address is derived by the NEAR MPC signer (v1.signer). Funding stays at that address while the note changes hands.</p>
+  <a class="skip" href="#main">Skip to the live read</a>
 
-  <div class="panel">
-    <h2>NEAR mainnet block</h2>
-    <p class="what">You are seeing the current NEAR mainnet block height and its timestamp, read at page load.</p>
-    <div id="block" class="mono">loading...</div>
+  <div class="sheet">
+    <header class="masthead">
+      <div class="kicker">
+        <span>Cachet</span>
+        <span>Read-only mainnet</span>
+      </div>
+      <h1>Bitcoin notes<br>on NEAR</h1>
+      <p class="standfirst">One note, read live: the Bitcoin address the NEAR signer derives, the record the contract stores, and every key that can move the note.</p>
+      <p class="masthead-note">This page derives the address in your browser from the MPC signer key. It does not connect a wallet, sign, send, or store anything.</p>
+    </header>
+
+    <main id="main">
+      <section class="controls" aria-labelledby="controls-title">
+        <div class="controls-head">
+          <h2 id="controls-title">Read a note</h2>
+          <p>Set the contract, token id, and derivation slot. Every panel below reads mainnet at the moment you press the button.</p>
+        </div>
+
+        <form id="read-form" novalidate>
+          <div class="field">
+            <label for="contract-input">Contract account</label>
+            <input id="contract-input" name="contract" type="text" value="cachet.near" spellcheck="false" autocomplete="off" autocapitalize="none">
+          </div>
+          <div class="field">
+            <label for="token-input">Token id</label>
+            <input id="token-input" name="token" type="text" value="1" spellcheck="false" autocomplete="off" autocapitalize="none">
+          </div>
+          <div class="field">
+            <label for="slot-input">Slot</label>
+            <input id="slot-input" name="slot" type="text" inputmode="numeric" value="0" spellcheck="false" autocomplete="off">
+          </div>
+          <button id="read-button" type="submit">Read live</button>
+        </form>
+
+        <div class="path-row">
+          <span class="path-label">Signer path</span>
+          <code id="path-preview">cachet/1/0</code>
+          <span class="path-note">The contract derives one key per token and slot.</span>
+        </div>
+
+        <p id="control-status" class="control-status" role="status" aria-live="polite"></p>
+      </section>
+
+      <div id="contract-banner" hidden></div>
+
+      <section class="panel" id="address-panel" aria-labelledby="address-title">
+        <span class="panel-index">01</span>
+        <div class="panel-head">
+          <h2 id="address-title">The address</h2>
+          <p class="panel-sub">What you are seeing: a P2WPKH address derived locally from the live signer key, then the Bitcoin activity at that address.</p>
+        </div>
+        <div id="address-body" aria-live="polite">
+          <p class="reading"><span class="reading-dot"></span>Reading the signer key...</p>
+        </div>
+        <p class="meta" id="address-meta"></p>
+      </section>
+
+      <section class="panel" id="note-panel" aria-labelledby="note-title">
+        <span class="panel-index">02</span>
+        <div class="panel-head">
+          <h2 id="note-title">The note record</h2>
+          <p class="panel-sub">What you are seeing: the token, owner, state, funding output, sweep, and claim fields returned by the contract view.</p>
+        </div>
+        <div id="note-body" aria-live="polite">
+          <p class="reading"><span class="reading-dot"></span>Reading the note record...</p>
+        </div>
+        <p class="meta" id="note-meta"></p>
+      </section>
+
+      <section class="panel" id="keys-panel" aria-labelledby="keys-title">
+        <span class="panel-index">03</span>
+        <div class="panel-head">
+          <h2 id="keys-title">The access keys</h2>
+          <p class="panel-sub">What you are seeing: every key attached to the contract account. An empty list is the intended keyless state.</p>
+        </div>
+        <div id="keys-body" aria-live="polite">
+          <p class="reading"><span class="reading-dot"></span>Reading the access key list...</p>
+        </div>
+        <p class="meta" id="keys-meta"></p>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-grid">
+        <div>
+          <p class="footer-label">Reads</p>
+          <p>Fastnear mainnet RPC: <code>call_function</code> for <code>config</code> and <code>note</code>, and <code>view_access_key_list</code> for the keys. mempool.space: <code>/address</code> and <code>/blocks</code> for Bitcoin activity and the tip.</p>
+        </div>
+        <div>
+          <p class="footer-label">How to check it</p>
+          <p>Each panel names its source and NEAR block below the result. Account and transaction ids open on nearblocks.io. Bitcoin addresses and txids open on mempool.space.</p>
+        </div>
+      </div>
+      <p class="footer-fine">Cachet holds no admin key. The contract exposes no method that reaches the signer except an owner unseal or fee resign on an attested, unspent note.</p>
+    </footer>
   </div>
 
-  <div class="panel">
-    <h2>Contract account</h2>
-    <p class="what">You are seeing whether the note contract account exists on NEAR mainnet. Enter an account id, or leave blank to check cachet.near.</p>
-    <div class="row">
-      <input id="contract" placeholder="contract account id, e.g. cachet.near">
-      <button id="checkAcct" class="secondary">Check account</button>
-    </div>
-    <div id="acct" class="mono">loading...</div>
-  </div>
+  <noscript>
+    <p class="noscript">This page reads live mainnet data with JavaScript. Enable JavaScript to see the note.</p>
+  </noscript>
 
-  <div class="panel">
-    <h2>Derived Bitcoin address for a note path</h2>
-    <p class="what">You are seeing the BTC address derived by v1.signer for the path cachet/&lt;token&gt;/&lt;slot&gt;, with the contract as predecessor. The address links to mempool.space.</p>
-    <div class="row">
-      <input id="token" placeholder="token id, e.g. 1">
-      <input id="slot" placeholder="slot, e.g. 0">
-      <button id="derive">Derive address</button>
-    </div>
-    <div id="derived" class="mono">not configured</div>
-    <div id="mempool" class="small"></div>
-  </div>
-
-  <div class="panel">
-    <h2>v1.signer account</h2>
-    <p class="what">You are seeing the account that holds the MPC root key behind every note address.</p>
-    <div id="signer" class="mono">loading...</div>
-  </div>
-
-  <div class="panel">
-    <h2>Address on mempool.space</h2>
-    <p class="what">You are seeing live chain data for the derived address from mempool.space, read after derivation.</p>
-    <div id="mpdata" class="mono">no address yet</div>
-  </div>
-
-  <footer>Static page. No framework, no build step. Data is read live from public endpoints at page load.</footer>
-</div>
-<script src="app.js"></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
