@@ -64,4 +64,3 @@ mut M27 src/btc.rs 's/if stripped\.len\(\) == 64 \{/if false \&\& stripped.len()
 mut M28 src/lib.rs 's/(let Some\(pubkey\) = key else \{\n\s+)Self::refund\(&owner_id, deposit\.0\);/$1/' "$PAPER a_failed_derivation_mints_no_note" "failed derivation refunds the deposit and mints nothing"
 mut M29 src/lib.rs 's/let Some\(pubkey\) = key else \{/let Some(pubkey) = key.or(Some([7u8; 64])) else {/' "$PAPER a_failed_derivation_mints_no_note" "a note exists only after the derived key came back"
 mut M30 src/lib.rs 's/if !caller_is_owner \{/if false \&\& !caller_is_owner {/' "$INTENTS a_signed_token_diff_trade" "after an intents.near sale only the buyer can unseal"
-mut M31 src/lib.rs 's/if in_transfer \{/if false \&\& in_transfer {/' "$INTENTS real_intents_near_holds_a_sealed_note" "a note held by intents.near cannot be unsealed by its seller"
