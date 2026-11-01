@@ -10,7 +10,7 @@ Commands:
 ./scripts/mutate.sh M26                # one row
 ```
 
-The mutation rows below were produced by the `mutation` workflow (`.github/workflows/mutation.yml`, GitHub Actions run 41284142546, ubuntu-latest, four parallel jobs) at commit `de2be78`, then copied from the job logs. The full test run at that commit is `ci` run 41284264019, conclusion success: 15 unit, 19 `sandbox`, 10 `gift_and_lock`, 3 `intents`, 2 `paper_design`, 2 `web_parity` tests.
+The mutation rows below were produced by the `mutation` workflow (`.github/workflows/mutation.yml`, GitHub Actions run 41285131135, ubuntu-latest, four parallel jobs, conclusion success) at commit `59a6eb9`, then copied from the job logs. The full test run at that commit is `ci` run 41285123641, conclusion success: 15 unit, 19 `sandbox`, 10 `gift_and_lock`, 3 `intents`, 2 `paper_design`, 2 `web_parity` tests.
 
 ## Methods and the tests that gate them
 
