@@ -1,0 +1,48 @@
+name: mutation
+on:
+  workflow_dispatch:
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  mutate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        ids:
+          - "M01 M02 M03 M04 M05 M06 M07 M08"
+          - "M09 M10 M11 M12 M13 M14 M15 M16"
+          - "M17 M18 M19 M20 M21 M22 M23 M24"
+          - "M25 M26 M27 M28 M29 M30 M31"
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: install cargo-near 0.16.0 (prebuilt release, checksum verified)
+        run: |
+          base=https://github.com/near/cargo-near/releases/download/cargo-near-v0.16.0
+          curl -fsSL -o cn.tgz "$base/cargo-near-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL "$base/cargo-near-x86_64-unknown-linux-gnu.tar.gz.sha256" | awk '{print $1 "  cn.tgz"}' | sha256sum -c -
+          tar -xzf cn.tgz --strip-components=1 -C "$HOME/.cargo/bin" cargo-near-x86_64-unknown-linux-gnu/cargo-near
+      - name: fetch fixtures
+        run: ./scripts/fetch-fixtures.sh
+      - name: break each guard, expect red, restore, expect green
+        run: |
+          ./scripts/mutate.sh ${{ matrix.ids }} | tee mutation.txt
+          cat mutation.txt >> "$GITHUB_STEP_SUMMARY"
+          ! grep -E "DID NOT APPLY" mutation.txt
+          test "$(grep -c 'green=0' mutation.txt)" = "$(echo '${{ matrix.ids }}' | wc -w)"
+          ! grep -E 'red=0 ' mutation.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-${{ strategy.job-index }}
+          path: |
+            mutation.txt
+            target/mutation/*.log

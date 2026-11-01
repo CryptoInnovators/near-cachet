@@ -889,7 +889,7 @@ mod tests {
     }
 
     #[test]
-    fn signing_is_reachable_from_exactly_two_configurations() {
+    fn signing_is_reachable_from_exactly_three_configurations_in_two_states() {
         let a = allowed();
         assert_eq!(
             a,
