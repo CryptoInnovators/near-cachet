@@ -27,13 +27,13 @@ async fn patch_contract(worker: &Worker<Sandbox>, id: &str, wasm: &[u8]) -> Cont
 }
 
 
-async fn deploy_market(w: &World) -> (Contract, Contract) {
+async fn deploy_market(w: &World, fee: u32) -> (Contract, Contract) {
     let wrap = patch_contract(&w.worker, "wrap.near", &fixture_wasm("wrap_near.wasm")).await;
     wrap.call("new").transact().await.unwrap().into_result().unwrap();
     let intents = patch_contract(&w.worker, "intents.near", &fixture_wasm("intents.wasm")).await;
     intents
         .call("new")
-        .args_json(json!({"config": {"wnear_id": "wrap.near", "fees": {"fee": 0, "fee_collector": w.root.id()}, "roles": {}}}))
+        .args_json(json!({"config": {"wnear_id": "wrap.near", "fees": {"fee": fee, "fee_collector": w.root.id()}, "roles": {}}}))
         .transact()
         .await
         .unwrap()
@@ -45,7 +45,7 @@ async fn deploy_market(w: &World) -> (Contract, Contract) {
 #[tokio::test]
 async fn real_intents_near_holds_a_sealed_note_and_nobody_can_unseal_it() {
     let w = World::new(2).await;
-    let (_wrap, intents) = deploy_market(&w).await;
+    let (_wrap, intents) = deploy_market(&w, 0).await;
 
     let (id, _) = w.sealed_note(&w.alice, 75_000).await;
     let r = w
@@ -115,6 +115,7 @@ struct Sale {
     note_token: String,
     alice_key: SigningKey,
     bob_key: SigningKey,
+    fee: u128,
 }
 
 impl Sale {
@@ -123,7 +124,8 @@ impl Sale {
     }
 
     fn diffs(&self, bob_pays: u128) -> (Value, Value) {
-        let alice = signed_diff(&self.alice_key, self.w.alice.id().as_str(), "alice sells", json!({self.note_token.clone(): "-1", "nep141:wrap.near": PRICE.to_string()}));
+        let seller_gets = PRICE - (PRICE * self.fee).div_ceil(1_000_000);
+        let alice = signed_diff(&self.alice_key, self.w.alice.id().as_str(), "alice sells", json!({self.note_token.clone(): "-1", "nep141:wrap.near": seller_gets.to_string()}));
         let bob = signed_diff(&self.bob_key, self.w.bob.id().as_str(), "bob buys", json!({self.note_token.clone(): "1", "nep141:wrap.near": format!("-{bob_pays}")}));
         (alice, bob)
     }
@@ -135,9 +137,9 @@ impl Sale {
 
 /// Alice's sealed note and Bob's wNEAR both sit as intents.near balances, each side has registered
 /// the ed25519 key it will sign with, and carol is the relayer.
-async fn market_with_a_sealed_note() -> Sale {
+async fn market_with_a_sealed_note(fee: u128) -> Sale {
     let w = World::new(2).await;
-    let (wrap, intents) = deploy_market(&w).await;
+    let (wrap, intents) = deploy_market(&w, fee as u32).await;
     let (id, _) = w.sealed_note(&w.alice, 75_000).await;
     let r = w
         .alice
@@ -177,7 +179,7 @@ async fn market_with_a_sealed_note() -> Sale {
         assert!(r.is_success(), "{}", fail_text(&r));
     }
     let note_token = format!("nep171:{}:{}", w.cachet.id(), id);
-    let sale = Sale { w, intents, id, note_token, alice_key, bob_key };
+    let sale = Sale { w, intents, id, note_token, alice_key, bob_key, fee };
     assert_eq!(sale.balance(sale.w.alice.id().as_str(), &sale.note_token).await, "1", "alice holds the note in intents.near");
     assert_eq!(sale.balance(sale.w.bob.id().as_str(), "nep141:wrap.near").await, PRICE.to_string(), "bob holds the price in intents.near");
     sale
@@ -185,7 +187,7 @@ async fn market_with_a_sealed_note() -> Sale {
 
 #[tokio::test]
 async fn a_signed_token_diff_trade_hands_the_unseal_right_to_the_buyer() {
-    let s = market_with_a_sealed_note().await;
+    let s = market_with_a_sealed_note(0).await;
 
     // a buyer who signs for less than the seller asks does not trade, and nothing moves
     let (alice, bob_short) = s.diffs(PRICE - 1);
@@ -231,8 +233,25 @@ async fn a_signed_token_diff_trade_hands_the_unseal_right_to_the_buyer() {
 }
 
 #[tokio::test]
+async fn a_sale_at_the_live_fee_settles() {
+    let s = market_with_a_sealed_note(1).await;
+    let fee = PRICE.div_ceil(1_000_000);
+    let (alice, bob) = s.diffs(PRICE);
+    let buyer_short = s.diffs(PRICE - fee);
+    let r = s.execute(vec![alice.clone(), buyer_short.1]).await;
+    assert!(r.is_failure(), "buyer short by 1 yocto must not settle");
+    assert_eq!(s.balance(s.w.alice.id().as_str(), &s.note_token).await, "1");
+    assert_eq!(s.balance(s.w.bob.id().as_str(), "nep141:wrap.near").await, PRICE.to_string());
+
+    let r = s.execute(vec![alice, bob]).await;
+    assert!(r.is_success(), "{}", fail_text(&r));
+    assert_eq!(s.balance(s.w.bob.id().as_str(), &s.note_token).await, "1");
+    assert_eq!(s.balance(s.w.alice.id().as_str(), "nep141:wrap.near").await, (PRICE - fee).to_string());
+}
+
+#[tokio::test]
 async fn a_seller_who_withdraws_before_execution_voids_the_trade() {
-    let s = market_with_a_sealed_note().await;
+    let s = market_with_a_sealed_note(0).await;
     let (alice, bob) = s.diffs(PRICE);
     let r = s
         .w
