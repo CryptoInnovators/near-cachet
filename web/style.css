@@ -212,7 +212,9 @@ h1 {
   border-bottom-color: var(--accent);
 }
 
-#read-button {
+#read-button,
+.tool-form button,
+.cmd button {
   min-height: 38px;
   padding: 0 18px;
   border: 1px solid var(--ink);
@@ -228,7 +230,9 @@ h1 {
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-#read-button:hover:not(:disabled) {
+#read-button:hover:not(:disabled),
+.tool-form button:hover:not(:disabled),
+.cmd button:hover:not(:disabled) {
   border-color: var(--accent);
   background: var(--accent);
 }
@@ -795,4 +799,45 @@ footer code {
   * {
     scroll-behavior: auto !important;
   }
+}
+
+.tool-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem 1.25rem;
+  align-items: end;
+  margin: 1.25rem 0 0.75rem;
+}
+
+.cmd {
+  margin: 1.25rem 0;
+  padding: 1rem 1.25rem;
+  background: var(--paper-deep);
+  border-top: 1px solid var(--rule-strong);
+}
+
+.cmd-label {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.cmd-text {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cmd-link {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.fine {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  max-width: 44rem;
 }

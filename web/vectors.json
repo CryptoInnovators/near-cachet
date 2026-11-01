@@ -1,0 +1,28 @@
+{
+  "address": [
+    {
+      "source": "v1.signer.derived_public_key({path: cachet/1/0, predecessor: cachet.near, domain_id: 0}) via https://rpc.mainnet.fastnear.com at NEAR block 222530483",
+      "signerKey": "secp256k1:HiXx9x1dvVDbKcxeeScLCMwcYp5VGbaRSdKfRoKj7MgBKmCLBRFZbYdbgbk4ypNyg9Q3aWgB7XpZYbRbgVWgxwm",
+      "hrp": "bc",
+      "compressed": "020e6a52ea59bcffcec4db6f7b7b254724ac767beb4ec16f9242769b4f812826cc",
+      "address": "bc1qet3xpvw7kh6sdvha9xqmhdqpd9zum8nx3st8dg"
+    },
+    {
+      "source": "BIP173 P2WPKH example, secp256k1 generator point written as the signer's 64-byte X||Y base58",
+      "signerKey": "secp256k1:3SB8tA9Kbn7FBtT6GWR6AJk73QceudisHaGThPoLCDgC9tan7d3cwZFiDZtrmhSAf8aTynEdQ3N7KXhMm3nWhekP",
+      "hrp": "bc",
+      "compressed": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "address": "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+    }
+  ],
+  "claim": {
+    "source": "web/claim-lib.js signClaim, seed = sha256('cachet web claim vector'); the sandbox names are test.near subaccounts",
+    "seed": "fa9dab8a5d552a51e4ad98b597490b07e197f9a418203e6d49b8796ff2650454",
+    "publicKey": "62f3979090566d8ebf624055bf98d0a5eb280cfb5d06e8c6f78a18473b346364",
+    "contract": "cachet.test.near",
+    "token": "1",
+    "newOwner": "bob.test.near",
+    "message": "cachet-claim:cachet.test.near:1:bob.test.near",
+    "signature": "5f427401b1b90ba8022bcca6492a55de20856495dfb46a5c91b5d1210aea01cea3ce4cf8979d5ffe2fe53e5a486132c5ce72743eddf6d8b0ea0134d307edd304"
+  }
+}

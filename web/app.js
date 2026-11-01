@@ -642,8 +642,7 @@ function renderBanner(contract, config, configError) {
     return;
   }
   banner.hidden = false;
-  const text = formatError(configError);
-  if (/UNKNOWN_ACCOUNT|does not exist while viewing/i.test(text)) {
+  if (isUnknownAccount(configError)) {
     banner.append(node("p", "banner-title", "The contract account is not deployed on mainnet."));
     const paragraph = node("p", "banner-body");
     paragraph.append(document.createTextNode("The note and access key panels show the exact chain error for "));
@@ -736,9 +735,19 @@ function renderNote(container, meta, note, error, contract, tokenId, hrp, run) {
   meta.textContent = `read at NEAR block ${note.blockHeight}. source: ${contract}.note("${tokenId}").`;
 }
 
-function renderKeys(container, meta, result, error, contract, run) {
+function isUnknownAccount(error) {
+  return /UNKNOWN_ACCOUNT|does not exist while viewing/i.test(formatError(error));
+}
+
+function renderKeys(container, meta, result, error, contract, run, deployed = true) {
   if (run !== currentRun) return;
   meta.textContent = "";
+  if (!error && !deployed) {
+    container.replaceChildren();
+    container.append(emptyState(`No account exists at ${contract}.`, "The RPC returns an empty key list for an account that was never created, so an empty list here says nothing about keys.", "enter a deployed contract above, or deploy Cachet at this account and read again."));
+    meta.textContent = `source: ${contract}.view_access_key_list, answered with an empty list for an unknown account.`;
+    return;
+  }
   if (error) {
     renderError(container, "The access key list could not be read.", error, "keys");
     meta.textContent = `source: ${contract}.view_access_key_list`;
@@ -800,7 +809,7 @@ function renderKeys(container, meta, result, error, contract, run) {
   meta.textContent = `read at NEAR block ${result.blockHeight}. source: ${contract}.view_access_key_list.`;
 }
 
-async function renderBitcoinActivity(container, address, hrp, run) {
+async function renderBitcoinActivity(container, address, hrp, run, fundingNext) {
   container.replaceChildren(node("h3", null, "Bitcoin activity at this address"));
   const base = mempoolBase(hrp);
   if (!base) {
@@ -839,7 +848,7 @@ async function renderBitcoinActivity(container, address, hrp, run) {
         emptyState(
           "This address is empty at the Bitcoin tip.",
           "It has no funding transaction yet.",
-          "fund the address, then attest the funding transaction to seal the note. An address alone is not a sealed note.",
+          fundingNext,
         ),
       );
     }
@@ -854,7 +863,13 @@ async function renderBitcoinActivity(container, address, hrp, run) {
   }
 }
 
-async function renderAddress({ contract, path, signerId, hrp, confirmations, note, run }) {
+function fundingGuidance(deployed, note, contract) {
+  if (!deployed) return `do not send bitcoin here. No contract exists at ${contract} to sign for this address, so funds sent to it could not be moved.`;
+  if (!note) return `call mint_note on ${contract} first. A note exists once the contract record for this token appears in panel 02; only then is this address spendable through the contract.`;
+  return "fund the address, then attest the funding transaction to seal the note. An address alone is not a sealed note.";
+}
+
+async function renderAddress({ contract, path, signerId, hrp, confirmations, note, run, deployed = true }) {
   const body = document.getElementById("address-body");
   const meta = document.getElementById("address-meta");
   body.replaceChildren(reading(`Reading ${signerId}.derived_public_key...`));
@@ -930,7 +945,7 @@ async function renderAddress({ contract, path, signerId, hrp, confirmations, not
 
   const activity = node("div", "activity");
   body.append(activity);
-  await renderBitcoinActivity(activity, derived.address, hrp, run);
+  await renderBitcoinActivity(activity, derived.address, hrp, run, fundingGuidance(deployed, note, contract));
 }
 
 function resetPanels() {
@@ -1017,8 +1032,9 @@ async function readAll() {
 
     renderBanner(contract, config, configError);
     renderNote(document.getElementById("note-body"), document.getElementById("note-meta"), note, noteError, contract, tokenId, hrp, run);
-    renderKeys(document.getElementById("keys-body"), document.getElementById("keys-meta"), keys, keysError, contract, run);
-    await renderAddress({ contract, path, signerId, hrp, confirmations, note: noteView, run });
+    const deployed = !(configError && isUnknownAccount(configError));
+    renderKeys(document.getElementById("keys-body"), document.getElementById("keys-meta"), keys, keysError, contract, run, deployed);
+    await renderAddress({ contract, path, signerId, hrp, confirmations, note: noteView, run, deployed });
   } catch (error) {
     if (run !== currentRun) return;
     renderError(document.getElementById("address-body"), "The read stopped unexpectedly.", error, "address");

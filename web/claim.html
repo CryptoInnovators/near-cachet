@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Gift a Cachet note by link: make a claim link in your browser, then sign the claim as the receiver.">
+  <title>Cachet claim links</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the claim tools</a>
+
+  <div class="sheet">
+    <header class="masthead">
+      <div class="kicker">
+        <span>Cachet</span>
+        <span><a href="index.html">Read a note</a></span>
+      </div>
+      <h1>Gift a note<br>by link</h1>
+      <p class="standfirst">The owner makes a link. Whoever opens it signs for their own NEAR account, and the contract moves the note to that account once.</p>
+      <p class="masthead-note">Keys are made and used in this browser tab. The link secret sits after the # in the address, which browsers do not send to any server. Nothing is stored.</p>
+    </header>
+
+    <main id="main">
+      <section class="panel" id="make-panel" aria-labelledby="make-title">
+        <div class="panel-head">
+          <h2 id="make-title">Make a claim link</h2>
+          <p class="panel-sub">What you are seeing: a fresh ed25519 key pair, the owner call that registers its public key on the note, and the link that carries the secret.</p>
+        </div>
+        <form id="make-form" class="tool-form" novalidate>
+          <div class="field">
+            <label for="make-contract">Contract account</label>
+            <input id="make-contract" type="text" value="cachet.near" spellcheck="false" autocomplete="off" autocapitalize="none">
+          </div>
+          <div class="field">
+            <label for="make-token">Token id</label>
+            <input id="make-token" type="text" value="1" spellcheck="false" autocomplete="off" autocapitalize="none">
+          </div>
+          <div class="field">
+            <label for="make-blocks">Lock, in blocks</label>
+            <input id="make-blocks" type="text" inputmode="numeric" value="86400" spellcheck="false" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="make-owner">Your NEAR account</label>
+            <input id="make-owner" type="text" value="" placeholder="owner.near" spellcheck="false" autocomplete="off" autocapitalize="none">
+          </div>
+          <button type="submit">Make link</button>
+        </form>
+        <p id="make-status" class="control-status" role="status" aria-live="polite"></p>
+        <div id="make-out" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" id="claim-panel" aria-labelledby="claim-title">
+        <div class="panel-head">
+          <h2 id="claim-title">Claim a note</h2>
+          <p class="panel-sub">What you are seeing: the note this link points at, read from the contract, and the signature that binds the claim to the account you name.</p>
+        </div>
+        <div id="claim-intro" aria-live="polite">
+          <p class="reading">Open a claim link to fill this in. A link looks like claim.html#v=1&amp;contract=...&amp;token=...&amp;key=...</p>
+        </div>
+        <form id="claim-form" class="tool-form" hidden novalidate>
+          <div class="field">
+            <label for="claim-owner">Your NEAR account</label>
+            <input id="claim-owner" type="text" value="" placeholder="you.near" spellcheck="false" autocomplete="off" autocapitalize="none">
+          </div>
+          <div class="field">
+            <label for="claim-dest">Bitcoin address to sweep to (optional)</label>
+            <input id="claim-dest" type="text" value="" placeholder="bc1q..." spellcheck="false" autocomplete="off" autocapitalize="none">
+          </div>
+          <div class="field">
+            <label for="claim-fee">Fee rate, sat/vB</label>
+            <input id="claim-fee" type="text" inputmode="numeric" value="5" spellcheck="false" autocomplete="off">
+          </div>
+          <button type="submit">Sign the claim</button>
+        </form>
+        <p id="claim-status" class="control-status" role="status" aria-live="polite"></p>
+        <div id="claim-out" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-grid">
+        <div>
+          <p class="footer-label">Reads</p>
+          <p>Fastnear mainnet RPC: <code>block</code> for the lock height and <code>call_function</code> for <code>note</code>.</p>
+        </div>
+        <div>
+          <p class="footer-label">How the contract checks it</p>
+          <p><code>claim</code> verifies an ed25519 signature over <code>cachet-claim:&lt;contract&gt;:&lt;token&gt;:&lt;new owner&gt;</code> against the public key registered by <code>create_claim</code>. A signature for one account does not move the note to another.</p>
+        </div>
+      </div>
+    </footer>
+  </div>
+  <script src="claim-lib.js"></script>
+  <script src="claim.js" defer></script>
+</body>
+</html>

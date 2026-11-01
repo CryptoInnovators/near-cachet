@@ -202,3 +202,29 @@ async fn unsealed_note_cannot_be_listed() {
     let v: Value = w.note(&id).await.unwrap();
     assert_eq!(v["owner_id"], w.alice.id().as_str());
 }
+
+#[tokio::test]
+async fn the_signature_made_by_the_web_page_moves_the_note() {
+    let v: Value = serde_json::from_slice(&std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("web/vectors.json")).unwrap()).unwrap();
+    let c = &v["claim"];
+    let w = World::new(2).await;
+    assert_eq!(w.cachet.id().as_str(), c["contract"].as_str().unwrap(), "vector assumes this contract account");
+    assert_eq!(w.bob.id().as_str(), c["newOwner"].as_str().unwrap(), "vector assumes this receiver");
+    let (id, _) = w.sealed_note(&w.alice, 50_000).await;
+    assert_eq!(id, c["token"].as_str().unwrap(), "vector assumes this token id");
+    let h = w.worker.view_block().await.unwrap().height();
+    let r = w
+        .alice
+        .call(w.cachet.id(), "create_claim")
+        .args_json(json!({"token_id": id, "claim_key": c["publicKey"], "expires_at_block": h + 5000}))
+        .max_gas()
+        .transact()
+        .await
+        .unwrap();
+    assert!(r.is_success(), "{}", fail_text(&r));
+    let sig = c["signature"].as_str().unwrap().to_string();
+    assert_reverts(&claim(&w, &id, w.carol.id().as_str(), sig.clone()).await, "bad claim signature");
+    let r = claim(&w, &id, w.bob.id().as_str(), sig).await;
+    assert!(r.is_success(), "{}", fail_text(&r));
+    assert_eq!(w.owner(&id).await.unwrap(), w.bob.id().as_str());
+}
