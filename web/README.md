@@ -2,7 +2,7 @@
 
 A static, read-only page for one Cachet note on NEAR mainnet. It derives the note address in the browser from the live `v1.signer` key, reads the note record from the contract, lists the contract access keys, and reads Bitcoin activity at the derived address.
 
-There is no build step and no dependency install. The page is three files: `index.html`, `app.js`, and `style.css`.
+There is no build step and no dependency install. The note reader is `index.html`, `app.js` and `style.css`. The claim-link page is `claim.html`, `claim.js` and `claim-lib.js`.
 
 ## Run it
 
@@ -12,7 +12,7 @@ From the repository root:
 python3 -m http.server 8080 --directory web
 ```
 
-Open `http://localhost:8080`.
+Open port 8080 on localhost in a browser.
 
 The page also works from any static host. It calls the Fastnear mainnet RPC and mempool.space directly from the browser, and both allow cross-origin reads.
 
@@ -25,7 +25,7 @@ The page also works from any static host. It calls the Fastnear mainnet RPC and 
 | Note record | Fastnear mainnet RPC | `<contract>.note` with the token id |
 | Access keys | Fastnear mainnet RPC | `view_access_key_list` on the contract account |
 
-The contract `config` view supplies the signer account and the bech32 prefix. If the contract account is not deployed, the address panel still derives from `v1.signer` and the other panels show the exact chain error.
+The contract `config` view supplies the signer account and the bech32 prefix. The address panel derives from the live `v1.signer` key for any contract account, and each other panel prints the exact chain response for the account it reads.
 
 Every result names its source and the NEAR block it was read at.
 

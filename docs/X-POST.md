@@ -22,7 +22,7 @@ Video: a bitcoin note changes owner on NEAR, a stranger's unseal fails, the new 
 Built at NEAR HACKATHON @NEARProtocol #NEARHackathon REPO_URL
 ```
 
-## Variant C (next step: try one)
+## Variant C (offer a note)
 
 Needs the human's OK on the amount before posting, because it commits team bitcoin.
 
