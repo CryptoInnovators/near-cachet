@@ -31,8 +31,10 @@ mut() { # id file perl-expression test-command guard
   cp "$file" "$OUT/$id.orig"; CUR_FILE="$file"; CUR_ORIG="$OUT/$id.orig"
   perl -0pi -e "$expr" "$file"
   if cmp -s "$file" "$OUT/$id.orig"; then echo "$id | $guard | MUTATION DID NOT APPLY"; return 0; fi
+  [ "$id" != M26 ] || rm -f target/wasm/cachet.wasm
   $cmd > "$OUT/$id.red.log" 2>&1; local red=$?
   restore
+  [ "$id" != M26 ] || rm -f target/wasm/cachet.wasm
   $cmd > "$OUT/$id.green.log" 2>&1; local green=$?
   echo "$id | $guard | red=$red green=$green | $(grep -E 'panicked at|^test result' "$OUT/$id.red.log" | head -1)"
 }
