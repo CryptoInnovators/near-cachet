@@ -6,7 +6,7 @@ Commands:
 
 ```
 ./scripts/test.sh                      # fetch fixtures, then cargo test --workspace --no-fail-fast
-./scripts/mutate.sh                    # all 36 rows
+./scripts/mutate.sh                    # all 37 rows
 ./scripts/mutate.sh M26                # one row
 ```
 
@@ -73,6 +73,8 @@ M37 | funding address is hidden past Minted | red=1 green=0 | node test `funding
 ## Wave 5 focused unit mutation checks
 
 These two rows ran locally with `./scripts/mutate.sh M35 M36` and in mutation workflow run 41332375472. Each test failed with its guard removed, then passed after restoration.
+
+M26 also ran locally after `scripts/mutate.sh` cleared the generated Cachet wasm before both runs. The cached artifact previously had a future timestamp and hid the source mutation. The fixed run returned `red=101 green=0`.
 
 M37 ran locally with `./scripts/mutate.sh M37`; it failed with the guard removed and passed after restoration. The browser test suite also compares the inclusion proof assembled from captured mempool.space responses with the public mainnet light-client vector.
 
