@@ -40,3 +40,13 @@ jobs:
           cargo build --workspace --release --target wasm32-unknown-unknown
       - name: test
         run: ./scripts/test.sh
+      - name: build deployable wasm
+        run: cargo near build non-reproducible-wasm --env 'RUSTFLAGS=--cfg near -C link-arg=-s'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cachet-wasm
+          path: |
+            target/near/cachet.wasm
+            target/near/cachet_abi.json
+          if-no-files-found: error
+          retention-days: 7
