@@ -1,8 +1,7 @@
-const RPC_ENDPOINT = "https://rpc.mainnet.fastnear.com";
-const DEFAULT_CONTRACT = "cachet.near";
-const DEFAULT_SIGNER = "v1.signer";
-const DEFAULT_HRP = "bc";
-const REQUEST_TIMEOUT_MS = 15000;
+const activeNetwork = cachetChain.network();
+const DEFAULT_CONTRACT = activeNetwork.contract;
+const DEFAULT_SIGNER = activeNetwork.name === "testnet" ? "v1.signer-prod.testnet" : "v1.signer";
+const DEFAULT_HRP = activeNetwork.name === "testnet" ? "tb" : "bc";
 const MAX_SLOT = 4294967295;
 
 const BECH32_ALPHABET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
@@ -355,70 +354,9 @@ function pubkeyToAddress(signerKey, hrp) {
   return { address, compressedHex: bytesToHex(compressed), hash160: bytesToHex(hash160) };
 }
 
-function bytesToBase64(bytes) {
-  let binary = "";
-  const chunk = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
-  }
-  return btoa(binary);
-}
-
-async function fetchWithTimeout(url, options = {}, timeout = REQUEST_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } catch (error) {
-    if (error && error.name === "AbortError") {
-      throw new Error(`The request to ${url} timed out after ${Math.round(timeout / 1000)} seconds.`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function rpc(method, params) {
-  const response = await fetchWithTimeout(RPC_ENDPOINT, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-web", method, params }),
-  });
-  const text = await response.text();
-  let payload;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    throw new Error(`The RPC returned HTTP ${response.status} with a non-JSON body: ${text.slice(0, 240)}`);
-  }
-  if (payload.error) {
-    const error = new Error(payload.error.message || "The RPC returned an error.");
-    error.rpc = payload.error;
-    throw error;
-  }
-  if (!response.ok) throw new Error(`The RPC returned HTTP ${response.status}.`);
-  return payload.result;
-}
-
-async function callView(account, method, args) {
-  const argsBase64 = bytesToBase64(new TextEncoder().encode(JSON.stringify(args)));
-  const result = await rpc("query", {
-    request_type: "call_function",
-    finality: "final",
-    account_id: account,
-    method_name: method,
-    args_base64: argsBase64,
-  });
-  const text = new TextDecoder().decode(new Uint8Array(result.result));
-  let value;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    value = text;
-  }
-  return { value, blockHeight: result.block_height, blockHash: result.block_hash };
-}
+const fetchWithTimeout = cachetChain.fetchWithTimeout;
+const rpc = (method, params) => cachetChain.rpc(method, params, activeNetwork);
+const callView = (account, method, args) => cachetChain.callView(account, method, args, activeNetwork);
 
 async function viewAccessKeys(account) {
   const result = await rpc("query", {
@@ -429,20 +367,8 @@ async function viewAccessKeys(account) {
   return { keys: Array.isArray(result.keys) ? result.keys : [], blockHeight: result.block_height };
 }
 
-function mempoolBase(hrp) {
-  if (hrp === "bc") return "https://mempool.space";
-  if (hrp === "tb") return "https://mempool.space/testnet";
-  return null;
-}
-
-async function mempoolJson(base, path) {
-  const response = await fetchWithTimeout(`${base}/api${path}`, { headers: { accept: "application/json" } });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`mempool.space returned HTTP ${response.status}: ${body.slice(0, 240)}`);
-  }
-  return response.json();
-}
+const mempoolBase = cachetChain.mempoolBase;
+const mempoolJson = cachetChain.mempoolJson;
 
 function formatError(error) {
   if (error && error.rpc) {
@@ -464,8 +390,8 @@ function formatError(error) {
 function adviceFor(error, context) {
   const text = formatError(error);
   if (/UNKNOWN_ACCOUNT|does not exist while viewing/i.test(text)) {
-    if (context === "signer") return "The configured signer account is not deployed on mainnet. Check the contract config.";
-    return "This contract account is not deployed on mainnet. Deploy Cachet at this account, or enter a deployed contract account above.";
+    if (context === "signer") return `The configured signer account is not deployed on ${activeNetwork.name}. Check the contract config.`;
+    return `This contract account is not deployed on ${activeNetwork.name}. Deploy Cachet at this account, or enter a deployed contract account above.`;
   }
   if (/MethodNotFound|does not have a method|Method not found/i.test(text)) {
     return "The account exists but does not expose this view. Confirm the account is the Cachet contract.";
@@ -483,7 +409,7 @@ function adviceFor(error, context) {
 }
 
 function nearAccountUrl(account) {
-  return `https://nearblocks.io/accounts/${encodeURIComponent(account)}`;
+  return `${activeNetwork.nearExplorer}/address/${encodeURIComponent(account)}`;
 }
 
 function mempoolAddressUrl(address, hrp) {
@@ -643,11 +569,11 @@ function renderBanner(contract, config, configError) {
   }
   banner.hidden = false;
   if (isUnknownAccount(configError)) {
-    banner.append(node("p", "banner-title", "The contract account is not deployed on mainnet."));
+    banner.append(node("p", "banner-title", `The contract account is not deployed on ${activeNetwork.name}.`));
     const paragraph = node("p", "banner-body");
     paragraph.append(document.createTextNode("The note and access key panels show the exact chain error for "));
     paragraph.append(code(contract));
-    paragraph.append(document.createTextNode(". The address panel still reads the live "));
+    paragraph.append(document.createTextNode(`. The address panel still reads the live `));
     paragraph.append(code(DEFAULT_SIGNER));
     paragraph.append(document.createTextNode(", so the derived address is real. Deploy Cachet at this account, or enter a deployed contract above."));
     banner.append(paragraph);
@@ -658,7 +584,7 @@ function renderBanner(contract, config, configError) {
     paragraph.append(code(DEFAULT_SIGNER));
     paragraph.append(document.createTextNode(" and "));
     paragraph.append(code(DEFAULT_HRP));
-    paragraph.append(document.createTextNode(". The note panel carries the exact error."));
+    paragraph.append(document.createTextNode(`. The note panel carries the exact error.`));
     banner.append(paragraph);
   }
 }
@@ -696,9 +622,9 @@ function renderNote(container, meta, note, error, contract, tokenId, hrp, run) {
     ["Owner", accountLink(view.owner_id)],
     ["State", mono(view.state)],
     ["Path", mono(view.path)],
-    ["Address", mempoolAddressUrl(view.address, hrp) ? externalLink(mempoolAddressUrl(view.address, hrp), view.address, "mono") : mono(view.address)],
     ["Compressed key", mono(view.pubkey, "wrap")],
   ];
+  if (cachetOutcome.fundingAddressVisible(view)) rows.push(["Funding address", mempoolAddressUrl(view.address, hrp) ? externalLink(mempoolAddressUrl(view.address, hrp), view.address, "mono") : mono(view.address)]);
 
   if (view.utxo) {
     const txUrl = mempoolTxUrl(view.utxo.txid, hrp);
@@ -901,15 +827,17 @@ async function renderAddress({ contract, path, signerId, hrp, confirmations, not
   }
 
   body.replaceChildren();
-  const addressBlock = node("div", "address-block");
-  addressBlock.append(node("p", "address-label", "P2WPKH address"));
-  const addressLine = node("p", "address");
   const addressUrl = mempoolAddressUrl(derived.address, hrp);
-  if (addressUrl) addressLine.append(externalLink(addressUrl, derived.address));
-  else addressLine.textContent = derived.address;
-  addressBlock.append(addressLine);
-  addressBlock.append(node("p", "address-action", addressUrl ? "The address links to mempool.space." : "This network has no public explorer link."));
-  body.append(addressBlock);
+  if (!note || cachetOutcome.fundingAddressVisible(note)) {
+    const addressBlock = node("div", "address-block");
+    addressBlock.append(node("p", "address-label", "P2WPKH funding address"));
+    const addressLine = node("p", "address");
+    if (addressUrl) addressLine.append(externalLink(addressUrl, derived.address));
+    else addressLine.textContent = derived.address;
+    addressBlock.append(addressLine);
+    addressBlock.append(node("p", "address-action", addressUrl ? "Fund once with one output." : "This network has no public explorer link."));
+    body.append(addressBlock);
+  }
 
   const network = hrp === "bc" ? "Bitcoin mainnet (bc)" : hrp === "tb" ? "Bitcoin testnet (tb)" : `Bitcoin regtest (${hrp})`;
   const rows = [
@@ -933,7 +861,7 @@ async function renderAddress({ contract, path, signerId, hrp, confirmations, not
       body.append(
         notice(
           "The note record does not match this derivation.",
-          `Derived address ${derived.address}. Stored address ${note.address}. Derived key ${derived.compressedHex}. Stored key ${note.pubkey}.`,
+          `Derived key ${derived.compressedHex}. Stored key ${note.pubkey}.`,
           "warn",
         ),
       );
@@ -943,9 +871,11 @@ async function renderAddress({ contract, path, signerId, hrp, confirmations, not
   body.append(node("p", "fine", "This page derives the address locally from the signer key. It does not copy the address from the contract."));
   meta.textContent = `read at NEAR block ${response.blockHeight}. source: ${signerId}.derived_public_key(path, predecessor, 0).`;
 
-  const activity = node("div", "activity");
-  body.append(activity);
-  await renderBitcoinActivity(activity, derived.address, hrp, run, fundingGuidance(deployed, note, contract));
+  if (!note || cachetOutcome.fundingAddressVisible(note)) {
+    const activity = node("div", "activity");
+    body.append(activity);
+    await renderBitcoinActivity(activity, derived.address, hrp, run, fundingGuidance(deployed, note, contract));
+  } else body.append(node("p", "fine", "The funding address stays private in this view after the note leaves Minted."));
 }
 
 function resetPanels() {
@@ -984,7 +914,7 @@ function syncUrl(contract, tokenId, slot) {
   const url = new URL(window.location.href);
   url.searchParams.set("contract", contract);
   url.searchParams.set("token", tokenId);
-  url.searchParams.set("slot", slot);
+  url.searchParams.delete("slot");
   window.history.replaceState(null, "", url);
 }
 
@@ -1034,6 +964,7 @@ async function readAll() {
     renderNote(document.getElementById("note-body"), document.getElementById("note-meta"), note, noteError, contract, tokenId, hrp, run);
     const deployed = !(configError && isUnknownAccount(configError));
     renderKeys(document.getElementById("keys-body"), document.getElementById("keys-meta"), keys, keysError, contract, run, deployed);
+    if (globalThis.cachetOwner && configValue) await cachetOwner.refresh(contract, tokenId, noteView, configValue);
     await renderAddress({ contract, path, signerId, hrp, confirmations, note: noteView, run, deployed });
   } catch (error) {
     if (run !== currentRun) return;
@@ -1048,12 +979,20 @@ async function readAll() {
 
 function init() {
   const params = new URLSearchParams(window.location.search);
+  const networkParam = params.get("network");
   const contract = params.get("contract");
   const token = params.get("token");
-  const slot = params.get("slot");
+  const slot = "0";
   document.getElementById("contract-input").value = contract && isAccountId(contract.trim().toLowerCase()) ? contract.trim().toLowerCase() : DEFAULT_CONTRACT;
+  if (networkParam === "testnet" || networkParam === "mainnet") document.getElementById("network-input").value = networkParam;
+  document.getElementById("network-input").value = activeNetwork.name;
+  document.getElementById("network-input").addEventListener("change", (event) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("network", event.target.value);
+    window.location.assign(url);
+  });
   document.getElementById("token-input").value = token && isTokenId(token.trim()) ? token.trim() : "1";
-  document.getElementById("slot-input").value = slot && isSlot(slot.trim()) ? slot.trim() : "0";
+  document.getElementById("slot-input").value = slot;
   updatePathPreview();
 
   for (const id of ["contract-input", "token-input", "slot-input"]) {

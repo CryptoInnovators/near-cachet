@@ -14,6 +14,7 @@ PAPER="cargo test --test paper_design --"
 INTENTS="cargo test --test intents --"
 REVIEW="cargo test --test review_fixes --"
 ALC="cargo test --test attest_light_client --"
+NODE="node --test web/web.test.mjs"
 OUT=target/mutation
 mkdir -p "$OUT"
 want=("$@")
@@ -72,3 +73,4 @@ mut M33 src/lib.rs 's/ \+ NOTE_STORAGE_RESERVE_BYTES as u128;/;/' "$REVIEW the_m
 mut M34 src/lib.rs 's/\n        self\.notes\.flush\(\);//' "$REVIEW the_mint_deposit_funds_every_later" "mint charges the note record itself"
 mut M35 src/light_client.rs 's/proof\.merkle_proof\.len\(\) != proof\.coinbase_merkle_proof\.len\(\)/false/' "$UNIT proof_args_v2_refuses_mismatched_branches" "proof branches have equal depth"
 mut M36 src/light_client.rs 's/btc::hex_32\(hex\)\.map\(btc::reversed\)/btc::hex_32(hex)/' "$UNIT proof_args_v2_matches_live_vector" "light-client hashes use internal byte order"
+mut M37 web/outcome.js 's/return note\.state === "Minted";/return true;/' "$NODE" "funding address is hidden past Minted"

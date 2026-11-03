@@ -168,7 +168,7 @@ h1 {
 
 #read-form {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.7fr) 86px auto;
+  grid-template-columns: 110px minmax(0, 1.25fr) minmax(0, 0.7fr) auto;
   gap: 12px;
   align-items: end;
   padding: 18px 0 16px;
@@ -190,7 +190,8 @@ h1 {
   text-transform: uppercase;
 }
 
-.field input {
+.field input,
+.field select {
   width: 100%;
   min-width: 0;
   padding: 7px 1px 9px;
@@ -203,6 +204,11 @@ h1 {
   font-size: 14px;
 }
 
+.owner-connect { display: flex; align-items: center; gap: 16px; margin: 18px 0; }
+.owner-actions { display: grid; gap: 16px; }
+.owner-actions .tool-form { margin-top: 16px; }
+.owner-actions .record { margin-top: 18px; }
+
 .field input:hover {
   border-bottom-color: var(--ink);
 }
@@ -214,7 +220,11 @@ h1 {
 
 #read-button,
 .tool-form button,
-.cmd button {
+.cmd button,
+#owner-actions > button,
+.owner-actions button,
+.owner-connect button,
+#claim-actions button {
   min-height: 38px;
   padding: 0 18px;
   border: 1px solid var(--ink);

@@ -4,3 +4,4 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ./scripts/fetch-fixtures.sh
 cargo test --workspace --no-fail-fast
+node --test web/web.test.mjs

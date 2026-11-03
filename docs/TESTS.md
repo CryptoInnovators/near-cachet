@@ -67,11 +67,14 @@ M31 | claim clears NEP-178 approvals | red=101 green=0 | thread 'claim_clears_th
 M32 | recover never re-seals an unsealing note | red=101 green=0 | thread 'a_note_whose_signature_became_public_is_never_resealed' panicked at tests/review_fixes.rs:177:5:
 M33 | mint prefunds the note storage growth | red=101 green=0 | thread 'the_mint_deposit_funds_every_later_byte_a_note_can_grow' panicked at tests/review_fixes.rs:109:5:
 M34 | mint charges the note record itself | red=101 green=0 | thread 'the_mint_deposit_funds_every_later_byte_a_note_can_grow' panicked at tests/review_fixes.rs:109:5:
+M37 | funding address is hidden past Minted | red=1 green=0 | node test `funding address is visible only while Minted` failed after the guard was removed
 ```
 
 ## Wave 5 focused unit mutation checks
 
 These two rows ran locally with `./scripts/mutate.sh M35 M36` and in mutation workflow run 41332375472. Each test failed with its guard removed, then passed after restoration.
+
+M37 ran locally with `./scripts/mutate.sh M37`; it failed with the guard removed and passed after restoration. The browser test suite also compares the inclusion proof assembled from captured mempool.space responses with the public mainnet light-client vector.
 
 ```
 M35 | proof branches have equal depth | red=101 green=0 | thread 'light_client::tests::proof_args_v2_refuses_mismatched_branches' panicked at src/light_client.rs:90:54:

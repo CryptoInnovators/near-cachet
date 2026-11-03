@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <meta name="description" content="Read a Cachet Bitcoin note on NEAR mainnet: the derived P2WPKH address, the note record, and the contract access keys.">
+  <meta name="description" content="Create and manage sealed Bitcoin notes on NEAR testnet or mainnet.">
   <title>Cachet, Bitcoin notes on NEAR</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
@@ -16,22 +16,26 @@
     <header class="masthead">
       <div class="kicker">
         <span>Cachet</span>
-        <span>Read-only mainnet</span>
+        <span>Bitcoin notes</span>
         <span><a href="claim.html">Gift by link</a></span>
       </div>
-      <h1>Bitcoin notes<br>on NEAR</h1>
-      <p class="standfirst">One note, read live: the Bitcoin address the NEAR signer derives, the record the contract stores, and every key that can move the note.</p>
-      <p class="masthead-note">This page derives the address in your browser from the MPC signer key. It does not connect a wallet, sign, send, or store anything.</p>
+      <h1>Give Bitcoin<br>by link</h1>
+      <p class="standfirst">Create a note, fund its Bitcoin address, then give it to someone as a link or NEAR token.</p>
+      <p class="masthead-note">The contract records who owns each note. Its Bitcoin output stays sealed until the owner asks the NEAR signer to release it.</p>
     </header>
 
     <main id="main">
       <section class="controls" aria-labelledby="controls-title">
         <div class="controls-head">
           <h2 id="controls-title">Read a note</h2>
-          <p>Set the contract, token id, and derivation slot. Every panel below reads mainnet at the moment you press the button.</p>
+          <p>Read the note record, its derived funding address, and the current contract settings.</p>
         </div>
 
         <form id="read-form" novalidate>
+          <div class="field">
+            <label for="network-input">Network</label>
+            <select id="network-input" name="network"><option value="testnet">Testnet</option><option value="mainnet">Mainnet</option></select>
+          </div>
           <div class="field">
             <label for="contract-input">Contract account</label>
             <input id="contract-input" name="contract" type="text" value="cachet.near" spellcheck="false" autocomplete="off" autocapitalize="none">
@@ -40,12 +44,10 @@
             <label for="token-input">Token id</label>
             <input id="token-input" name="token" type="text" value="1" spellcheck="false" autocomplete="off" autocapitalize="none">
           </div>
-          <div class="field">
-            <label for="slot-input">Slot</label>
-            <input id="slot-input" name="slot" type="text" inputmode="numeric" value="0" spellcheck="false" autocomplete="off">
-          </div>
           <button id="read-button" type="submit">Read live</button>
         </form>
+        <input id="slot-input" type="hidden" value="0">
+        <p class="fine">Each note uses slot 0.</p>
 
         <div class="path-row">
           <span class="path-label">Signer path</span>
@@ -56,7 +58,19 @@
         <p id="control-status" class="control-status" role="status" aria-live="polite"></p>
       </section>
 
+      <section class="panel" id="owner-panel" aria-labelledby="owner-title">
+        <div class="panel-head"><h2 id="owner-title">Manage a note</h2><p class="panel-sub">Connect your NEAR wallet to create a note, fund it, or manage a note you own.</p></div>
+        <div class="owner-connect"><button id="wallet-connect" type="button">Connect NEAR wallet</button><span id="wallet-account" class="meta" aria-live="polite">No wallet connected</span></div>
+        <div id="owner-actions" aria-live="polite"></div>
+        <p id="owner-status" class="control-status" role="status" aria-live="polite"></p>
+      </section>
+
       <div id="contract-banner" hidden></div>
+
+      <section class="panel" id="trust-panel" aria-labelledby="trust-title">
+        <div class="panel-head"><h2 id="trust-title">Trust inputs</h2><p class="panel-sub">Signer and Bitcoin proof sources read from the selected contract configuration.</p></div>
+        <div id="trust-body" aria-live="polite"><p class="reading">Reading trust inputs...</p></div>
+      </section>
 
       <section class="panel" id="address-panel" aria-labelledby="address-title">
         <span class="panel-index">01</span>
@@ -99,11 +113,11 @@
       <div class="footer-grid">
         <div>
           <p class="footer-label">Reads</p>
-          <p>Fastnear mainnet RPC: <code>call_function</code> for <code>config</code> and <code>note</code>, and <code>view_access_key_list</code> for the keys. mempool.space: <code>/address</code> and <code>/blocks</code> for Bitcoin activity and the tip.</p>
+          <p>Fastnear reads the selected network. The page reads contract settings, note details, and account keys. mempool.space shows Bitcoin activity.</p>
         </div>
         <div>
           <p class="footer-label">How to check it</p>
-          <p>Each panel names its source and NEAR block below the result. Account and transaction ids open on nearblocks.io. Bitcoin addresses and txids open on mempool.space.</p>
+          <p>Each panel names its source and NEAR block below the result. Account and transaction ids open on the matching NEAR explorer. Bitcoin addresses and txids open on mempool.space.</p>
         </div>
       </div>
       <p class="footer-fine">Cachet holds no admin key. The contract exposes no method that reaches the signer except an owner unseal or fee resign on an attested, unspent note.</p>
@@ -114,6 +128,12 @@
     <p class="noscript">This page reads live mainnet data with JavaScript. Enable JavaScript to see the note.</p>
   </noscript>
 
+  <script src="chain.js" defer></script>
+  <script src="outcome.js" defer></script>
+  <script src="btc-proof.js" defer></script>
+  <script src="claim-lib.js" defer></script>
+  <script type="module" src="wallet.js"></script>
   <script src="app.js" defer></script>
+  <script src="owner.js" defer></script>
 </body>
 </html>

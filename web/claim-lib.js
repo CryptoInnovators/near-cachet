@@ -60,11 +60,6 @@ function parseFragment(hash) {
   return { contract, token, key: key.toLowerCase() };
 }
 
-function nearCall(contract, method, args, signer) {
-  const json = JSON.stringify(args);
-  return `near contract call-function as-transaction ${contract} ${method} json-args '${json}' prepaid-gas '100 Tgas' attached-deposit '0 NEAR' sign-as ${signer} network-config mainnet sign-with-keychain send`;
-}
-
-const lib = { PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment, nearCall };
+const lib = { PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetClaim = lib;
