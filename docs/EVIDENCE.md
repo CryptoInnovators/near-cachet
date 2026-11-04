@@ -33,3 +33,20 @@ The CI artifact `cachet-wasm` from run `41656688087` contains `cachet.wasm` with
 | Mint note 1 for `cachet-ops.testnet` | `69TY7XLbCAXPM1mAXf1o5LZbxLHQRmaFpWocwMNcYgrs` | 276063615 | Final success; 12.0 Tgas |
 
 At final block 276063397, `config()` returned signer `v1.signer-prod.testnet`, light client `btc-client-v4.testnet`, HRP `tb`, and 2 confirmations. `note("1")` returns `Minted`, owner `cachet-ops.testnet`, path `cachet/1/0`, and address `tb1qqesag4graaen9v6f9ug4xawf4e8lacdhhkffsj`. A live `derived_public_key` read from `v1.signer-prod.testnet`, converted with `web/app.js`, matches both the stored compressed public key and address.
+
+## Bitcoin testnet3 gift and sweep through Chain Signatures, 2026-11-04
+
+Note 1 on `cachet.testnet` goes from funded to burned in one run of `scripts/e2e-testnet-gift.sh`. The funding is a real Bitcoin testnet3 output, the claim is a link signature, and the sweep signature comes from `v1.signer-prod.testnet`.
+
+| Step | Transaction | Block | Result |
+|---|---|---:|---|
+| Create holder `cachet-holder-1104.testnet` | NEAR `FmuEBrV3YyzSo7Jp2FseRUBD99HDbS9fR9qT7f5Avc7c` | n/a | Final success |
+| Fund note address `tb1qqesag4graaen9v6f9ug4xawf4e8lacdhhkffsj` with 107,894 sats from the coinfaucet.eu testnet3 faucet | Bitcoin `eaf498e49379648fc48d10ec58840d89f47b89d8d844c3bdd67a1055e54d124b`, output 1 | Bitcoin 5,261,568 | Confirmed |
+| `attest` as `cachet-ops.testnet` | NEAR `F7yT17CT5GxU4nUhJQBvybEShzdeKKxik9cUAAHCVrkg` | 276163907 | Returns `true`; the light client `btc-client-v4.testnet` verified inclusion at 2 confirmations, note `Sealed` with the funding txid and block hash |
+| `create_claim` as `cachet-ops.testnet` | NEAR `DM9H19dUxjMNHgCuc5GdYDW6WRkmxWEUy1y2GkV28ayP` | 276163935 | `note.claim.key` equals the public key derived from the link secret |
+| `claim` as `cachet-holder-1104.testnet` | NEAR `6kyB3vQ24Ezrmj12WJm64Np3CuXLUJrrs1TrRWWVuSSJ` | 276163996 | `nft_token` owner is the holder; replaying the same signature fails with `no claim link` |
+| `unseal` to `tb1qerzrlxcfu24davlur5sqmgzzgsal6wusda40er` at 2 sat/vB | NEAR `8bMnmy5muiiTGUk88Sz9n7z44cfuAg8c2fd57bwjZJx2` | 276164037 | `v1.signer-prod.testnet` signs through domain 0 in about 13 s; `ecrecover` accepts the signature against the note key; `note` is `Unsealed` with a 220-sat fee |
+| Broadcast the stored `signed_sweep_tx` | Bitcoin `dc4e322b039eecf10a5d4f02cde246b4406b7845fc9ed9345b97df2654fffdde` | Bitcoin 5,261,570 | `mempool.space/testnet/api/tx/<txid>`: one input `eaf498e4...:1` from the note address (107,894 sats), one output of 107,674 sats to the destination, confirmed |
+| `finalize` with the sweep inclusion proof | NEAR `FwLo9qXY666vMQ8rwPYKGXPnfkzou11vrkFzqR2RDAJW` | 276164580 | Returns `true`; `note("1")` and `nft_token("1")` both return `null` |
+
+The note address then shows one funded and one spent 107,894-sat output. `scripts/check-sweep.sh` reads the sweep from the explorer API and the note from `https://test.rpc.fastnear.com`, and exits nonzero unless the sweep has one confirmed input spending output 1 of the funding transaction from the note address, pays only the destination, and note 1 is burned. Given the funding txid or an unknown txid in place of the sweep txid, it exits 1.
