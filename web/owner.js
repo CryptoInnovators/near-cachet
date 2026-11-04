@@ -1,5 +1,7 @@
 "use strict";
 
+(() => {
+
 const ownerNet = cachetChain.network();
 const ownerPanel = document.getElementById("owner-actions");
 const ownerStatus = document.getElementById("owner-status");
@@ -315,3 +317,5 @@ document.getElementById("wallet-connect").addEventListener("click", async () => 
 });
 
 globalThis.cachetOwner = { refresh };
+
+})();

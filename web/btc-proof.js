@@ -1,5 +1,7 @@
 "use strict";
 
+(() => {
+
 async function inclusionProof(base, txid, get = globalThis.cachetChain.mempoolJson, text = globalThis.cachetChain.mempoolText) {
   const tx = await get(base, `/tx/${encodeURIComponent(txid)}`);
   if (!tx.status?.confirmed || !tx.status.block_hash) throw new Error("Funding transaction is not confirmed yet.");
@@ -30,3 +32,5 @@ async function spendOf(base, txid, vout, get = globalThis.cachetChain.mempoolJso
 const lib = { inclusionProof, fundingOf, spendOf };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetBtcProof = lib;
+
+})();

@@ -1,5 +1,7 @@
 "use strict";
 
+(() => {
+
 function failureText(outcome) {
   const read = (status) => {
     const failure = status?.Failure;
@@ -38,3 +40,5 @@ function feeGuard(sats, rate, destScriptLen) {
 const lib = { failureText, blockHashMismatch, fundingAddressVisible, feeGuard };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetOutcome = lib;
+
+})();

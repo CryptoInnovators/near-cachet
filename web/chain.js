@@ -1,5 +1,7 @@
 "use strict";
 
+(() => {
+
 const NETWORKS = {
   testnet: { name: "testnet", rpc: "https://rpc.testnet.fastnear.com", contract: "cachet.testnet", nearExplorer: "https://testnet.nearblocks.io", poolOwner: "cachet-ops.testnet" },
   mainnet: { name: "mainnet", rpc: "https://rpc.mainnet.fastnear.com", contract: "cachet.near", nearExplorer: "https://nearblocks.io", poolOwner: null },
@@ -18,13 +20,19 @@ async function fetchWithTimeout(url, options = {}, timeout = REQUEST_TIMEOUT_MS)
 }
 
 async function rpc(method, params, net = network()) {
-  const response = await fetchWithTimeout(net.rpc, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-web", method, params }) });
-  const text = await response.text();
-  let payload;
-  try { payload = JSON.parse(text); } catch { throw new Error(`The RPC returned HTTP ${response.status} with a non-JSON body: ${text.slice(0, 240)}`); }
-  if (payload.error) { const error = new Error(payload.error.message || "The RPC returned an error."); error.rpc = payload.error; throw error; }
-  if (!response.ok) throw new Error(`The RPC returned HTTP ${response.status}.`);
-  return payload.result;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let response;
+    try { response = await fetchWithTimeout(net.rpc, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-web", method, params }) }, 6000); }
+    catch (error) { if (attempt === 2) throw error; continue; }
+    const text = await response.text();
+    let payload;
+    try { payload = JSON.parse(text); } catch {}
+    if (payload?.error) { const error = new Error(payload.error.message || "The RPC returned an error."); error.rpc = payload.error; throw error; }
+    if ([429, 502, 503, 504].includes(response.status) && attempt < 2) continue;
+    if (!payload) throw new Error(`The RPC returned HTTP ${response.status} with a non-JSON body: ${text.slice(0, 240)}`);
+    if (!response.ok) throw new Error(`The RPC returned HTTP ${response.status}.`);
+    return payload.result;
+  }
 }
 
 function bytesToBase64(bytes) {
@@ -71,3 +79,5 @@ async function defaultDestination(net = network(), mempool = mempoolJson) {
 const lib = { NETWORKS, network, fetchWithTimeout, rpc, callView, mempoolBase, mempoolJson, mempoolText, defaultDestination };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetChain = lib;
+
+})();

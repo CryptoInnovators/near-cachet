@@ -1,5 +1,7 @@
 "use strict";
 
+(() => {
+
 const $ = (id) => document.getElementById(id);
 const net = cachetChain.network();
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -262,3 +264,5 @@ async function init() {
 }
 
 init();
+
+})();

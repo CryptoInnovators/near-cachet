@@ -1,4 +1,6 @@
 "use strict";
+
+(() => {
 // Pure claim-link logic. No DOM. Loaded by claim.html and by the Node tests.
 
 const PKCS8_ED25519_PREFIX = "302e020100300506032b657004220420";
@@ -63,3 +65,5 @@ function parseFragment(hash) {
 const lib = { PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetClaim = lib;
+
+})();

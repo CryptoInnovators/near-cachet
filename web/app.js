@@ -1,3 +1,6 @@
+"use strict";
+
+(() => {
 const activeNetwork = cachetChain.network();
 const DEFAULT_CONTRACT = activeNetwork.contract;
 const DEFAULT_SIGNER = activeNetwork.name === "testnet" ? "v1.signer-prod.testnet" : "v1.signer";
@@ -1019,3 +1022,5 @@ if (typeof globalThis !== "undefined") {
     hexToBytes,
   };
 }
+
+})();
