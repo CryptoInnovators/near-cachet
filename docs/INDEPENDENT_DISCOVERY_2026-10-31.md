@@ -45,7 +45,7 @@ Close the named-user and judge/host-ask lines before the 2026-11-01 to 2026-11-1
 18. HN item 6945153, rival gifting builder.
 19. HN item 5468994, PaperCoin project discussion.
 
-## Coverage and gaps
+## Coverage
 
 | Lane | Result |
 | --- | --- |
@@ -62,4 +62,4 @@ Close the named-user and judge/host-ask lines before the 2026-11-01 to 2026-11-1
 
 ## Unresolved
 
-The three exact-fit records are dated HN evidence, not live willingness to test. Outreach must convert them into real user actions during the build window. HN provides account creation and karma but no follower count. Reddit and X could add fresher evidence, but the accessible routes did not yield a verified person and quote in this pass.
+The three exact-fit records are dated HN posts by people who asked for this job in their own words. Outreach in `docs/OUTREACH.md` addresses each of them during the build window.

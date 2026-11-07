@@ -50,3 +50,14 @@ Note 1 on `cachet.testnet` goes from funded to burned in one run of `scripts/e2e
 | `finalize` with the sweep inclusion proof | NEAR `FwLo9qXY666vMQ8rwPYKGXPnfkzou11vrkFzqR2RDAJW` | 276164580 | Returns `true`; `note("1")` and `nft_token("1")` both return `null` |
 
 The note address then shows one funded and one spent 107,894-sat output. `scripts/check-sweep.sh` reads the sweep from the explorer API and the note from `https://test.rpc.fastnear.com`, and exits nonzero unless the sweep has one confirmed input spending output 1 of the funding transaction from the note address, pays only the destination, and note 1 is burned. Given the funding txid or an unknown txid in place of the sweep txid, it exits 1.
+
+## Judge pool note, 2026-11-07
+
+`web/judge-links.json` lists a sealed note that `claim.html` hands to a judge. `scripts/check-judge-pool.sh` reads the note from NEAR testnet and the funding output from the Bitcoin testnet3 explorer and exits nonzero unless they agree.
+
+| Step | Transaction | Result |
+|---|---|---|
+| Mint note 2 for `cachet-ops.testnet` | NEAR `ET3QfRRbh9U6UZNSVVxzS32n3oPzjt5NhKbuNAZdPKnR` | Final success, token `"2"`, 12.0 Tgas |
+| Fund `tb1qsq98ec3mxsy9f2jhmmwwm54lsdq0sz47mx0wgd` with 50,000 sats from the Satloot testnet3 faucet | Bitcoin `35784fb7705de7a4da2d6d98fb808c28cae0d334f89e08b5dcd0fe0f8e2f3885`, output 0 | Confirmed in Bitcoin testnet3 block 5,302,704 |
+| `attest` as `cachet-ops.testnet` | NEAR `G3NR3NQjWYbTzdLsFd6trK6B333TZ93dZ61XACK7DgxW` | Returns `true` through `btc-client-v4.testnet`; `note("2")` is `Sealed` with block hash `0000000000f98b9ac91fb4e1b9b3e86b4b9409409d06e5e38edc43d629790b2` |
+| `create_claim` as `cachet-ops.testnet` | NEAR `By9hXtiH4BzTTPRXDEoTBue6tAZGPpckL5nLHQTaXZiM` | `note.claim.key` equals the public key derived from the link secret |
