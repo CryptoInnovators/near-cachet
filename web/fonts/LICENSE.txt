@@ -1,0 +1,2 @@
+Gloock (Duarte Pires) and Schibsted Grotesk (Schibsted Media Group) are licensed under the SIL Open Font License 1.1, https://openfontlicense.org.
+Latin subsets served from the Fontsource packages @fontsource/gloock and @fontsource-variable/schibsted-grotesk.

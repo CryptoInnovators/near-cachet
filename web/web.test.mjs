@@ -112,3 +112,31 @@ test("recorded mempool proof maps to the reviewed live light-client vector", asy
   const proof = await btc.inclusionProof("https://mempool.space", vector.txid, get, get);
   assert.deepEqual(proof, { block_hash: vector.block_hash, tx_index: vector.tx_index, merkle_proof: vector.merkle_proof, coinbase_tx_id: vector.coinbase_tx_id, coinbase_merkle_proof: vector.coinbase_merkle_proof });
 });
+
+test("rpc moves to the next provider on a 429, remembers it, and does not retry a contract error", async () => {
+  const real = globalThis.fetch;
+  const net = { name: "fallback-test", rpc: "https://a.example", rpcs: ["https://a.example", "https://b.example"] };
+  const calls = [];
+  const reply = (status, body) => new Response(JSON.stringify(body), { status });
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    if (String(url).startsWith("https://a.example")) return reply(429, { error: { code: -429, message: "Rate limits exceeded" } });
+    return reply(200, { result: { ok: true } });
+  };
+  try {
+    assert.deepEqual(await chain.rpc("status", [], net), { ok: true });
+    assert.deepEqual(calls, ["https://a.example", "https://b.example"]);
+    calls.length = 0;
+    await chain.rpc("status", [], net);
+    assert.deepEqual(calls, ["https://b.example"], "the provider that answered last goes first");
+    globalThis.fetch = async (url) => { calls.push(String(url)); return reply(200, { error: { name: "HANDLER_ERROR", message: "contract panicked" } }); };
+    calls.length = 0;
+    await assert.rejects(chain.rpc("query", {}, net), /contract panicked/);
+    assert.equal(calls.length, 1, "a contract error is final, not a reason to try another provider");
+  } finally { globalThis.fetch = real; }
+});
+
+test("rpc override parameter replaces the provider list and must be https", () => {
+  assert.deepEqual(chain.network("?network=testnet&rpc=https://near-testnet.drpc.org").rpcs, ["https://near-testnet.drpc.org"]);
+  assert.equal(chain.network("?rpc=http://evil.example").rpcs.length, 2);
+});
