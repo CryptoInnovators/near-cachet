@@ -40,7 +40,7 @@ listeners.push((msg) => {
   if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") errors.push(`console.error: ${msg.params.args.map((a) => a.value ?? a.description).join(" ")}`);
   if (msg.method === "Log.entryAdded" && msg.params.entry.level === "error") errors.push(`log: ${msg.params.entry.text} ${msg.params.entry.url || ""}`);
 });
-await S("Page.enable"); await S("Runtime.enable"); await S("Log.enable");
+await S("Page.enable"); await S("Runtime.enable"); await S("Log.enable"); await S("Network.enable"); await S("Network.setCacheDisabled", { cacheDisabled: true });
 await S("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: args.motion ? "no-preference" : "reduce" }] });
 
 const evalJs = async (expression) => {
@@ -60,18 +60,26 @@ try {
         let ok = false;
         try { ok = await evalJs(`!!(${args.wait})`); } catch {}
         if (ok) break;
-        if (Date.now() > end) throw new Error(`timeout (${w}px) waiting for: ${args.wait}`);
+        if (Date.now() > end) { errors.push(`timeout (${w}px) waiting for: ${args.wait}`); break; }
         await new Promise((r) => setTimeout(r, 500));
       }
     } else await new Promise((r) => setTimeout(r, 4000));
     if (args.then) await evalJs(args.then);
+    if (args.scroll) {
+      // walk the page so IntersectionObserver reveals fire, then come back to the top
+      const total = await evalJs(`document.documentElement.scrollHeight`);
+      for (let y = 0; y < total; y += 500) { await evalJs(`window.scrollTo({ top: ${y}, behavior: "instant" })`); await new Promise((r) => setTimeout(r, 140)); }
+      await evalJs(`window.scrollTo({ top: 0, behavior: "instant" })`);
+      await new Promise((r) => setTimeout(r, 900));
+    }
     await new Promise((r) => setTimeout(r, 700));
+    const probe = args.probe ? await evalJs(args.probe) : undefined;
     const overflow = await evalJs(`document.documentElement.scrollWidth - document.documentElement.clientWidth`);
     const height = await evalJs(`Math.ceil(document.documentElement.scrollHeight)`);
     const shot = await S("Page.captureScreenshot", args["viewport-only"] ? { format: "png" } : { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: w, height: Math.min(height, 12000), scale: 1 } });
     const file = `${out}/${name}-${w}.png`;
     writeFileSync(file, Buffer.from(shot.data, "base64"));
-    results.push({ width: w, file, height, horizontalOverflowPx: overflow });
+    results.push({ width: w, file, height, horizontalOverflowPx: overflow, probe });
   }
 } finally {
   await send("Target.closeTarget", { targetId }).catch(() => {});

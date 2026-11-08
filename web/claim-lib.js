@@ -62,7 +62,19 @@ function parseFragment(hash) {
   return { contract, token, key: key.toLowerCase() };
 }
 
-const lib = { PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment };
+// The first judge-pool fragment for this network whose note is still Sealed with an open claim link, or null.
+async function pickJudgeFragment(net, readNote, entries) {
+  const list = entries || await (await fetch("judge-links.json", { cache: "no-store" })).json();
+  for (const entry of list) {
+    const fragment = parseFragment(entry.fragment);
+    if (!fragment || fragment.contract !== net.contract) continue;
+    const note = await readNote(fragment);
+    if (note?.state === "Sealed" && note.claim) return entry.fragment;
+  }
+  return null;
+}
+
+const lib = { pickJudgeFragment, PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetClaim = lib;
 

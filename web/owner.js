@@ -3,37 +3,23 @@
 (() => {
 
 const ownerNet = cachetChain.network();
+const { h, short } = cachetUi;
 const ownerPanel = document.getElementById("owner-actions");
 const ownerStatus = document.getElementById("owner-status");
-const ownerAccount = document.getElementById("wallet-account");
+const connectButton = document.getElementById("wallet-connect");
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function ownerElement(tag, text, className) {
-  const item = document.createElement(tag);
-  if (text != null) item.textContent = text;
-  if (className) item.className = className;
-  return item;
-}
-
-function ownerButton(label, fn) {
-  const button = ownerElement("button", label);
-  button.type = "button";
-  button.addEventListener("click", fn);
-  return button;
+function ownerButton(label, fn, className = "btn btn-primary") {
+  return h("button", { type: "button", class: className, onclick: fn }, label);
 }
 
 function ownerField(form, label, id, value = "") {
-  const wrap = ownerElement("div", null, "field");
-  const caption = ownerElement("label", label);
-  caption.htmlFor = id;
-  const input = ownerElement("input");
-  input.id = id;
-  input.value = value;
-  input.autocomplete = "off";
-  input.autocapitalize = "none";
-  wrap.append(caption, input);
-  form.append(wrap);
-  return input;
+  form.append(h("div", { class: "field" }, h("label", { for: id }, label), h("input", { id, value, autocomplete: "off", autocapitalize: "none", spellcheck: "false" })));
+  return document.getElementById(id);
+}
+
+function tool(title, ...children) {
+  return h("div", { class: "tool" }, title ? h("h3", null, title) : null, ...children);
 }
 
 function resultFailure(result) {
@@ -44,42 +30,32 @@ function resultFailure(result) {
 
 async function refresh(contract, tokenId, noteProvided, configProvided) {
   const account = cachetWallet.accountId;
-  const [noteRead, configRead] = await Promise.all([
-    noteProvided ? Promise.resolve({ value: noteProvided }) : cachetChain.callView(contract, "note", { token_id: tokenId }, ownerNet),
-    configProvided ? Promise.resolve({ value: configProvided }) : cachetChain.callView(contract, "config", {}, ownerNet),
-  ]);
-  const note = noteRead.value;
-  const config = configRead.value;
   ownerPanel.replaceChildren();
-  if (config) await trust(config);
+  const note = noteProvided === undefined ? (await cachetChain.callView(contract, "note", { token_id: tokenId }, ownerNet)).value : noteProvided;
+  const config = configProvided || (await cachetChain.callView(contract, "config", {}, ownerNet).catch(() => ({ value: null }))).value;
+  if (!config) return ownerPanel.append(tool("No contract here", h("p", null, `${contract} is not a Cachet contract on ${ownerNet.name}, so there is nothing to manage.`)));
   if (!account) {
-    ownerPanel.append(ownerElement("p", "Connect a NEAR wallet to see actions for your account."));
+    ownerPanel.append(tool("Connect a NEAR wallet", h("p", null, "Connect to mint a note, or to manage one you own."), ownerButton("Connect wallet", connect)));
     return;
   }
-  const mint = ownerButton("Mint note · 0.02 NEAR", () => runMint(contract));
-  ownerPanel.append(mint);
+  ownerPanel.append(tool("Mint a note", h("p", null, "0.02 NEAR derives a new Bitcoin address and prepays every byte the note can ever store."), ownerButton("Mint note", () => runMint(contract))));
   if (!note) return;
   if (account !== note.owner_id) {
-    ownerPanel.append(ownerElement("p", `This note belongs to ${note.owner_id}. Connect that account to manage it.`, "fine"));
+    ownerPanel.append(tool(`Note ${note.token_id} belongs to ${note.owner_id}`, h("p", null, "Connect that account to manage it.")));
     return;
   }
-  const actions = ownerElement("div", null, "owner-actions");
-  ownerPanel.append(actions);
   if (note.state === "Minted") {
-    actions.append(ownerElement("p", "Fund once with one output. The funding address appears in the note record while it is Minted."));
-    actions.append(ownerButton("Attest funding", () => runAttest(contract, tokenId, note, config)));
-    if (!note.claim) actions.append(ownerButton("Create claim link", () => runClaimLink(contract, tokenId)));
+    ownerPanel.append(tool("Attest the funding", h("p", null, "Fund the address on the card once with one output. When it has two confirmations, attest it and the wax goes on."), ownerButton("Attest funding", () => runAttest(contract, tokenId, note, config))));
+    if (!note.claim) ownerPanel.append(tool("Make a claim link", h("p", null, "A link that moves this note to whoever opens it first."), ownerButton("Create claim link", () => runClaimLink(contract, tokenId), "btn btn-paper")));
   }
   if (note.state === "Sealed") {
-    if (!note.claim) actions.append(ownerButton("Create claim link", () => runClaimLink(contract, tokenId)));
-    if (!note.claim?.locked) await addUnsealForm(actions, contract, tokenId, note, config);
+    if (!note.claim) ownerPanel.append(tool("Make a claim link", h("p", null, "A link that moves this note to whoever opens it first."), ownerButton("Create claim link", () => runClaimLink(contract, tokenId))));
+    if (!note.claim?.locked) await addUnsealForm(contract, tokenId, note, config);
   }
   if (note.state === "Unsealed") {
-    const form = ownerElement("form", null, "tool-form");
+    const form = h("form", { class: "tool-form" });
     const fee = ownerField(form, "New fee rate, sat/vB", "resign-fee", "5");
-    const submit = ownerElement("button", "Resign sweep");
-    submit.type = "submit";
-    form.append(submit);
+    form.append(h("button", { type: "submit", class: "btn btn-paper" }, "Resign sweep"));
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const rate = Number(fee.value);
@@ -87,22 +63,29 @@ async function refresh(contract, tokenId, noteProvided, configProvided) {
       if (guard) return report(guard, true);
       await runCall(contract, "resign", { token_id: tokenId, fee_rate: rate }, 300);
     });
-    actions.append(form);
-    if (note.sweep?.signed_tx) {
-      actions.append(ownerElement("pre", note.sweep.signed_tx, "cmd-text"));
-      actions.append(ownerButton("Copy signed sweep", async () => { await navigator.clipboard.writeText(note.sweep.signed_tx); report("Signed sweep copied."); }));
-      actions.append(ownerButton("Broadcast", () => runBroadcast(config, note)));
-    }
-    actions.append(ownerButton("Finalize sweep", () => runFinalize(contract, tokenId, note, config)));
+    ownerPanel.append(tool("Sweep", h("p", null, "The sweep is signed. Broadcast it, or sign again at a new fee."), note.sweep?.signed_tx ? h("pre", { class: "cmd-text" }, note.sweep.signed_tx) : null, note.sweep?.signed_tx ? ownerButton("Broadcast", () => runBroadcast(config, note)) : null, note.sweep?.signed_tx ? ownerButton("Copy signed sweep", async () => { await navigator.clipboard.writeText(note.sweep.signed_tx); report("Signed sweep copied."); }, "btn btn-paper") : null, form));
+    ownerPanel.append(tool("Finalize", h("p", null, "Once the sweep is confirmed, finalize burns the note."), ownerButton("Finalize sweep", () => runFinalize(contract, tokenId, note, config), "btn btn-paper")));
   }
   if (["Attesting", "Unsealing", "Resigning", "Finalizing"].includes(note.state)) {
-    actions.append(ownerButton("Recover after timeout", () => runRecover(contract, tokenId, note)));
+    ownerPanel.append(tool("Waiting on a cross-contract answer", h("p", null, "If no answer arrives, recover opens 400 NEAR blocks after the request."), ownerButton("Recover after timeout", () => runRecover(contract, tokenId, note), "btn btn-paper")));
   }
+}
+
+async function connect() {
+  try {
+    const account = await cachetWallet.connect(ownerNet.name);
+    connectButton.textContent = short(account, 12, 8);
+    connectButton.setAttribute("aria-label", `Connected account ${account}`);
+    const supply = await cachetChain.callView(document.getElementById("contract-input").value.trim(), "nft_supply_for_owner", { account_id: account }, ownerNet).catch(() => null);
+    const badge = document.getElementById("notes-count");
+    if (badge && supply && Number(supply.value) > 0) { badge.textContent = String(supply.value); badge.hidden = false; }
+    await refresh(document.getElementById("contract-input").value.trim(), document.getElementById("token-input").value.trim());
+  } catch (error) { report(error.message, true); }
 }
 
 function report(text, error = false) {
   ownerStatus.textContent = text || "";
-  ownerStatus.className = error ? "control-status error" : "control-status";
+  ownerStatus.className = error ? "status error" : "status";
 }
 
 async function updateRead(contract, tokenId) {
@@ -149,8 +132,8 @@ function bitcoinScriptLen(address, hrp) {
   return null;
 }
 
-async function addUnsealForm(parent, contract, tokenId, note, config) {
-  const form = ownerElement("form", null, "tool-form");
+async function addUnsealForm(contract, tokenId, note, config) {
+  const form = h("form", { class: "tool-form" });
   const base = cachetChain.mempoolBase(config.hrp);
   let destination = "";
   let rate = ownerNet.name === "testnet" ? 5 : 1;
@@ -165,9 +148,7 @@ async function addUnsealForm(parent, contract, tokenId, note, config) {
   } catch (error) { report(`Fee estimate unavailable: ${error.message}`, true); }
   const destinationInput = ownerField(form, "Bitcoin destination", "owner-destination", destination);
   const feeInput = ownerField(form, "Fee rate, sat/vB", "owner-fee", String(rate));
-  const submit = ownerElement("button", "Unseal");
-  submit.type = "submit";
-  form.append(submit);
+  form.append(h("button", { type: "submit", class: "btn btn-primary" }, "Break the seal"));
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const scriptLen = bitcoinScriptLen(destinationInput.value.trim(), config.hrp);
@@ -178,10 +159,10 @@ async function addUnsealForm(parent, contract, tokenId, note, config) {
       await runCall(contract, "unseal", { token_id: tokenId, btc_dest: destinationInput.value.trim().toLowerCase(), fee_rate: Number(feeInput.value.trim()) }, 300, "0", tokenId);
       const unsealed = await waitForUnsealed(contract, tokenId);
       await refresh(contract, tokenId, unsealed, config);
-      report(`Note ${tokenId} is Unsealed. Its signed sweep is ready below.`);
+      report(`Note ${tokenId} is Unsealed. Its signed sweep is ready.`);
     } catch (error) { report(error.message, true); }
   });
-  parent.append(form);
+  ownerPanel.append(tool("Break the seal", h("p", null, "Signs a Bitcoin sweep of the whole note to the address you name. The seal cannot be restored."), form));
 }
 
 async function runAttest(contract, tokenId, note, config) {
@@ -207,11 +188,9 @@ async function runClaimLink(contract, tokenId) {
     const link = new URL("claim.html", location.href);
     link.searchParams.set("network", ownerNet.name);
     link.hash = cachetClaim.buildFragment({ contract, token: tokenId, key: seed });
-    const anchor = ownerElement("a", link.href, "mono wrap");
-    anchor.href = link.href;
-    anchor.rel = "noopener noreferrer";
+    const anchor = h("a", { href: link.href, rel: "noopener noreferrer", class: "link-out" }, link.href);
     const copy = ownerButton("Copy claim link", async () => { await navigator.clipboard.writeText(link.href); report("Claim link copied."); });
-    ownerPanel.append(anchor, copy);
+    ownerPanel.append(tool("Your claim link", h("p", null, "Anyone who opens it can take the note once. Send it over a channel you trust."), anchor, copy));
   } catch (error) { report(error.message, true); }
 }
 
@@ -288,33 +267,7 @@ async function waitForUnsealed(contract, tokenId) {
   throw new Error(`The signer has not answered; Recover opens at NEAR block ${Number(note?.pending_since || 0) + 400}.`);
 }
 
-async function trust(config) {
-  const target = document.getElementById("trust-body");
-  if (!target) return;
-  target.replaceChildren();
-  const list = ownerElement("dl", null, "record");
-  const add = (label, value) => { const row = ownerElement("div", null, "record-row"); row.append(ownerElement("dt", label), ownerElement("dd", String(value))); list.append(row); };
-  add("Signer", config.signer_id);
-  add("Bitcoin light client", config.btc_light_client);
-  try {
-    const header = await cachetChain.callView(config.btc_light_client, "get_last_block_header", {}, ownerNet);
-    add("Light-client height", header.value?.block_height);
-  } catch (error) { add("Light-client read", error.message); }
-  try {
-    const height = await cachetChain.mempoolText(cachetChain.mempoolBase(config.hrp), "/blocks/tip/height");
-    add("Bitcoin tip", height.trim());
-  } catch (error) { add("Bitcoin tip read", error.message); }
-  target.append(list);
-}
-
-document.getElementById("wallet-connect").addEventListener("click", async () => {
-  try {
-    const account = await cachetWallet.connect(ownerNet.name);
-    ownerAccount.textContent = account;
-    ownerAccount.setAttribute("aria-label", `Connected account ${account}`);
-    await refresh(document.getElementById("contract-input").value.trim(), document.getElementById("token-input").value.trim());
-  } catch (error) { report(error.message, true); }
-});
+connectButton.addEventListener("click", connect);
 
 globalThis.cachetOwner = { refresh };
 

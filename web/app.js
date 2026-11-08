@@ -358,29 +358,23 @@ function pubkeyToAddress(signerKey, hrp) {
 }
 
 const fetchWithTimeout = cachetChain.fetchWithTimeout;
+
 const rpc = (method, params) => cachetChain.rpc(method, params, activeNetwork);
 const callView = (account, method, args) => cachetChain.callView(account, method, args, activeNetwork);
-
-async function viewAccessKeys(account) {
-  const result = await rpc("query", {
-    request_type: "view_access_key_list",
-    finality: "final",
-    account_id: account,
-  });
-  return { keys: Array.isArray(result.keys) ? result.keys : [], blockHeight: result.block_height };
-}
-
 const mempoolBase = cachetChain.mempoolBase;
 const mempoolJson = cachetChain.mempoolJson;
+
+async function viewAccessKeys(account) {
+  const result = await rpc("query", { request_type: "view_access_key_list", finality: "final", account_id: account });
+  return { keys: Array.isArray(result.keys) ? result.keys : [], blockHeight: result.block_height };
+}
 
 function formatError(error) {
   if (error && error.rpc) {
     const payload = error.rpc;
     const cause = payload.cause || {};
     const lines = [];
-    if (payload.name || cause.name) {
-      lines.push(cause.name ? `${payload.name || "RPC"}: ${cause.name}` : payload.name);
-    }
+    if (payload.name || cause.name) lines.push(cause.name ? `${payload.name || "RPC"}: ${cause.name}` : payload.name);
     if (payload.data) lines.push(String(payload.data));
     if (cause.info && cause.info.block_height != null) lines.push(`block ${cause.info.block_height}`);
     if (lines.length === 0) lines.push(JSON.stringify(payload));
@@ -390,637 +384,360 @@ function formatError(error) {
   return String(error);
 }
 
+function isUnknownAccount(error) {
+  return /UNKNOWN_ACCOUNT|does not exist while viewing/i.test(formatError(error));
+}
+
 function adviceFor(error, context) {
   const text = formatError(error);
   if (/UNKNOWN_ACCOUNT|does not exist while viewing/i.test(text)) {
-    if (context === "signer") return `The configured signer account is not deployed on ${activeNetwork.name}. Check the contract config.`;
-    return `This contract account is not deployed on ${activeNetwork.name}. Deploy Cachet at this account, or enter a deployed contract account above.`;
+    if (context === "signer") return `The configured signer account is not deployed on ${activeNetwork.name}.`;
+    return `No account exists at this address on ${activeNetwork.name}. Enter a deployed Cachet contract.`;
   }
-  if (/MethodNotFound|does not have a method|Method not found/i.test(text)) {
-    return "The account exists but does not expose this view. Confirm the account is the Cachet contract.";
-  }
-  if (/FunctionCallError|ExecutionError|panicked|HostError|wasm execution/i.test(text)) {
-    return "The contract rejected the view call. Check the token id and the contract version above.";
-  }
-  if (/timed out|Failed to fetch|NetworkError|Load failed/i.test(text)) {
-    return "The browser could not complete the request. Check the connection and read again.";
-  }
-  if (context === "bitcoin") return "The address above is still valid. Open it on mempool.space, or read again when the API responds.";
-  if (context === "signer") return "The signer may be unavailable or misconfigured. Try again, or check the contract config.";
-  if (context === "keys") return "Check the contract account, then read again.";
-  return "Read the exact error above, then try again or enter another contract account.";
-}
-
-function nearAccountUrl(account) {
-  return `${activeNetwork.nearExplorer}/address/${encodeURIComponent(account)}`;
-}
-
-function mempoolAddressUrl(address, hrp) {
-  const base = mempoolBase(hrp);
-  return base ? `${base}/address/${encodeURIComponent(address)}` : null;
-}
-
-function mempoolTxUrl(txid, hrp) {
-  const base = mempoolBase(hrp);
-  return base ? `${base}/tx/${encodeURIComponent(txid)}` : null;
-}
-
-function formatSats(value) {
-  return `${new Intl.NumberFormat("en-US").format(value)} sats`;
-}
-
-function formatBtc(value) {
-  const amount = Math.trunc(value);
-  const negative = amount < 0;
-  const absolute = Math.abs(amount);
-  const whole = Math.floor(absolute / 100000000);
-  const fraction = String(absolute % 100000000).padStart(8, "0");
-  return `${negative ? "-" : ""}${new Intl.NumberFormat("en-US").format(whole)}.${fraction} BTC`;
-}
-
-function satsAndBtc(value) {
-  return `${formatSats(value)} (${formatBtc(value)})`;
-}
-
-function formatNear(yocto) {
-  const value = BigInt(yocto);
-  const whole = value / 1000000000000000000000000n;
-  const fraction = (value % 1000000000000000000000000n).toString().padStart(24, "0").slice(0, 4).replace(/0+$/, "");
-  return `${new Intl.NumberFormat("en-US").format(whole)}${fraction ? `.${fraction}` : ""} NEAR`;
-}
-
-function formatUnixUtc(seconds) {
-  return `${new Date(seconds * 1000).toISOString().replace("T", " ").slice(0, 16)} UTC`;
-}
-
-function nowUtc() {
-  return `${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`;
-}
-
-function node(tag, className, text) {
-  const element = document.createElement(tag);
-  if (className) element.className = className;
-  if (text != null) element.textContent = String(text);
-  return element;
-}
-
-function appendContent(parent, content) {
-  if (content == null) return;
-  if (typeof content === "object" && content.nodeType) parent.append(content);
-  else parent.append(document.createTextNode(String(content)));
-}
-
-function mono(text, extra) {
-  const element = node("span", `mono${extra ? ` ${extra}` : ""}`, text);
-  return element;
-}
-
-function code(text) {
-  return node("code", null, text);
-}
-
-function externalLink(href, text, className) {
-  const link = node("a", className || null, text);
-  link.href = href;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  return link;
-}
-
-function accountLink(account) {
-  return externalLink(nearAccountUrl(account), account, "mono");
-}
-
-function record(rows) {
-  const list = node("dl", "record");
-  for (const [label, value] of rows) {
-    if (value == null) continue;
-    const row = node("div", "record-row");
-    row.append(node("dt", null, label));
-    const detail = node("dd");
-    appendContent(detail, value);
-    row.append(detail);
-    list.append(row);
-  }
-  return list;
-}
-
-function reading(text) {
-  const element = node("p", "reading");
-  element.append(node("span", "reading-dot"));
-  element.append(document.createTextNode(text));
-  return element;
-}
-
-function emptyState(title, text, next) {
-  const box = node("div", "state state-empty");
-  box.append(node("p", "state-title", title));
-  if (text) box.append(node("p", null, text));
-  if (next) box.append(node("p", "next", `Next: ${next}`));
-  return box;
-}
-
-function notice(title, content, tone = "info") {
-  const box = node("div", `notice notice-${tone}`);
-  box.append(node("p", "notice-title", title));
-  if (content) {
-    const paragraph = node("p");
-    appendContent(paragraph, content);
-    box.append(paragraph);
-  }
-  return box;
-}
-
-function errorState(title, error, advice) {
-  const box = node("div", "state state-error");
-  box.setAttribute("role", "alert");
-  box.append(node("p", "state-title", title));
-  const exact = node("pre", "exact");
-  exact.textContent = formatError(error);
-  box.append(exact);
-  if (advice) box.append(node("p", "next", `Next: ${advice}`));
-  return box;
-}
-
-function renderError(container, title, error, context) {
-  container.replaceChildren(errorState(title, error, adviceFor(error, context)));
+  if (/MethodNotFound|does not have a method|Method not found/i.test(text)) return "The account exists but does not expose this view. Confirm it is a Cachet contract.";
+  if (/FunctionCallError|ExecutionError|panicked|HostError|wasm execution/i.test(text)) return "The contract rejected the view call. Check the token id.";
+  if (/timed out|Failed to fetch|NetworkError|Load failed|rate limited/i.test(text)) return "No provider answered in time. Read again in a moment.";
+  if (context === "bitcoin") return "Open the address on mempool.space, or read again when the API responds.";
+  return "Read again, or enter another contract account.";
 }
 
 function isAccountId(value) {
-  return (
-    value.length >= 2 &&
-    value.length <= 64 &&
-    /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/.test(value) &&
-    !value.includes("..")
-  );
+  return value.length >= 2 && value.length <= 64 && /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/.test(value) && !value.includes("..");
 }
 
 function isTokenId(value) {
   return value.length >= 1 && value.length <= 64 && /^[A-Za-z0-9._:-]+$/.test(value);
 }
 
-function isSlot(value) {
-  return /^\d{1,10}$/.test(value) && Number(value) <= MAX_SLOT;
-}
+function mountPage() {
+  const { h, int, sats, short, ago, link, groupHex } = cachetUi;
+  const $ = (id) => document.getElementById(id);
+  const net = activeNetwork;
+  const explorerAccount = (account) => `${net.nearExplorer}/address/${encodeURIComponent(account)}`;
 
-function renderBanner(contract, config, configError) {
-  const banner = document.getElementById("contract-banner");
-  banner.replaceChildren();
-  if (!configError) {
-    banner.hidden = true;
-    return;
-  }
-  banner.hidden = false;
-  if (isUnknownAccount(configError)) {
-    banner.append(node("p", "banner-title", `The contract account is not deployed on ${activeNetwork.name}.`));
-    const paragraph = node("p", "banner-body");
-    paragraph.append(document.createTextNode("The note and access key panels show the exact chain error for "));
-    paragraph.append(code(contract));
-    paragraph.append(document.createTextNode(`. The address panel still reads the live `));
-    paragraph.append(code(DEFAULT_SIGNER));
-    paragraph.append(document.createTextNode(", so the derived address is real. Deploy Cachet at this account, or enter a deployed contract above."));
-    banner.append(paragraph);
-  } else {
-    banner.append(node("p", "banner-title", "The contract config could not be read."));
-    const paragraph = node("p", "banner-body");
-    paragraph.append(document.createTextNode("The address panel falls back to "));
-    paragraph.append(code(DEFAULT_SIGNER));
-    paragraph.append(document.createTextNode(" and "));
-    paragraph.append(code(DEFAULT_HRP));
-    paragraph.append(document.createTextNode(`. The note panel carries the exact error.`));
-    banner.append(paragraph);
-  }
-}
+  /* ---- the record: five tiles ---- */
+  const VERDICT = { match: "Match", differs: "Differs", lag: "Lagging", wait: "Waiting", read: "Read", unread: "Not read", reading: "Reading" };
 
-function renderNote(container, meta, note, error, contract, tokenId, hrp, run) {
-  if (run !== currentRun) return;
-  meta.textContent = "";
-  if (error) {
-    renderError(container, "The note record could not be read.", error, "note");
-    meta.textContent = `source: ${contract}.note("${tokenId}")`;
-    return;
-  }
-  const view = note.value;
-  if (view == null) {
-    container.replaceChildren(
-      emptyState(
-        `No note at token id ${tokenId}.`,
-        `The contract returned null for note("${tokenId}"). No token with this id is stored on this contract.`,
-        "mint a note with mint_note, or enter an existing token id above.",
-      ),
-    );
-    meta.textContent = `read at NEAR block ${note.blockHeight}. source: ${contract}.note("${tokenId}").`;
-    return;
-  }
-  if (typeof view !== "object") {
-    container.replaceChildren(
-      errorState("The note view was not an object.", new Error(`Received: ${JSON.stringify(view)}`), "Check that the account is the Cachet contract."),
-    );
-    return;
+  function makeTile(claim) {
+    const verdict = h("p", { class: "verdict", dataset: { v: "reading" } }, VERDICT.reading);
+    const proof = h("div", { class: "tile-proof" }, h("p", { class: "reading" }, "Reading…"));
+    const el = h("article", { class: "tile rise" }, h("div", { class: "tile-claim" }, h("h3", null, claim), verdict), proof);
+    return { el, verdict, proof };
   }
 
-  container.replaceChildren();
-  const rows = [
-    ["Token", mono(`#${view.token_id}`)],
-    ["Owner", accountLink(view.owner_id)],
-    ["State", mono(view.state)],
-    ["Path", mono(view.path)],
-    ["Compressed key", mono(view.pubkey, "wrap")],
-  ];
-  if (cachetOutcome.fundingAddressVisible(view)) rows.push(["Funding address", mempoolAddressUrl(view.address, hrp) ? externalLink(mempoolAddressUrl(view.address, hrp), view.address, "mono") : mono(view.address)]);
-
-  if (view.utxo) {
-    const txUrl = mempoolTxUrl(view.utxo.txid, hrp);
-    const utxoLabel = `${view.utxo.txid}:${view.utxo.vout}`;
-    rows.push(["Funding UTXO", txUrl ? externalLink(txUrl, utxoLabel, "mono wrap") : mono(utxoLabel, "wrap")]);
-    rows.push(["Funding value", mono(satsAndBtc(view.utxo.sats))]);
-    rows.push(["Attestation hash", mono(view.utxo.attestation_payload_hash, "wrap")]);
-  } else {
-    rows.push(["Funding UTXO", mono("None attested")]);
+  function fill(tile, { v, body, source }) {
+    tile.verdict.dataset.v = v;
+    tile.verdict.textContent = VERDICT[v] || v;
+    tile.proof.replaceChildren(...body, source ? h("p", { class: "source" }, source) : null);
   }
 
-  if (view.sweep) {
-    rows.push(["Sweep destination script", mono(view.sweep.destination_script, "wrap")]);
-    rows.push(["Sweep fee", mono(satsAndBtc(view.sweep.fee_sats))]);
-    rows.push(["Signed sweep", mono(view.sweep.signed_tx ? `Ready, ${view.sweep.signed_tx.length} hex characters` : "Not signed")]);
-  } else {
-    rows.push(["Sweep", mono("No destination set")]);
+  const dl = (pairs) => h("dl", null, pairs.filter(Boolean).map(([k, ...v]) => h("div", null, h("dt", null, k), h("dd", null, ...v))));
+
+  function failTile(tile, error, context) {
+    fill(tile, { v: "unread", body: [h("div", { class: "state-error", role: "alert" }, h("p", { class: "state-title" }, "This read did not finish."), h("pre", { class: "exact" }, formatError(error)), h("p", { class: "next" }, adviceFor(error, context)))] });
   }
 
-  if (view.claim) {
-    rows.push(["Claim key hash", mono(view.claim.key, "wrap")]);
-    rows.push(["Claim expires", mono(`NEAR block ${view.claim.expires_at_block}`)]);
-    rows.push(["Claim locked", mono(view.claim.locked ? "Yes" : "No")]);
-  } else {
-    rows.push(["Claim link", mono("None")]);
+  /* ---- reads ---- */
+  async function bitcoinTx(base, note) {
+    return mempoolJson(base, `/tx/${encodeURIComponent(note.utxo.txid)}`);
   }
 
-  rows.push(["In transfer", mono(view.in_transfer ? "Yes" : "No")]);
-  container.append(record(rows));
-
-  if (view.in_transfer) {
-    container.append(notice("This note is mid-transfer.", "The owner cannot request a signature until the transfer settles.", "warn"));
-  }
-  meta.textContent = `read at NEAR block ${note.blockHeight}. source: ${contract}.note("${tokenId}").`;
-}
-
-function isUnknownAccount(error) {
-  return /UNKNOWN_ACCOUNT|does not exist while viewing/i.test(formatError(error));
-}
-
-function renderKeys(container, meta, result, error, contract, run, deployed = true) {
-  if (run !== currentRun) return;
-  meta.textContent = "";
-  if (!error && !deployed) {
-    container.replaceChildren();
-    container.append(emptyState(`No account exists at ${contract}.`, "The RPC returns an empty key list for an account that was never created, so an empty list here says nothing about keys.", "enter a deployed contract above, or deploy Cachet at this account and read again."));
-    meta.textContent = `source: ${contract}.view_access_key_list, answered with an empty list for an unknown account.`;
-    return;
-  }
-  if (error) {
-    renderError(container, "The access key list could not be read.", error, "keys");
-    meta.textContent = `source: ${contract}.view_access_key_list`;
-    return;
-  }
-  const keys = result.keys || [];
-  container.replaceChildren();
-  if (keys.length === 0) {
-    const box = node("div", "keys-empty");
-    box.append(node("p", "key-count", "0"));
-    box.append(node("p", "state-title", "No access keys on this account."));
-    box.append(node("p", null, "No key can sign a transaction for the contract account. Calls can still reach its public methods."));
-    box.append(node("p", "next", "This is the intended post-deploy state for Cachet. A deployer key would appear here if it still existed."));
-    container.append(box);
-    meta.textContent = `read at NEAR block ${result.blockHeight}. source: ${contract}.view_access_key_list.`;
-    return;
-  }
-
-  const fullAccess = keys.filter((entry) => entry.access_key && entry.access_key.permission === "FullAccess");
-  container.append(node("p", "key-count", String(keys.length)));
-  if (fullAccess.length > 0) {
-    container.append(
-      notice(
-        `${fullAccess.length} full-access ${fullAccess.length === 1 ? "key can" : "keys can"} sign for this account.`,
-        "The no-admin property does not hold while a full-access key exists.",
-        "warn",
-      ),
-    );
-  } else {
-    container.append(node("p", "key-summary", "No full-access keys. Only function-call keys are attached."));
-  }
-
-  const list = node("div", "key-list");
-  for (const entry of keys) {
-    const row = node("div", "key-row");
-    row.append(mono(entry.public_key, "key-pub wrap"));
-    const permission = entry.access_key ? entry.access_key.permission : "Unknown";
-    if (permission === "FullAccess") {
-      row.append(node("p", "key-perm key-full", "Full access"));
-    } else if (permission && permission.FunctionCall) {
-      const call = permission.FunctionCall;
-      const line = node("p", "key-perm");
-      line.append(document.createTextNode("Function calls to "));
-      line.append(accountLink(call.receiver_id));
-      if (Array.isArray(call.method_names) && call.method_names.length > 0) {
-        line.append(document.createTextNode(` for ${call.method_names.join(", ")}`));
-      }
-      if (call.allowance) line.append(document.createTextNode(`; allowance ${formatNear(call.allowance)}`));
-      row.append(line);
-    } else {
-      row.append(node("p", "key-perm", "Unknown permission"));
-    }
-    if (entry.access_key && entry.access_key.nonce != null) {
-      row.append(node("p", "key-meta", `nonce ${entry.access_key.nonce}`));
-    }
-    list.append(row);
-  }
-  container.append(list);
-  meta.textContent = `read at NEAR block ${result.blockHeight}. source: ${contract}.view_access_key_list.`;
-}
-
-async function renderBitcoinActivity(container, address, hrp, run, fundingNext) {
-  container.replaceChildren(node("h3", null, "Bitcoin activity at this address"));
-  const base = mempoolBase(hrp);
-  if (!base) {
-    container.append(
-      emptyState("No public explorer for this network.", `The signer returned hrp ${hrp}, which has no mempool.space endpoint.`, "use a mainnet or testnet signer to read public Bitcoin activity."),
-    );
-    return;
-  }
-  const status = reading("Reading mempool.space...");
-  container.append(status);
-  try {
-    const [blocks, stats] = await Promise.all([
-      mempoolJson(base, "/blocks"),
-      mempoolJson(base, `/address/${encodeURIComponent(address)}`),
-    ]);
-    if (run !== currentRun) return;
-    status.remove();
-    const tip = Array.isArray(blocks) && blocks[0] ? blocks[0] : null;
-    const chain = stats.chain_stats || {};
-    const mempool = stats.mempool_stats || {};
-    const received = (chain.funded_txo_sum || 0) + (mempool.funded_txo_sum || 0);
-    const spent = (chain.spent_txo_sum || 0) + (mempool.spent_txo_sum || 0);
-    const balance = received - spent;
-    const transactionCount = (chain.tx_count || 0) + (mempool.tx_count || 0);
-    const unconfirmed = mempool.tx_count || 0;
-    container.append(
-      record([
-        ["Balance", mono(satsAndBtc(balance))],
-        ["Transactions", mono(`${transactionCount}${unconfirmed ? `, ${unconfirmed} unconfirmed` : ""}`)],
-        ["Received", mono(satsAndBtc(received))],
-        ["Spent", mono(satsAndBtc(spent))],
-      ]),
-    );
-    if (transactionCount === 0) {
-      container.append(
-        emptyState(
-          "This address is empty at the Bitcoin tip.",
-          "It has no funding transaction yet.",
-          fundingNext,
-        ),
-      );
-    }
-    const tipLine = tip
-      ? `Bitcoin tip ${tip.height}, ${formatUnixUtc(tip.timestamp)}. Page read ${nowUtc()}.`
-      : `Bitcoin tip unavailable. Page read ${nowUtc()}.`;
-    container.append(node("p", "meta", tipLine));
-  } catch (error) {
-    if (run !== currentRun) return;
-    status.remove();
-    container.append(errorState("Bitcoin activity could not be read.", error, adviceFor(error, "bitcoin")));
-  }
-}
-
-function fundingGuidance(deployed, note, contract) {
-  if (!deployed) return `do not send bitcoin here. No contract exists at ${contract} to sign for this address, so funds sent to it could not be moved.`;
-  if (!note) return `call mint_note on ${contract} first. A note exists once the contract record for this token appears in panel 02; only then is this address spendable through the contract.`;
-  return "fund the address, then attest the funding transaction to seal the note. An address alone is not a sealed note.";
-}
-
-async function renderAddress({ contract, path, signerId, hrp, confirmations, note, run, deployed = true }) {
-  const body = document.getElementById("address-body");
-  const meta = document.getElementById("address-meta");
-  body.replaceChildren(reading(`Reading ${signerId}.derived_public_key...`));
-  meta.textContent = "";
-  let response;
-  try {
-    response = await callView(signerId, "derived_public_key", {
-      path,
-      predecessor: contract,
-      domain_id: 0,
+  async function fundingTile(tile, ctx) {
+    const { note, config, contract, tokenId, txRead } = ctx;
+    if (!note) return fill(tile, { v: "wait", body: [h("p", null, `${contract} holds no note ${tokenId}.`)] });
+    if (!note.utxo) return fill(tile, { v: "wait", body: [h("p", null, "No output is attested. Fund the address once with one output, then attest it."), h("p", { class: "source" }, `Read from ${contract}.note("${tokenId}") at NEAR block ${int(ctx.noteBlock)}.`)] });
+    const base = mempoolBase(config.hrp);
+    const tx = await txRead;
+    const mismatch = cachetOutcome.blockHashMismatch(note, tx);
+    const confirmed = Boolean(tx.status?.confirmed);
+    fill(tile, {
+      v: !confirmed || mismatch ? "differs" : "match",
+      body: [dl([
+        ["The contract stores", groupHex(note.utxo.block_hash)],
+        ["The explorer reports", confirmed ? [groupHex(tx.status.block_hash), ` at Bitcoin block ${int(tx.status.block_height)}`] : "The transaction is not in a block."],
+        [`Output ${note.utxo.vout}`, `${sats(note.utxo.sats)} to the note's address`],
+      ])],
+      source: `${contract}.note("${tokenId}") at NEAR block ${int(ctx.noteBlock)}, and ${base}/api/tx/${short(note.utxo.txid)}.`,
     });
-  } catch (error) {
-    if (run !== currentRun) return;
-    renderError(body, "The signer key could not be read.", error, "signer");
-    meta.textContent = `source: ${signerId}.derived_public_key`;
-    return;
-  }
-  if (run !== currentRun) return; 
-
-  const signerKey = response.value;
-  let derived;
-  try {
-    if (typeof signerKey !== "string") throw new Error(`The signer returned ${JSON.stringify(signerKey)} instead of a key string.`);
-    derived = pubkeyToAddress(signerKey, hrp);
-  } catch (error) {
-    renderError(body, "The signer key could not be turned into an address.", error, "signer");
-    meta.textContent = `source: ${signerId}.derived_public_key`;
-    return;
   }
 
-  body.replaceChildren();
-  const addressUrl = mempoolAddressUrl(derived.address, hrp);
-  if (!note || cachetOutcome.fundingAddressVisible(note)) {
-    const addressBlock = node("div", "address-block");
-    addressBlock.append(node("p", "address-label", "P2WPKH funding address"));
-    const addressLine = node("p", "address");
-    if (addressUrl) addressLine.append(externalLink(addressUrl, derived.address));
-    else addressLine.textContent = derived.address;
-    addressBlock.append(addressLine);
-    addressBlock.append(node("p", "address-action", addressUrl ? "Fund once with one output." : "This network has no public explorer link."));
-    body.append(addressBlock);
+  async function depthTile(tile, ctx) {
+    const { note, config } = ctx;
+    const base = mempoolBase(config.hrp);
+    const [tipText, header] = await Promise.all([cachetChain.mempoolText(base, "/blocks/tip/height"), callView(config.btc_light_client, "get_last_block_header", {})]);
+    const tip = Number(tipText.trim());
+    const lc = Number(header.value?.block_height);
+    const required = Number(config.confirmations);
+    const lines = [["Bitcoin tip", int(tip)], ["Light client tip", `${int(lc)} (${tip - lc <= 0 ? "level with Bitcoin" : `${int(tip - lc)} blocks behind`})`], ["Confirmations required", String(required)]];
+    let v = Math.abs(tip - lc) <= 30 ? "match" : "lag";
+    let claim = null;
+    if (note?.utxo) {
+      const tx = await ctx.txRead;
+      if (tx.status?.confirmed) {
+        const depth = tip - tx.status.block_height + 1;
+        lines.unshift(["Blocks on top of the funding", `${int(depth)}`]);
+        if (depth < required) v = "wait";
+      }
+    }
+    fill(tile, { v, body: [dl(lines)], source: `${config.btc_light_client}.get_last_block_header at NEAR block ${int(header.blockHeight)}, and ${base}/api/blocks/tip/height. Page read ${new Date().toISOString().slice(0, 19).replace("T", " ")} UTC.` });
+    return claim;
   }
 
-  const network = hrp === "bc" ? "Bitcoin mainnet (bc)" : hrp === "tb" ? "Bitcoin testnet (tb)" : `Bitcoin regtest (${hrp})`;
-  const rows = [
-    ["Path", mono(path)],
-    ["Signer", accountLink(signerId)],
-    ["MPC public key", mono(signerKey, "wrap")],
-    ["Compressed key", mono(derived.compressedHex, "wrap")],
-    ["HASH160", mono(derived.hash160)],
-    ["Address type", `P2WPKH, bech32 version 0`],
-    ["Network", network],
+  async function keyTile(tile, ctx) {
+    const { note, config, contract, tokenId } = ctx;
+    const path = note?.path || `cachet/${tokenId}/0`;
+    const response = await callView(config.signer_id, "derived_public_key", { path, predecessor: contract, domain_id: 0 });
+    if (typeof response.value !== "string") throw new Error(`The signer returned ${JSON.stringify(response.value)} instead of a key string.`);
+    const derived = pubkeyToAddress(response.value, config.hrp);
+    ctx.derived = derived;
+    const matches = note ? String(note.pubkey).toLowerCase() === derived.compressedHex && note.address === derived.address : null;
+    fill(tile, {
+      v: note ? (matches ? "match" : "differs") : "read",
+      body: [dl([
+        ["Path under this contract", path],
+        ["Derived in this page", groupHex(derived.compressedHex)],
+        note ? ["Stored by the contract", matches ? "The same key, and the same address." : [groupHex(String(note.pubkey)), ". The contract's address differs from the derived one."]] : null,
+      ])],
+      source: `${config.signer_id}.derived_public_key(path, predecessor, 0) at NEAR block ${int(response.blockHeight)}, converted to ${config.hrp === "tb" ? "a Bitcoin testnet" : "a Bitcoin"} P2WPKH key in this page.`,
+    });
+  }
+
+  function keysTile(tile, keysResult, error, ctx) {
+    if (error) return failTile(tile, error, "keys");
+    const keys = keysResult.keys;
+    const full = keys.filter((entry) => entry.access_key?.permission === "FullAccess").length;
+    const body = [h("p", { class: "numeral" }, String(keys.length))];
+    if (keys.length === 0) body.push(h("p", null, "No key can sign for the contract account. No one can upgrade or empty it."));
+    else {
+      body.push(h("p", null, full ? `${full} full-access ${full === 1 ? "key can" : "keys can"} sign for this account.` : "Only function-call keys are attached."));
+      body.push(h("ul", null, keys.map((entry) => h("li", { class: "source" }, `${short(entry.public_key, 16, 6)}, ${entry.access_key?.permission === "FullAccess" ? "full access" : "function call"}`))));
+    }
+    fill(tile, { v: full ? "differs" : "match", body, source: `${ctx.contract}.view_access_key_list at NEAR block ${int(keysResult.blockHeight)}.` });
+  }
+
+  function systemsTile(tile, ctx) {
+    const { config } = ctx;
+    fill(tile, {
+      v: "read",
+      body: [dl([
+        ["Signs for the note", link(explorerAccount(config.signer_id), config.signer_id), " (NEAR MPC, domain 0)"],
+        ["Proves Bitcoin blocks", link(explorerAccount(config.btc_light_client), config.btc_light_client)],
+        ["Confirmations", String(config.confirmations)],
+      ])],
+      source: `${ctx.contract}.config() at NEAR block ${int(ctx.configBlock)}. Both are fixed at deploy; the contract has no key to change them.`,
+    });
+  }
+
+  /* ---- strip, life, footer ---- */
+  function renderStrip(contract, latest, latestError, block) {
+    const strip = $("strip");
+    const latestNode = latest
+      ? h("dd", null, link(`${net.nearExplorer}/txns/${latest.hash}`, short(latest.hash, 10, 6)), h("span", { class: "dim" }, `${latest.success ? "" : "Failed. "}Block ${int(latest.blockHeight)}, ${ago(latest.timestampMs)}`))
+      : h("dd", null, latestError ? `Not read: ${formatError(latestError)}` : "None yet");
+    strip.replaceChildren(
+      h("div", { class: "pair" }, h("dt", null, "Contract"), h("dd", null, link(explorerAccount(contract), contract))),
+      h("div", { class: "pair" }, h("dt", null, "Latest transaction"), latestNode),
+      h("div", { class: "pair" }, h("dt", null, "Read at"), h("dd", null, block ? `NEAR block ${int(block)}` : "Not read")),
+    );
+  }
+
+  let exemplarCache;
+  async function exemplar(note) {
+    if (note?.utxo) return note;
+    if (exemplarCache !== undefined) return exemplarCache;
+    exemplarCache = null;
+    try {
+      const entries = await (await fetch("judge-links.json", { cache: "no-store" })).json();
+      for (const entry of entries) {
+        const fragment = cachetClaim.parseFragment(entry.fragment);
+        if (!fragment || fragment.contract !== net.contract) continue;
+        const read = (await callView(fragment.contract, "note", { token_id: fragment.token })).value;
+        if (read?.utxo) { exemplarCache = read; break; }
+      }
+    } catch { exemplarCache = null; }
+    return exemplarCache;
+  }
+
+  const LIVES = [
+    { state: "Minted", name: "Minted", method: "mint_note", text: "The contract asks the signer for a Bitcoin address that belongs to this token. The die is empty." },
+    { state: "Sealed", name: "Sealed", method: "attest", text: "The light client proves the funding output sits in a block. That block's hash becomes the die, and the wax goes on." },
+    { state: "Unsealed", name: "Unsealed", method: "unseal", text: "The owner asks the signer for a signed sweep. The seal breaks and the Bitcoin can leave." },
+    { state: "Finalized", name: "Finalized", method: "finalize", text: "The light client proves the sweep is in a block. The note is burned and the die is empty again." },
   ];
-  if (confirmations != null) rows.push(["Confirmations", mono(String(confirmations))]);
-  body.append(record(rows));
 
-  if (note) {
-    const keyMatches = String(note.pubkey).toLowerCase() === derived.compressedHex;
-    const addressMatches = note.address === derived.address;
-    if (keyMatches && addressMatches) {
-      body.append(notice("The derivation matches the note record.", "The compressed key and address stored by the contract are the same values this page derived from the signer.", "ok"));
-    } else {
-      body.append(
-        notice(
-          "The note record does not match this derivation.",
-          `Derived key ${derived.compressedHex}. Stored key ${note.pubkey}.`,
-          "warn",
-        ),
-      );
+  async function renderLife(note, tokenId) {
+    const sample = await exemplar(note);
+    const token = sample?.token_id || tokenId;
+    const items = LIVES.map((life) => {
+      let svg;
+      if (life.state === "Minted") svg = cachetSeal.seal({ state: "Minted", token });
+      else if (life.state === "Finalized") svg = cachetSeal.seal({ state: "Minted", token }).replace(/<text[^>]*>.*?<\/text>/, "");
+      else if (sample?.utxo) svg = cachetSeal.seal({ blockHash: sample.utxo.block_hash, txid: sample.utxo.txid, state: life.state, token });
+      else svg = cachetSeal.seal({ state: "Minted", token });
+      const art = h("div", { class: "seal-art", role: "presentation" });
+      art.innerHTML = svg;
+      art.querySelectorAll(".seal-tick").forEach((tick) => tick.style.setProperty("--i", tick.dataset.i));
+      return h("li", { class: "stage rise" }, art, h("h3", null, life.name), h("p", { class: "method" }, life.method), h("p", null, life.text));
+    });
+    $("stages").replaceChildren(...items);
+    cachetUi.reveal($("stages"));
+  }
+
+  function renderFoot(contract, config) {
+    const pair = (k, v) => h("div", null, h("dt", null, k), h("dd", null, v));
+    $("foot-facts").replaceChildren(
+      pair("Contract", link(explorerAccount(contract), contract)),
+      pair("Signer", config ? link(explorerAccount(config.signer_id), config.signer_id) : "Not read"),
+      pair("Bitcoin light client", config ? link(explorerAccount(config.btc_light_client), config.btc_light_client) : "Not read"),
+    );
+  }
+
+  /* ---- one read of a contract and token ---- */
+  async function activityAt(address, hrp) {
+    const stats = await mempoolJson(mempoolBase(hrp), `/address/${encodeURIComponent(address)}`);
+    const chain = stats.chain_stats || {};
+    const pool = stats.mempool_stats || {};
+    return { received: (chain.funded_txo_sum || 0) + (pool.funded_txo_sum || 0), spent: (chain.spent_txo_sum || 0) + (pool.spent_txo_sum || 0), count: (chain.tx_count || 0) + (pool.tx_count || 0) };
+  }
+
+  function setBusy(busy) {
+    const button = $("read-button");
+    button.disabled = busy;
+    button.textContent = busy ? "Reading…" : "Read live";
+    $("read-form").setAttribute("aria-busy", busy ? "true" : "false");
+  }
+
+  async function readAll() {
+    const run = ++currentRun;
+    const contract = $("contract-input").value.trim().toLowerCase();
+    const tokenId = $("token-input").value.trim();
+    const problems = [];
+    if (!isAccountId(contract)) problems.push("Enter a NEAR account id, for example cachet.testnet.");
+    if (!isTokenId(tokenId)) problems.push("Enter a token id: letters, numbers, dots, colons, hyphens or underscores.");
+    $("lookup-status").textContent = problems.join(" ");
+    if (problems.length) return;
+
+    setBusy(true);
+    document.body.dataset.ready = "0";
+    const url = new URL(location.href);
+    url.searchParams.set("contract", contract);
+    url.searchParams.set("token", tokenId);
+    history.replaceState(null, "", url);
+
+    const slot = $("card-slot");
+    const tiles = [
+      makeTile("The funding sits in the block it claims."),
+      makeTile("Enough Bitcoin blocks sit on top of it."),
+      makeTile("The note's key is the signer's key."),
+      makeTile("No one holds a key to the contract."),
+      makeTile("Two systems answer for it."),
+    ];
+    $("tiles").replaceChildren(...tiles.map((tile) => tile.el));
+    cachetUi.reveal($("tiles"));
+    cachetCard.loading(slot, tokenId);
+
+    try {
+      const [configR, noteR, keysR, latestR] = await Promise.allSettled([
+        callView(contract, "config", {}),
+        callView(contract, "note", { token_id: tokenId }),
+        viewAccessKeys(contract),
+        cachetChain.latestTx(contract, net),
+      ]);
+      if (run !== currentRun) return;
+      const config = configR.status === "fulfilled" && typeof configR.value.value === "object" ? configR.value.value : null;
+      const note = noteR.status === "fulfilled" && noteR.value.value && typeof noteR.value.value === "object" ? noteR.value.value : null;
+      const ctx = { contract, tokenId, config, note, noteBlock: noteR.value?.blockHeight, configBlock: configR.value?.blockHeight };
+
+      renderStrip(contract, latestR.value || null, latestR.status === "rejected" ? latestR.reason : null, noteR.value?.blockHeight || configR.value?.blockHeight);
+      renderFoot(contract, config);
+
+      if (!config) {
+        const reason = configR.reason;
+        const missing = reason && isUnknownAccount(reason);
+        cachetCard.failed(slot, tokenId, missing ? `No Cachet contract exists at ${contract} on ${net.name}.` : `The contract config could not be read. ${formatError(reason)}`);
+        for (const tile of tiles) fill(tile, { v: "unread", body: [h("p", null, missing ? `${contract} does not exist on ${net.name}, so there is nothing to check.` : formatError(reason))] });
+        await renderLife(null, tokenId);
+        if (globalThis.cachetOwner) globalThis.cachetOwner.refresh(contract, tokenId, null, null);
+        return;
+      }
+
+      if (noteR.status === "rejected") cachetCard.failed(slot, tokenId, formatError(noteR.reason));
+      else if (!note) cachetCard.none(slot, tokenId, contract);
+      else cachetCard.render(slot, note, { net, hrp: config.hrp, contract });
+
+      ctx.txRead = note?.utxo ? bitcoinTx(mempoolBase(config.hrp), note) : Promise.resolve(null);
+      ctx.txRead.catch(() => {});
+      const jobs = [
+        fundingTile(tiles[0], ctx).catch((e) => failTile(tiles[0], e, "bitcoin")),
+        depthTile(tiles[1], ctx).catch((e) => failTile(tiles[1], e, "bitcoin")),
+        keyTile(tiles[2], ctx).catch((e) => failTile(tiles[2], e, "signer")),
+        Promise.resolve(keysTile(tiles[3], keysR.value, keysR.reason, ctx)),
+        Promise.resolve(systemsTile(tiles[4], ctx)),
+        renderLife(note, tokenId),
+      ];
+      await Promise.all(jobs);
+      if (run !== currentRun) return;
+      if (note && cachetOutcome.fundingAddressVisible(note) && ctx.derived) {
+        let activity = null;
+        try { activity = await activityAt(ctx.derived.address, config.hrp); } catch {}
+        if (run === currentRun) cachetCard.render(slot, note, { net, hrp: config.hrp, contract, funding: { address: ctx.derived.address, activity } });
+      }
+      if (globalThis.cachetOwner) await globalThis.cachetOwner.refresh(contract, tokenId, note, config);
+    } catch (error) {
+      if (run !== currentRun) return;
+      cachetCard.failed(slot, tokenId, formatError(error));
+    } finally {
+      if (run === currentRun) { setBusy(false); document.body.dataset.ready = "1"; }
     }
   }
 
-  body.append(node("p", "fine", "This page derives the address locally from the signer key. It does not copy the address from the contract."));
-  meta.textContent = `read at NEAR block ${response.blockHeight}. source: ${signerId}.derived_public_key(path, predecessor, 0).`;
-
-  if (!note || cachetOutcome.fundingAddressVisible(note)) {
-    const activity = node("div", "activity");
-    body.append(activity);
-    await renderBitcoinActivity(activity, derived.address, hrp, run, fundingGuidance(deployed, note, contract));
-  } else body.append(node("p", "fine", "The funding address stays private in this view after the note leaves Minted."));
-}
-
-function resetPanels() {
-  document.getElementById("address-body").replaceChildren(reading("Reading v1.signer derived_public_key..."));
-  document.getElementById("address-meta").textContent = "";
-  document.getElementById("note-body").replaceChildren(reading("Reading the note record..."));
-  document.getElementById("note-meta").textContent = "";
-  document.getElementById("keys-body").replaceChildren(reading("Reading the access key list..."));
-  document.getElementById("keys-meta").textContent = "";
-  const banner = document.getElementById("contract-banner");
-  banner.hidden = true;
-  banner.replaceChildren();
-}
-
-function setControlStatus(text, tone) {
-  const status = document.getElementById("control-status");
-  status.textContent = text || "";
-  status.className = `control-status${tone ? ` ${tone}` : ""}`;
-  status.setAttribute("role", tone === "error" ? "alert" : "status");
-}
-
-function setBusy(busy) {
-  const button = document.getElementById("read-button");
-  button.disabled = busy;
-  button.textContent = busy ? "Reading..." : "Read live";
-  document.getElementById("read-form").setAttribute("aria-busy", busy ? "true" : "false");
-}
-
-function updatePathPreview() {
-  const token = document.getElementById("token-input").value.trim() || "1";
-  const slot = document.getElementById("slot-input").value.trim() || "0";
-  document.getElementById("path-preview").textContent = `cachet/${token}/${slot}`;
-}
-
-function syncUrl(contract, tokenId, slot) {
-  const url = new URL(window.location.href);
-  url.searchParams.set("contract", contract);
-  url.searchParams.set("token", tokenId);
-  url.searchParams.delete("slot");
-  window.history.replaceState(null, "", url);
-}
-
-async function readAll() {
-  const run = ++currentRun;
-  const contract = document.getElementById("contract-input").value.trim().toLowerCase();
-  const tokenId = document.getElementById("token-input").value.trim();
-  const slot = document.getElementById("slot-input").value.trim();
-  const errors = [];
-  if (!isAccountId(contract)) errors.push("Enter a NEAR account id, for example cachet.near.");
-  if (!isTokenId(tokenId)) errors.push("Enter a token id using letters, numbers, dots, colons, hyphens, or underscores.");
-  if (!isSlot(slot)) errors.push("Slot must be a whole number from 0 to 4294967295.");
-  if (errors.length > 0) {
-    setControlStatus(errors.join(" "), "error");
-    return;
+  async function judgeDefaults() {
+    try {
+      const entries = await (await fetch("judge-links.json", { cache: "no-store" })).json();
+      for (const entry of entries) {
+        const fragment = cachetClaim.parseFragment(entry.fragment);
+        if (fragment && fragment.contract === net.contract) return fragment;
+      }
+    } catch {}
+    return null;
   }
 
-  setControlStatus("");
-  setBusy(true);
-  document.getElementById("contract-input").value = contract;
-  syncUrl(contract, tokenId, slot);
-  resetPanels();
-
-  try {
-    const [configResult, noteResult, keysResult] = await Promise.allSettled([
-      callView(contract, "config", {}),
-      callView(contract, "note", { token_id: tokenId }),
-      viewAccessKeys(contract),
-    ]);
-    if (run !== currentRun) return;
-
-    const config = configResult.status === "fulfilled" ? configResult.value : null;
-    const configError = configResult.status === "rejected" ? configResult.reason : null;
-    const note = noteResult.status === "fulfilled" ? noteResult.value : null;
-    const noteError = noteResult.status === "rejected" ? noteResult.reason : null;
-    const keys = keysResult.status === "fulfilled" ? keysResult.value : null;
-    const keysError = keysResult.status === "rejected" ? keysResult.reason : null;
-
-    const configValue = config && config.value && typeof config.value === "object" ? config.value : null;
-    const signerId = configValue && configValue.signer_id ? configValue.signer_id : DEFAULT_SIGNER;
-    const hrp = configValue && configValue.hrp ? configValue.hrp : DEFAULT_HRP;
-    const confirmations = configValue && configValue.confirmations != null ? configValue.confirmations : null;
-    const noteView = note && note.value && typeof note.value === "object" ? note.value : null;
-    const path = noteView && noteView.path ? noteView.path : `cachet/${tokenId}/${slot}`;
-
-    renderBanner(contract, config, configError);
-    renderNote(document.getElementById("note-body"), document.getElementById("note-meta"), note, noteError, contract, tokenId, hrp, run);
-    const deployed = !(configError && isUnknownAccount(configError));
-    renderKeys(document.getElementById("keys-body"), document.getElementById("keys-meta"), keys, keysError, contract, run, deployed);
-    if (globalThis.cachetOwner && configValue) await cachetOwner.refresh(contract, tokenId, noteView, configValue);
-    await renderAddress({ contract, path, signerId, hrp, confirmations, note: noteView, run, deployed });
-  } catch (error) {
-    if (run !== currentRun) return;
-    renderError(document.getElementById("address-body"), "The read stopped unexpectedly.", error, "address");
-    renderError(document.getElementById("note-body"), "The read stopped unexpectedly.", error, "note");
-    renderError(document.getElementById("keys-body"), "The read stopped unexpectedly.", error, "keys");
-    setControlStatus(`The read stopped unexpectedly. ${formatError(error)}`, "error");
-  } finally {
-    if (run === currentRun) setBusy(false);
-  }
-}
-
-function init() {
-  const params = new URLSearchParams(window.location.search);
-  const networkParam = params.get("network");
-  const contract = params.get("contract");
-  const token = params.get("token");
-  const slot = "0";
-  document.getElementById("contract-input").value = contract && isAccountId(contract.trim().toLowerCase()) ? contract.trim().toLowerCase() : DEFAULT_CONTRACT;
-  if (networkParam === "testnet" || networkParam === "mainnet") document.getElementById("network-input").value = networkParam;
-  document.getElementById("network-input").value = activeNetwork.name;
-  document.getElementById("network-input").addEventListener("change", (event) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("network", event.target.value);
-    window.location.assign(url);
-  });
-  document.getElementById("token-input").value = token && isTokenId(token.trim()) ? token.trim() : "1";
-  document.getElementById("slot-input").value = slot;
-  updatePathPreview();
-
-  for (const id of ["contract-input", "token-input", "slot-input"]) {
-    document.getElementById(id).addEventListener("input", updatePathPreview);
-  }
-  document.getElementById("read-form").addEventListener("submit", (event) => {
-    event.preventDefault();
+  async function init() {
+    const params = new URLSearchParams(location.search);
+    for (const a of [$("net-testnet"), $("net-mainnet")]) {
+      const target = a.id === "net-testnet" ? "testnet" : "mainnet";
+      a.setAttribute("aria-current", String(net.name === target));
+    }
+    $("network-input").value = net.name;
+    $("network-input").addEventListener("change", (event) => { const next = new URL(location.href); next.searchParams.set("network", event.target.value); next.searchParams.delete("contract"); next.searchParams.delete("token"); location.assign(next); });
+    const wantContract = (params.get("contract") || "").trim().toLowerCase();
+    const wantToken = (params.get("token") || "").trim();
+    const defaults = wantToken ? null : await judgeDefaults();
+    $("contract-input").value = isAccountId(wantContract) ? wantContract : net.contract;
+    $("token-input").value = isTokenId(wantToken) ? wantToken : defaults?.token || "1";
+    $("read-form").addEventListener("submit", (event) => { event.preventDefault(); readAll(); });
+    $("claim-cta").href = `claim.html${location.search ? `?network=${net.name}` : ""}`;
+    $("claim-cta").addEventListener("click", async (event) => {
+      event.preventDefault();
+      const note = $("cta-note");
+      note.textContent = "Picking a funded note from the judge pool…";
+      try {
+        const fragment = await cachetClaim.pickJudgeFragment(net, (f) => callView(f.contract, "note", { token_id: f.token }).then((r) => r.value));
+        if (!fragment) { note.textContent = "No sealed judge note with an open claim link is available right now."; return; }
+        location.assign(`claim.html?network=${net.name}#${fragment}`);
+      } catch (error) { note.textContent = formatError(error); }
+    });
+    cachetUi.reveal(document);
     readAll();
-  });
-  readAll();
+  }
+
+  init();
 }
 
-if (typeof document !== "undefined") init();
+if (typeof document !== "undefined") mountPage();
 
 if (typeof globalThis !== "undefined") {
-  globalThis.cachetInternals = {
-    sha256,
-    ripemd160,
-    base58Decode,
-    bech32Encode,
-    convertBits,
-    pubkeyToAddress,
-    bytesToHex,
-    hexToBytes,
-  };
+  globalThis.cachetInternals = { sha256, ripemd160, base58Decode, bech32Encode, convertBits, pubkeyToAddress, bytesToHex, hexToBytes };
 }
 
 })();

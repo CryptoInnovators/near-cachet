@@ -29,15 +29,18 @@ function fundingAddressVisible(note) {
   return note.state === "Minted";
 }
 
+// Virtual size of the one-input sweep, the formula of `sweep_vsize` in src/btc.rs.
+const sweepVsize = (destScriptLen) => Math.floor((4 * (60 + destScriptLen) + 110 + 3) / 4);
+
 function feeGuard(sats, rate, destScriptLen) {
   if (!Number.isInteger(rate) || rate < 1 || rate > 1000) return "Fee rate must be a whole number from 1 to 1000 sat/vB.";
   if (!Number.isInteger(sats) || !Number.isInteger(destScriptLen) || destScriptLen < 1) return "Note value or destination is invalid.";
-  const vsize = Math.floor((4 * (60 + destScriptLen) + 110 + 3) / 4);
+  const vsize = sweepVsize(destScriptLen);
   if (sats < rate * vsize + 546) return `The note needs at least ${rate * vsize + 546} sats for this fee and destination.`;
   return null;
 }
 
-const lib = { failureText, blockHashMismatch, fundingAddressVisible, feeGuard };
+const lib = { failureText, blockHashMismatch, fundingAddressVisible, sweepVsize, feeGuard };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetOutcome = lib;
 

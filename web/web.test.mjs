@@ -140,3 +140,16 @@ test("rpc override parameter replaces the provider list and must be https", () =
   assert.deepEqual(chain.network("?network=testnet&rpc=https://near-testnet.drpc.org").rpcs, ["https://near-testnet.drpc.org"]);
   assert.equal(chain.network("?rpc=http://evil.example").rpcs.length, 2);
 });
+
+test("sweepVsize matches the contract formula for each script length", () => {
+  assert.deepEqual([22, 25, 34].map(outcome.sweepVsize), [110, 113, 122]);
+});
+
+test("pickJudgeFragment skips spent and foreign notes and returns the first sealed one with a claim", async () => {
+  const frag = (token, contract = "cachet.testnet") => ({ fragment: claim.buildFragment({ contract, token, key: "ab".repeat(32) }) });
+  const notes = { 1: { state: "Unsealed", claim: null }, 2: { state: "Sealed", claim: null }, 3: { state: "Sealed", claim: { key: "k" } }, 4: { state: "Sealed", claim: { key: "k" } } };
+  const read = async (f) => notes[f.token];
+  const net = { contract: "cachet.testnet" };
+  assert.equal(await claim.pickJudgeFragment(net, read, [frag("1"), frag("2"), frag("9", "other.testnet"), frag("3"), frag("4")]), frag("3").fragment);
+  assert.equal(await claim.pickJudgeFragment(net, read, [frag("1"), frag("2")]), null);
+});
