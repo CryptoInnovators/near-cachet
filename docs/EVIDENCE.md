@@ -61,3 +61,13 @@ The note address then shows one funded and one spent 107,894-sat output. `script
 | Fund `tb1qsq98ec3mxsy9f2jhmmwwm54lsdq0sz47mx0wgd` with 50,000 sats from the Satloot testnet3 faucet | Bitcoin `35784fb7705de7a4da2d6d98fb808c28cae0d334f89e08b5dcd0fe0f8e2f3885`, output 0 | Confirmed in Bitcoin testnet3 block 5,302,704 |
 | `attest` as `cachet-ops.testnet` | NEAR `G3NR3NQjWYbTzdLsFd6trK6B333TZ93dZ61XACK7DgxW` | Returns `true` through `btc-client-v4.testnet`; `note("2")` is `Sealed` with block hash `0000000000f98b9ac91fb4e1b9b3e86b4b9409409d06e5e38edc43d629790b2` |
 | `create_claim` as `cachet-ops.testnet` | NEAR `By9hXtiH4BzTTPRXDEoTBue6tAZGPpckL5nLHQTaXZiM` | `note.claim.key` equals the public key derived from the link secret |
+
+## Judge pool note 3, 2026-11-08
+
+`web/judge-links.json` lists two sealed notes. Note 3 is funded by a real Bitcoin testnet3 output and sealed through `btc-client-v4.testnet`; `scripts/check-judge-pool.sh` with `MIN=2` reads both notes from NEAR testnet and both funding outputs from the explorer and exits 0.
+
+| Step | Transaction | Result |
+|---|---|---|
+| Fund `tb1qdwk5fzlt9e4w280tlfmthwmc2qzpdt698fvump` with 50,000 sats from the Satloot testnet3 faucet | Bitcoin `6462352d2eaec5924a8437e205f405ab0e1f0758fe0c2e32ad229a5260c1fc55`, output 0 | Confirmed in Bitcoin testnet3 block 5,303,453 |
+| `attest` as `cachet-ops.testnet` | NEAR `Apa7MAK7PRohUiQwtUNd2RDmJ2WVzbZF5WPkKffYcDiL` | Returns `true` through `btc-client-v4.testnet`; `note("3")` is `Sealed` with block hash `00000000000000c8de6e4df31ef1266f78913b7df5673bf459f9a2ee9ccca5d0` |
+| `create_claim` as `cachet-ops.testnet` | NEAR `DLgEdQCDAo9F7iHiEqdgUFb3sgtC8KCQY6mwfmuwy4oT` | `note.claim.key` equals the public key derived from the link secret |
