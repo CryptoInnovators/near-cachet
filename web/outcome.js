@@ -24,6 +24,14 @@ function blockHashMismatch(note, mempoolTx) {
   return !expected || !actual || expected.toLowerCase() === actual.toLowerCase() ? null : `Block hash mismatch: note says ${expected}, mempool.space says ${actual}.`;
 }
 
+function outputMismatch(note, tx) {
+  const output = tx?.vout?.[note?.utxo?.vout];
+  if (!output) return `Output ${note?.utxo?.vout} is missing from the transaction.`;
+  if (output.scriptpubkey_address !== note?.address) return `Output ${note?.utxo?.vout} pays a different address.`;
+  if (output.value !== note?.utxo?.sats) return `Output ${note?.utxo?.vout} has a different value.`;
+  return null;
+}
+
 function fundingAddressVisible(note) {
   if (!note) return false;
   return note.state === "Minted";
@@ -40,7 +48,7 @@ function feeGuard(sats, rate, destScriptLen) {
   return null;
 }
 
-const lib = { failureText, blockHashMismatch, fundingAddressVisible, sweepVsize, feeGuard };
+const lib = { failureText, blockHashMismatch, outputMismatch, fundingAddressVisible, sweepVsize, feeGuard };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetOutcome = lib;
 

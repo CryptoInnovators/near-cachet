@@ -449,9 +449,10 @@ function mountPage() {
     const base = mempoolBase(config.hrp);
     const tx = await txRead;
     const mismatch = cachetOutcome.blockHashMismatch(note, tx);
+    const outputMismatch = cachetOutcome.outputMismatch(note, tx);
     const confirmed = Boolean(tx.status?.confirmed);
     fill(tile, {
-      v: !confirmed || mismatch ? "differs" : "match",
+      v: !confirmed || mismatch || outputMismatch ? "differs" : "match",
       body: [dl([
         ["The contract stores", groupHex(note.utxo.block_hash)],
         ["The explorer reports", confirmed ? [groupHex(tx.status.block_hash), ` at Bitcoin block ${int(tx.status.block_height)}`] : "The transaction is not in a block."],
