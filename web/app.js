@@ -448,6 +448,7 @@ function mountPage() {
     if (!note.utxo) return fill(tile, { v: "wait", body: [h("p", null, "No output is attested. Fund the address once with one output, then attest it."), h("p", { class: "source" }, `Read from ${contract}.note("${tokenId}") at NEAR block ${int(ctx.noteBlock)}.`)] });
     const base = mempoolBase(config.hrp);
     const tx = await txRead;
+    const outspend = await ctx.outspendRead;
     const mismatch = cachetOutcome.blockHashMismatch(note, tx);
     const outputMismatch = cachetOutcome.outputMismatch(note, tx);
     const confirmed = Boolean(tx.status?.confirmed);
@@ -457,6 +458,7 @@ function mountPage() {
         ["The contract stores", groupHex(note.utxo.block_hash)],
         ["The explorer reports", confirmed ? [groupHex(tx.status.block_hash), ` at Bitcoin block ${int(tx.status.block_height)}`] : "The transaction is not in a block."],
         [`Output ${note.utxo.vout}`, `${sats(note.utxo.sats)} to the note's address`],
+        ["Outpoint spend status", `${outspend.spent === true ? "Spent" : outspend.spent === false ? "Verified unspent" : "Status unavailable"}. Read ${outspend.readAt}.`],
       ])],
       source: `${contract}.note("${tokenId}") at NEAR block ${int(ctx.noteBlock)}, and ${base}/api/tx/${short(note.utxo.txid)}.`,
     });
@@ -668,6 +670,7 @@ function mountPage() {
 
       ctx.txRead = note?.utxo ? bitcoinTx(mempoolBase(config.hrp), note) : Promise.resolve(null);
       ctx.txRead.catch(() => {});
+      ctx.outspendRead = note?.utxo ? cachetChain.outspendStatus(mempoolBase(config.hrp), note.utxo.txid, note.utxo.vout) : Promise.resolve({ spent: null, readAt: "not read" });
       const jobs = [
         fundingTile(tiles[0], ctx).catch((e) => failTile(tiles[0], e, "bitcoin")),
         depthTile(tiles[1], ctx).catch((e) => failTile(tiles[1], e, "bitcoin")),

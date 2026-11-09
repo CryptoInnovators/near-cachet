@@ -87,6 +87,13 @@ async function mempoolJson(base, path) { return (await explorerGet(base, path, "
 
 async function mempoolText(base, path) { return (await explorerGet(base, path, "text/plain")).text(); }
 
+async function outspendStatus(base, txid, vout) {
+  try {
+    const result = await mempoolJson(base, `/tx/${encodeURIComponent(txid)}/outspend/${Number(vout)}`);
+    return { spent: typeof result?.spent === "boolean" ? result.spent : null, readAt: new Date().toISOString() };
+  } catch { return { spent: null, readAt: new Date().toISOString() }; }
+}
+
 // Latest transaction that touched an account, read from the FastNear transactions index.
 async function latestTx(account, net = network()) {
   const response = await fetchWithTimeout(`${net.txApi}/v0/account`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ account_id: account, limit: 1 }) }, 8000);
@@ -109,7 +116,7 @@ async function defaultDestination(net = network(), mempool = mempoolJson) {
   return null;
 }
 
-const lib = { NETWORKS, network, fetchWithTimeout, rpc, callView, mempoolBase, mempoolJson, mempoolText, latestTx, defaultDestination };
+const lib = { NETWORKS, network, fetchWithTimeout, rpc, callView, mempoolBase, mempoolJson, mempoolText, outspendStatus, latestTx, defaultDestination };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetChain = lib;
 

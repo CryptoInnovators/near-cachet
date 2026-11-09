@@ -81,6 +81,8 @@ async function showClaimTarget(frag) {
   row(rows, "Owner", note.owner_id);
   row(rows, "State", note.state);
   row(rows, "Funding", note.utxo ? `${note.utxo.sats} sats at ${note.utxo.txid}:${note.utxo.vout}` : "not confirmed");
+  const outspend = note.utxo ? await cachetChain.outspendStatus(cachetChain.mempoolBase(state.config.hrp), note.utxo.txid, note.utxo.vout) : null;
+  if (outspend) row(rows, "Outpoint spend status", `${outspend.spent === true ? "Spent" : outspend.spent === false ? "Verified unspent" : "Status unavailable"}. Read ${outspend.readAt}.`);
   if (note.utxo) row(rows, "Bitcoin block", note.utxo.block_hash);
   intro.replaceChildren(rows);
   const matches = note.claim && note.claim.key === mine;
@@ -156,6 +158,8 @@ function addField(form, label, id, value, placeholder = "") {
 }
 
 async function unseal(frag, note, config, dest, fee) {
+  const outspend = await cachetChain.outspendStatus(cachetChain.mempoolBase(config.hrp), note.utxo.txid, note.utxo.vout);
+  if (outspend.spent !== false) return status(outspend.spent === true ? `This output is spent. Explorer read ${outspend.readAt}.` : `Outpoint status could not be verified. Unseal is disabled. Explorer read ${outspend.readAt}.`, true);
   const hrp = config.hrp;
   const len = destinationScriptLen(dest.value.trim());
   if (!accountAddress(dest.value.trim(), hrp) || !len) return status(`Enter a ${hrp} Bitcoin witness address.`, true);
@@ -224,6 +228,9 @@ async function showActions(frag, noteOverride, configOverride, signedOverride) {
     const feeInput = addField(form, "Fee rate, sat/vB", "claim-fee", String(fee));
     const button = el("button", "Unseal");
     button.type = "submit";
+    const outspend = await cachetChain.outspendStatus(base, note.utxo.txid, note.utxo.vout);
+    button.disabled = outspend.spent !== false;
+    button.title = outspend.spent === true ? "This Bitcoin output is already spent." : outspend.spent === false ? "Verified unspent." : "Outpoint status unavailable. Unseal is disabled.";
     form.append(button);
     form.addEventListener("submit", (event) => { event.preventDefault(); unseal(frag, note, config, dest, feeInput); });
     box.append(form);
