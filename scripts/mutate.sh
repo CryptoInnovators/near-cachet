@@ -76,3 +76,4 @@ mut M34 src/lib.rs 's/\n        self\.notes\.flush\(\);//' "$REVIEW the_mint_dep
 mut M35 src/light_client.rs 's/proof\.merkle_proof\.len\(\) != proof\.coinbase_merkle_proof\.len\(\)/false/' "$UNIT proof_args_v2_refuses_mismatched_branches" "proof branches have equal depth"
 mut M36 src/light_client.rs 's/btc::hex_32\(hex\)\.map\(btc::reversed\)/btc::hex_32(hex)/' "$UNIT proof_args_v2_matches_live_vector" "light-client hashes use internal byte order"
 mut M37 web/outcome.js 's/return note\.state === "Minted";/return true;/' "$NODE" "funding address is hidden past Minted"
+mut M38 src/lib.rs 's/\| \(SignOp::Resign, State::Unsealed\) => Ok/| (SignOp::Resign, State::Unsealed | State::Finalizing) => Ok/' "$SANDBOX finalization_pending_blocks_resign" "resign is refused while finalization is pending"

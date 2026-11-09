@@ -335,6 +335,65 @@ async fn in_flight_sign_blocks_transfer_and_second_unseal_until_the_signer_times
 }
 
 #[tokio::test]
+async fn finalization_pending_blocks_resign_until_recovery() {
+    let w = World::new(2).await;
+    let (id, _) = w.sealed_note(&w.alice, 60_000).await;
+    let r = w.unseal(&w.alice, &id, DEST, 10).await;
+    assert!(r.is_success(), "unseal failed: {}", fail_text(&r));
+    assert_eq!(w.state(&id).await, "Unsealed");
+    let raw = signed_tx(&w, &id).await;
+    let txid = deserialize::<Transaction>(&hex::decode(&raw).unwrap()).unwrap().compute_txid().to_string();
+    w.confirm(&txid, 6).await;
+
+    w.set_inclusion_pending(true).await;
+    let _pending = w
+        .bob
+        .call(w.cachet.id(), "finalize")
+        .args_json(json!({"token_id": id, "sweep_raw_tx": raw, "proof": inclusion_proof(&txid)}))
+        .max_gas()
+        .transact_async()
+        .await
+        .unwrap();
+    for _ in 0..40 {
+        if w.state(&id).await == "Finalizing" {
+            break;
+        }
+        w.worker.fast_forward(1).await.unwrap();
+    }
+    assert_eq!(w.state(&id).await, "Finalizing");
+    assert_reverts(
+        &w.alice.call(w.cachet.id(), "resign").args_json(json!({"token_id": id, "fee_rate": 20})).max_gas().transact().await.unwrap(),
+        "note is not unsealed",
+    );
+    let recover = || w.alice.call(w.cachet.id(), "recover").args_json(json!({"token_id": id})).transact();
+    assert_reverts(&recover().await.unwrap(), "request may still be pending");
+
+    // past the signer's own 200 block timeout the light client is still silent: the note stays frozen
+    w.worker.fast_forward(250).await.unwrap();
+    assert_eq!(w.state(&id).await, "Finalizing", "a pending inclusion check keeps the note in Finalizing");
+    assert_reverts(
+        &w.alice.call(w.cachet.id(), "resign").args_json(json!({"token_id": id, "fee_rate": 20})).max_gas().transact().await.unwrap(),
+        "note is not unsealed",
+    );
+    assert_reverts(&recover().await.unwrap(), "request may still be pending");
+
+    w.worker.fast_forward(200).await.unwrap();
+    let r = recover().await.unwrap();
+    assert!(r.is_success(), "recover failed: {}", fail_text(&r));
+    assert_eq!(w.state(&id).await, "Unsealed");
+
+    let r = w.alice.call(w.cachet.id(), "resign").args_json(json!({"token_id": id, "fee_rate": 20})).max_gas().transact().await.unwrap();
+    assert!(r.is_success(), "resign failed: {}", fail_text(&r));
+    assert_eq!(w.state(&id).await, "Unsealed");
+    assert_eq!(w.sign_log().await.len(), 2, "resign reached the signer after recovery");
+
+    // the stalled check finally gives up; its stale callback must not touch the recovered note
+    w.set_inclusion_pending(false).await;
+    w.worker.fast_forward(450).await.unwrap();
+    assert_eq!(w.state(&id).await, "Unsealed");
+}
+
+#[tokio::test]
 async fn finalize_guards() {
     let w = World::new(2).await;
     let (id, f) = w.sealed_note(&w.alice, 60_000).await;

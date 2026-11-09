@@ -223,6 +223,18 @@ impl World {
             .unwrap();
     }
 
+    /// While on, the fixture's light client parks every inclusion check unanswered.
+    pub async fn set_inclusion_pending(&self, pending: bool) {
+        self.signer
+            .call("set_inclusion_pending")
+            .args_json(json!({"pending": pending}))
+            .transact()
+            .await
+            .unwrap()
+            .into_result()
+            .unwrap();
+    }
+
     pub async fn confirm(&self, txid: &str, confirmations: u64) {
         self.signer
             .call("set_tx")

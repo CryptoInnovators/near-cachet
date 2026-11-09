@@ -19,7 +19,7 @@ The original rows M01 to M34 were produced by mutation workflow run 41290436563 
 | `mint_note` | `mint_requires_a_storage_deposit_and_refunds_the_rest`, `token_ids_are_never_reused_after_a_burn`, `a_failed_derivation_mints_no_note_and_shows_no_address`, `the_mint_deposit_funds_every_later_byte_a_note_can_grow` | M28, M29, M33, M34 |
 | `attest` | `lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract`, `attest_rejects_tx_paying_another_address_and_bad_vout`, `attest_rejects_a_raw_tx_that_does_not_hash_to_a_confirmed_txid`, `attest_waits_for_the_configured_confirmations`, `attest_is_owner_only_once_only_and_bounded`, `attest_and_finalize_reject_a_64_byte_transaction_before_asking_the_signer`, `a_proof_for_another_block_leaves_the_note_minted`, `an_unknown_tx_leaves_the_note_minted`, `the_light_client_gets_the_contracts_own_txid` | M05, M06, M07, M08, M19, M26, M35, M36 |
 | `unseal` | `non_owner_unseal_reverts_and_never_reaches_sign`, `double_unseal_reverts`, `unseal_before_attestation_reverts`, `unseal_input_validation`, `signature_over_the_wrong_hash_is_rejected_by_ecrecover`, `high_s_signatures_are_folded_to_low_s_and_still_verify`, `failed_sign_returns_the_note_to_sealed_and_retry_works` | M01, M10, M11, M17, M18, M24 |
-| `resign` | `resign_changes_only_the_fee_and_only_for_the_owner` | M22 |
+| `resign` | `resign_changes_only_the_fee_and_only_for_the_owner`, `finalization_pending_blocks_resign_until_recovery` | M22, M38 |
 | `finalize` | `finalize_guards`, `finalize_requires_the_sweep_to_pay_the_unseal_destination`, `lifecycle_mint_attest_unseal_finalize_on_a_keyless_contract`, `an_unconfirmed_sweep_cannot_park_a_note` | M12, M13, M21 |
 | `create_claim`, `claim`, `cancel_claim` | `claim_clears_the_old_owners_approvals`, `claim_link_moves_a_sealed_note_once_and_binds_the_receiver`, `after_expiry_the_sender_can_cancel_or_unseal`, `expired_link_still_claims_until_the_owner_acts`, `selling_the_note_kills_the_claim_link`, `unsealed_note_cannot_be_gifted_or_claimed`, `the_signature_made_by_the_web_page_moves_the_note` | M03, M14, M15, M31 |
 | `recover` | `in_flight_sign_blocks_transfer_and_second_unseal_until_the_signer_times_out`, `a_note_whose_signature_became_public_is_never_resealed` | M23, M32 |
@@ -68,6 +68,7 @@ M32 | recover never re-seals an unsealing note | red=101 green=0 | thread 'a_not
 M33 | mint prefunds the note storage growth | red=101 green=0 | thread 'the_mint_deposit_funds_every_later_byte_a_note_can_grow' panicked at tests/review_fixes.rs:109:5:
 M34 | mint charges the note record itself | red=101 green=0 | thread 'the_mint_deposit_funds_every_later_byte_a_note_can_grow' panicked at tests/review_fixes.rs:109:5:
 M37 | funding address is hidden past Minted | red=1 green=0 | node test `funding address is visible only while Minted` failed after the guard was removed
+M38 | resign is refused while finalization is pending | red=101 green=0 | thread 'finalization_pending_blocks_resign_until_recovery' panicked at tests/sandbox.rs:17:5:
 ```
 
 ## Wave 5 focused unit mutation checks

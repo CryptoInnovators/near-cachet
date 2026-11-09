@@ -82,6 +82,7 @@ pub struct Fixture {
     wrong_hash: bool,
     high_s: bool,
     hang_sign: bool,
+    inclusion_pending: bool,
 }
 
 fn scalar(b: &[u8; 32]) -> Scalar {
@@ -133,7 +134,7 @@ impl Fixture {
     pub fn new(sign_root: String) -> Self {
         let mut roots = LookupMap::new(b"r".to_vec());
         roots.insert(0, hex32(&sign_root));
-        Self { roots, txs: LookupMap::new(b"t".to_vec()), sign_log: vec![], lc_calls: 0, lc_last_args: String::new(), fail_sign: false, wrong_hash: false, high_s: false, hang_sign: false }
+        Self { roots, txs: LookupMap::new(b"t".to_vec()), sign_log: vec![], lc_calls: 0, lc_last_args: String::new(), fail_sign: false, wrong_hash: false, high_s: false, hang_sign: false, inclusion_pending: false }
     }
 
     pub fn derived_public_key(&self, path: String, predecessor: Option<AccountId>, domain_id: Option<u32>) -> String {
@@ -170,9 +171,20 @@ impl Fixture {
         env::panic_str("fixture: yield timed out")
     }
 
-    pub fn verify_transaction_inclusion_v2(&mut self, #[serializer(borsh)] args: ProofArgsV2) -> bool {
+    pub fn verify_transaction_inclusion_v2(&mut self, #[serializer(borsh)] args: ProofArgsV2) -> PromiseOrValue<bool> {
         self.lc_calls += 1;
         self.lc_last_args = STANDARD.encode(near_sdk::borsh::to_vec(&args).unwrap());
+        if self.inclusion_pending {
+            return PromiseOrValue::Promise(self.park_inclusion());
+        }
+        PromiseOrValue::Value(self.verify_inclusion(args))
+    }
+
+    fn park_inclusion(&self) -> Promise {
+        Promise::new_yield("inclusion_timed_out", b"{}", Gas::from_tgas(0), GasWeight(1)).0
+    }
+
+    fn verify_inclusion(&self, args: ProofArgsV2) -> bool {
         let txid = hex::encode(reversed(args.tx_id));
         let tx = self.txs.get(&txid).unwrap_or_else(|| env::panic_str("block does not belong to the current main chain"));
         if hex32(&tx.block_hash) != reversed(args.tx_block_blockhash) {
@@ -180,6 +192,20 @@ impl Fixture {
         }
         require!(tx.confirmations >= args.confirmations, "Not enough blocks confirmed");
         true
+    }
+
+    /// Resume target of a parked inclusion check nobody resumes. While pending mode is on
+    /// it parks the check again, so the light client stays unanswered past the 200 block
+    /// yield limit, the way a stalled Bitcoin relay does. Once pending mode is off it fails
+    /// like the real client does when it gives up.
+    #[private]
+    pub fn inclusion_timed_out(&self) -> PromiseOrValue<bool> {
+        require!(self.inclusion_pending, "fixture: inclusion check timed out");
+        PromiseOrValue::Promise(self.park_inclusion())
+    }
+
+    pub fn set_inclusion_pending(&mut self, pending: bool) {
+        self.inclusion_pending = pending;
     }
 
     pub fn set_tx(&mut self, txid: String, block_hash: String, confirmations: u64) {
