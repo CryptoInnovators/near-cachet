@@ -24,7 +24,7 @@ for t in bhn python3 curl jq; do command -v "$t" >/dev/null || fail "missing too
 cat >"$TMP/serve.py" <<'PY'
 import http.server, os, re, sys
 INJ = (b"<script>window.__errs=[];"
-       b"addEventListener('error',function(e){__errs.push('error: '+e.message)});"
+       b"addEventListener('error',function(e){__errs.push('error: '+e.message+' @'+(e.filename||''))});"
        b"addEventListener('unhandledrejection',function(e){__errs.push('rejection: '+(e.reason&&e.reason.message||e.reason))})</script>")
 BASE = http.server.SimpleHTTPRequestHandler
 if os.environ.get("E2E_BASE_HANDLER"):  # a repo's own server module with a Handler class (e.g. an API proxy)
@@ -75,7 +75,8 @@ waitjs() { # JS predicate, timeout seconds
 eq() { [ "$2" = "$3" ] || fail "$1: page shows '$2', chain says '$3'"; pass "$1 = $2"; }
 nonempty() { [ -n "$2" ] && [ "$2" != null ] || fail "$1 is empty"; }
 assert_no_errors() {
-  local e; e="$(ev "JSON.stringify(window.__errs||['__errs missing'])")"
+  # errors raised by browser extensions in the shared profile (source chrome-extension://) are not the page's
+  local e; e="$(ev "JSON.stringify((window.__errs||['__errs missing']).filter(m=>!/@chrome-extension:\\/\\//.test(m)))")"
   [ "$e" = "[]" ] || fail "uncaught page errors: $e"
   pass "zero uncaught page exceptions"
 }
@@ -109,7 +110,7 @@ txt() { jp "document.getElementById('$1').innerText.replace(/\\s+/g,' ')"; }
 
 # Independent P2WPKH derivation of what the page claims to derive in the browser:
 # signer derived_public_key -> secp256k1 point -> compressed -> HASH160 -> bech32 v0 (python stdlib only).
-derive() { # token -> address
+derive() { # token -> "<address> <compressed pubkey hex>"
   local key
   key="$(rpc_view "$RPC" "$SIGNER" derived_public_key "{\"path\":\"cachet/$1/0\",\"predecessor\":\"$CONTRACT\",\"domain_id\":0}" | jq -r .)"
   python3 - "$key" "$HRP" <<'PY'
@@ -135,7 +136,7 @@ for b in h160:
     while bits >= 5: bits -= 5; d.append((acc >> bits) & 31)
 if bits: d.append((acc << (5 - bits)) & 31)
 pol = pm(exp(hrp) + d + [0] * 6) ^ 1
-print(hrp + "1" + "".join(C[x] for x in d + [(pol >> 5 * (5 - i)) & 31 for i in range(6)]))
+print(hrp + "1" + "".join(C[x] for x in d + [(pol >> 5 * (5 - i)) & 31 for i in range(6)]), comp.hex())
 PY
 }
 
@@ -143,52 +144,74 @@ cfg="$(rpc_view "$RPC" "$CONTRACT" config '{}')"
 SIGNER="$(jq -r .signer_id <<<"$cfg")"; HRP="$(jq -r .hrp <<<"$cfg")"; LC="$(jq -r .btc_light_client <<<"$cfg")"
 
 start_server
-open_page "index.html?network=testnet&contract=$CONTRACT&token=1"
-waitjs "document.querySelector('#keys-meta').innerText.includes('read at NEAR block') && document.querySelector('#note-meta').innerText.includes('read at NEAR block') && document.querySelector('#address-meta').innerText.includes('read at NEAR block') && /Bitcoin tip \\d+/.test(document.getElementById('address-body').innerText)" 120
+TOKENS="${E2E_TOKENS:-2 3}"
+open_page "index.html?network=testnet&contract=$CONTRACT&token=${TOKENS%% *}"
+NT="(id=>document.getElementById(id).innerText.replace(/\\s+/g,' '))"
+waitjs "$NT('strip').includes('Read at NEAR block') && /Light client tip [0-9,]+/.test($NT('tiles')) && /Cachet note #/.test($NT('card-slot'))" 120
 
-for tok in 1 2; do
-  if [ "$tok" = 2 ]; then
+first=1
+for tok in $TOKENS; do
+  if [ "$first" = 0 ]; then
     # journey: type another token id, press "Read live"
-    ev "(()=>{const t=document.getElementById('token-input');t.value='2';t.dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('read-button').click();return 1})()" >/dev/null
-    waitjs "document.getElementById('note-meta').innerText.includes('note(\"2\")') && document.getElementById('address-body').innerText.includes('cachet/2/0')" 90
+    ev "(()=>{const t=document.getElementById('token-input');t.value='$tok';t.dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('read-button').click();return 1})()" >/dev/null
+    waitjs "$NT('card-slot').includes('#$tok') && $NT('tiles').includes('cachet/$tok/0')" 90
   fi
-  want_addr="$(derive "$tok")"
-  [ "$(txt address-body | grep -o "$want_addr" | head -1)" = "$want_addr" ] || fail "[token $tok] page does not show the independently derived address $want_addr: $(txt address-body | head -c 300)"
-  pass "[token $tok] page shows independently derived address $want_addr"
-  # note record: page agrees with the contract (null -> no-note state, else the state word)
+  first=0
+  read -r want_addr want_pub <<<"$(derive "$tok")"
+  tiles="$(txt tiles)"
+  # the key tile shows the key the page derived in the browser: it must equal the independent derivation
+  case "$tiles" in *"$want_pub"*) pass "[token $tok] page shows independently derived key $want_pub";; *) fail "[token $tok] page lacks derived key $want_pub: $(printf %s "$tiles" | head -c 400)";; esac
+  case "$tiles" in *"cachet/$tok/0"*) ;; *) fail "[token $tok] page lacks path cachet/$tok/0";; esac
   note="$(rpc_view "$RPC" "$CONTRACT" note "{\"token_id\":\"$tok\"}")"
+  card="$(txt card-slot)"
   if [ "$note" = null ]; then
-    case "$(txt note-body)" in *"No note at token id $tok"*) pass "[token $tok] contract returns null, page says no note";; *) fail "[token $tok] chain note is null but page shows: $(txt note-body | head -c 200)";; esac
-  else
-    for f in state owner_id; do v="$(jq -r ".$f // .owner // empty" <<<"$note")"; [ -z "$v" ] || case "$(txt note-body)" in *"$v"*) ;; *) fail "[token $tok] note $f '$v' missing from page";; esac; done
-    pass "[token $tok] note record fields match the contract"
+    case "$tiles" in *"holds no note $tok"*) pass "[token $tok] contract returns null, page says no note";; *) fail "[token $tok] chain note is null but page shows: $(printf %s "$tiles" | head -c 200)";; esac
+    continue
   fi
-  # bitcoin activity for that address == mempool.space
-  act="$(curl -sf -m 30 "$MEMPOOL/address/$want_addr")"
-  body="$(txt address-body)"
-  fmt() { python3 -c 'import sys;print(f"{int(sys.argv[1]):,}")' "$1"; }
-  for pair in "RECEIVED:$(jq -r '.chain_stats.funded_txo_sum + .mempool_stats.funded_txo_sum' <<<"$act")" "SPENT:$(jq -r '.chain_stats.spent_txo_sum + .mempool_stats.spent_txo_sum' <<<"$act")"; do
-    lab="${pair%%:*}"; sats="$(fmt "${pair#*:}")"
-    case "$body" in *"$lab $sats sats"*) pass "[token $tok] $lab $sats sats matches mempool.space";; *) fail "[token $tok] $lab: want '$sats sats' in page: $body";; esac
+  eq "[token $tok] chain address equals independent derivation" "$(jq -r .address <<<"$note")" "$want_addr"
+  eq "[token $tok] chain pubkey equals independent derivation" "$(jq -r .pubkey <<<"$note")" "$want_pub"
+  for f in state owner_id; do
+    v="$(jq -r ".$f" <<<"$note")"
+    case "$card" in *"$v"*) ;; *) fail "[token $tok] note $f '$v' missing from page: $card";; esac
   done
-  eq "[token $tok] bitcoin tx count" "$(grep -o 'TRANSACTIONS [0-9,]*' <<<"$body" | head -1 | tr -dc 0-9)" "$(jq -r '.chain_stats.tx_count + .mempool_stats.tx_count' <<<"$act")"
+  pass "[token $tok] note state and holder match the contract"
+  if [ "$(jq -r '.utxo != null' <<<"$note")" = true ]; then
+    ftxid="$(jq -r .utxo.txid <<<"$note")"; fvout="$(jq -r .utxo.vout <<<"$note")"; fsats="$(jq -r .utxo.sats <<<"$note")"; fblock="$(jq -r .utxo.block_hash <<<"$note")"
+    case "$card" in *"$ftxid"*) ;; *) fail "[token $tok] funding txid $ftxid missing from page card";; esac
+    case "$tiles" in *"$fblock"*) ;; *) fail "[token $tok] funding block $fblock missing from page tiles";; esac
+    # the funding output the page reports is the output the Bitcoin explorer reports
+    tx="$(curl -sf -m 30 "$MEMPOOL/tx/$ftxid")"
+    eq "[token $tok] explorer funding address" "$(jq -r ".vout[$fvout].scriptpubkey_address" <<<"$tx")" "$want_addr"
+    eq "[token $tok] explorer funding sats" "$(jq -r ".vout[$fvout].value" <<<"$tx")" "$fsats"
+    eq "[token $tok] explorer funding block" "$(jq -r .status.block_hash <<<"$tx")" "$fblock"
+    fmtsats="$(python3 -c 'import sys;print(f"{int(sys.argv[1]):,}")' "$fsats")"
+    case "$tiles" in *"$fmtsats sats"*) pass "[token $tok] page shows $fmtsats sats";; *) fail "[token $tok] page lacks '$fmtsats sats': $tiles";; esac
+    # spend status read from the explorer, same outpoint
+    sp="$(curl -sf -m 30 "$MEMPOOL/tx/$ftxid/outspend/$fvout" | jq -r .spent)"
+    if [ "$sp" = false ]; then
+      case "$tiles" in *"Verified unspent"*) pass "[token $tok] page says verified unspent, explorer agrees";; *) fail "[token $tok] explorer says unspent, page: $tiles";; esac
+    else
+      case "$tiles" in *"Spent"*) pass "[token $tok] page says spent, explorer agrees";; *) fail "[token $tok] explorer says spent, page: $tiles";; esac
+    fi
+  fi
 done
 
 # trust inputs and keys are read from the chain, not typed in
-trust="$(txt trust-body)"
-case "$trust" in *"$SIGNER"*"$LC"*) pass "trust inputs name the contract's signer $SIGNER and light client $LC";; *) fail "trust panel does not match config: $trust";; esac
-lc_page="$(grep -o 'LIGHT-CLIENT HEIGHT [0-9,]*' <<<"$trust" | tr -dc 0-9)"
+tiles="$(txt tiles)"
+CONF="$(jq -r .confirmations <<<"$cfg")"
+case "$tiles" in *"$SIGNER"*"$LC"*"Confirmations $CONF"*) pass "trust inputs name the contract's signer $SIGNER, light client $LC, $CONF confirmations";; *) fail "trust tile does not match config: $tiles";; esac
+lc_page="$(grep -o 'Light client tip [0-9,]*' <<<"$tiles" | head -1 | tr -dc 0-9)"
 lc_chain="$(rpc_view "$RPC" "$LC" get_last_block_height '{}' | jq -r .)"
 [ "$lc_page" -le "$lc_chain" ] && [ $((lc_chain - lc_page)) -lt 30 ] || fail "light-client height page $lc_page vs chain $lc_chain"
 pass "light-client height page $lc_page vs chain $lc_chain"
 nkeys="$(rpc "$RPC" query "{\"request_type\":\"view_access_key_list\",\"finality\":\"final\",\"account_id\":\"$CONTRACT\"}" | jq '.keys|length')"
 if [ "$nkeys" = 0 ]; then
-  case "$(txt keys-body)" in *"No access keys on this account"*) pass "keyless contract: page lists 0 access keys";; *) fail "chain has 0 keys, page shows: $(txt keys-body | head -c 200)";; esac
+  case "$tiles" in *"No key can sign for the contract account"*) pass "keyless contract: page says no key can sign";; *) fail "chain has 0 keys, page shows: $tiles";; esac
 else
-  eq "access key rows" "$(jp "document.querySelectorAll('#keys-body li, #keys-body tbody tr').length")" "$nkeys"
+  fail "contract has $nkeys access keys; a Cachet contract must be keyless"
 fi
 # read blocks are live
-pb="$(txt note-meta | grep -o 'NEAR block [0-9]*' | tr -dc 0-9)"
+pb="$(txt strip | grep -o 'NEAR block [0-9,]*' | head -1 | tr -dc 0-9)"
 head="$(rpc "$RPC" block '{"finality":"final"}' | jq -r .header.height)"
 [ "$pb" -le "$head" ] && [ $((head - pb)) -lt 3000 ] || fail "page block $pb not near head $head (fixture?)"
 pass "page read at live testnet block $pb (head $head)"
