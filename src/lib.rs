@@ -796,6 +796,25 @@ impl NonFungibleTokenCore for Cachet {
     }
 }
 
+/// NEP-199 payout map: account to the amount it receives.
+#[near(serializers = [json])]
+pub struct Payout {
+    pub payout: HashMap<AccountId, U128>,
+}
+
+#[near]
+impl Cachet {
+    /// NEP-199 `nft_payout`: the whole `balance` goes to the current owner of the note.
+    pub fn nft_payout(&self, token_id: TokenId, balance: U128, max_len_payout: Option<u32>) -> Payout {
+        let owner = self.owner_of(&token_id);
+        require!(max_len_payout.map_or(true, |m| m >= 1), "max_len_payout is below the payout length");
+        let mut payout = HashMap::new();
+        payout.insert(owner, balance);
+        Payout { payout }
+    }
+}
+
+
 #[near]
 impl NonFungibleTokenResolver for Cachet {
     #[private]

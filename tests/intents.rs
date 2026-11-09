@@ -270,3 +270,46 @@ async fn a_seller_who_withdraws_before_execution_voids_the_trade() {
     assert_eq!(s.balance(s.w.bob.id().as_str(), "nep141:wrap.near").await, PRICE.to_string(), "buyer keeps the price");
     assert_eq!(s.w.owner(&s.id).await.unwrap(), s.w.alice.id().as_str());
 }
+
+// ---- NEP-199 nft_payout ----
+
+async fn payout(w: &World, id: &str, balance: &str, max_len: Option<u32>) -> near_workspaces::result::ExecutionFinalResult {
+    w.root
+        .call(w.cachet.id(), "nft_payout")
+        .args_json(json!({"token_id": id, "balance": balance, "max_len_payout": max_len}))
+        .max_gas()
+        .transact()
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn nep199_nft_payout_returns_full_balance_to_owner() {
+    let w = World::new(2).await;
+    let (id, _) = w.sealed_note(&w.alice, 75_000).await;
+    let r = payout(&w, &id, "1000000000000000000000000", Some(1)).await;
+    assert!(r.is_success(), "{}", fail_text(&r));
+    let v: Value = r.json().unwrap();
+    assert_eq!(v, json!({"payout": {w.alice.id().to_string(): "1000000000000000000000000"}}));
+    let r = payout(&w, &id, "1000000000000000000000000", Some(0)).await;
+    assert!(r.is_failure() && fail_text(&r).contains("max_len_payout"), "{}", fail_text(&r));
+}
+
+#[tokio::test]
+async fn nep199_nft_payout_uses_post_transfer_owner() {
+    let w = World::new(2).await;
+    let (id, _) = w.sealed_note(&w.alice, 75_000).await;
+    let r = w.transfer(&w.alice, &id, w.bob.id().as_str()).await;
+    assert!(r.is_success(), "{}", fail_text(&r));
+    let r = payout(&w, &id, "42", None).await;
+    assert!(r.is_success(), "{}", fail_text(&r));
+    let v: Value = r.json().unwrap();
+    assert_eq!(v, json!({"payout": {w.bob.id().to_string(): "42"}}));
+}
+
+#[tokio::test]
+async fn nep199_nft_payout_rejects_missing_token() {
+    let w = World::new(2).await;
+    let r = payout(&w, "999", "42", Some(1)).await;
+    assert!(r.is_failure() && fail_text(&r).contains("unknown note"), "{}", fail_text(&r));
+}
