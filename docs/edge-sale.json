@@ -1,0 +1,15 @@
+{
+  "network": {
+    "near": "testnet",
+    "bitcoin": "testnet3",
+    "sepolia_chain_id": 11155111
+  },
+  "accounts": {
+    "contract": "cachet.testnet",
+    "operator": "cachet-ops.testnet",
+    "buyer": "cachet-edge-buyer.testnet"
+  },
+  "notes": [],
+  "sales": [],
+  "refused_sales": []
+}
