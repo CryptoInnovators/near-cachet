@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Cachet red envelopes for X",
+  "version": "1.0.0",
+  "description": "Share Bitcoin red envelopes from X conversations.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://rpc.testnet.near.org/*"
+  ],
+  "content_scripts": [{
+    "matches": ["https://x.com/*", "https://twitter.com/*"],
+    "js": ["lib.js", "content.js"],
+    "run_at": "document_idle"
+  }],
+  "action": { "default_popup": "popup.html" },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" }
+}
