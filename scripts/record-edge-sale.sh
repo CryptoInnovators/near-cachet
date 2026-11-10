@@ -132,9 +132,9 @@ sepolia_block() {
 # Send Sepolia USDC via cast (requires funded key via faucet path)
 sepolia_send_usdc() {
   local from=$1 to=$2 amount=$3
-  cast send "$SEPOLIA_USDC" "transfer(address,uint256)" "$to" "$amount" \
+  ETH_PRIVATE_KEY="$SEPOLIA_PRIVATE_KEY" cast send "$SEPOLIA_USDC" "transfer(address,uint256)" "$to" "$amount" \
     --rpc-url "$SEPOLIA_RPC" --chain "$SEPOLIA_CHAIN_ID" \
-    --private-key "$SEPOLIA_PRIVATE_KEY" 2>/dev/null || return 1
+    2>/dev/null || return 1
 }
 
 # Record a note in edge-sale.json
