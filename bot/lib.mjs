@@ -8,9 +8,10 @@ export function parseCommand(text = '') {
   const [command = '', ...args] = text.trim().split(/\s+/);
   const name = command.split('@')[0].toLowerCase();
   if (name === '/envelope' || name === '/hongbao') {
-    if (!args.length) return { command: 'envelope' };
+    if (args.length !== 2) return { command: 'invalid' };
     if (!/^\d+$/.test(args[0]) || Number(args[0]) < 1 || Number(args[0]) > Number.MAX_SAFE_INTEGER) return { command: 'invalid' };
-    const shares = args[1] === undefined ? 1 : Number(args[1]);
+    if (!/^\d+$/.test(args[1])) return { command: 'invalid' };
+    const shares = Number(args[1]);
     return Number.isSafeInteger(shares) && shares > 0 ? { command: 'envelope', sats: Number(args[0]), shares } : { command: 'invalid' };
   }
   if (name === '/link') return args.length === 2 ? { command: 'link', tokenId: args[0], claimUrl: args[1] } : { command: 'invalid' };
@@ -76,4 +77,35 @@ export async function nearBlockHeight(fetchImpl = fetch) {
 
 export function envelopeText({ sats, shares, giver }) {
   return `🧧 Bitcoin red envelope\n${sats.toLocaleString('en-US')} sats · ${(sats / 100_000_000).toFixed(8)} BTC\n${shares} ${shares === 1 ? 'share' : 'shares'}\nFrom ${giver}`;
+}
+
+export async function liveEnvelopeNotes(entries, sats, shares, getNote, blockHeight) {
+  const candidates = await Promise.all(Object.entries(entries || {}).map(async ([tokenId, item]) => {
+    if (item.used || !item.claimUrl) return null;
+    let parsed;
+    try {
+      parsed = parseClaimUrl(item.claimUrl);
+      if (parsed.tokenId !== tokenId) return null;
+    } catch { return null; }
+    const note = await getNote(tokenId);
+    if (note?.token_id !== tokenId || note.owner_id == null || note.state !== 'Sealed' || !note.claim || Number(note.claim.expires_at_block) <= blockHeight) return null;
+    const url = new URL(item.claimUrl.startsWith('http') ? item.claimUrl : `/claim#${item.claimUrl.replace(/^#/, '')}`, DEFAULT_WEB_URL);
+    const key = (url.hash.match(/(?:^#|&)v=1(?:&|$)/) ? new URLSearchParams(url.hash.slice(1)) : url.searchParams).get('key');
+    if (!key || key.toLowerCase() !== note.claim.key.toLowerCase()) return null;
+    return { tokenId, item, sats: Number(note.utxo?.sats) };
+  }));
+  const valid = candidates.filter((candidate) => candidate && Number.isSafeInteger(candidate.sats) && candidate.sats > 0);
+  const seen = new Set();
+  const distinct = valid.filter(({ tokenId }) => !seen.has(tokenId) && seen.add(tokenId));
+  const chosen = [];
+  function find(start, sum) {
+    if (chosen.length === shares) return sum === sats;
+    for (let i = start; i <= distinct.length - (shares - chosen.length); i++) {
+      chosen.push(distinct[i]);
+      if (find(i + 1, sum + distinct[i].sats)) return true;
+      chosen.pop();
+    }
+    return false;
+  }
+  return find(0, 0) ? chosen : [];
 }

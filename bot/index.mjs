@@ -2,7 +2,7 @@ import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buttonFor, DEFAULT_WEB_URL, envelopeText, nearBlockHeight, nearView, parseClaimUrl, parseCommand, statusFromNote } from './lib.mjs';
+import { buttonFor, DEFAULT_WEB_URL, envelopeText, liveEnvelopeNotes, nearBlockHeight, nearView, parseClaimUrl, parseCommand, statusFromNote } from './lib.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const statePath = join(root, 'state', 'links.json');
@@ -36,7 +36,7 @@ async function handle(message) {
   const parsed = parseCommand(message.text);
   if (!parsed) return;
   const chatId = message.chat.id;
-  if (parsed.command === 'invalid') return send(chatId, 'Try /envelope <sats> [shares], /link <note id> <claim url>, or /status <note id>.');
+  if (parsed.command === 'invalid') return send(chatId, 'Try /envelope <total-sats> <shares>, /link <note id> <claim url>, or /status <note id>.');
   const state = await loadState();
   const giver = String(message.from.id);
   if (parsed.command === 'link') {
@@ -60,14 +60,12 @@ async function handle(message) {
     const [note, height] = await Promise.all([nearView('note', { token_id: parsed.tokenId }), nearBlockHeight()]);
     return send(chatId, statusFromNote(note, height));
   }
-  const linked = Object.entries(state[giver] || {}).filter(([, item]) => !item.used && (!parsed.sats || item.sats === parsed.sats));
-  if (!linked.length) return send(chatId, parsed.sats ? `No linked sealed note with ${parsed.sats.toLocaleString('en-US')} sats. Create and seal a note, then register it with /link <note id> <claim url>.` : 'No linked sealed note is ready. Create and seal a note, then register it with /link <note id> <claim url>.');
-  const [tokenId, item] = linked[0];
-  const claimUrl = parseClaimUrl(item.claimUrl, webUrl).claimUrl;
-  const keyboard = buttonFor({ claimUrl, botUsername: botUsername, appShortname, chatType: message.chat.type });
-  const text = envelopeText({ sats: item.sats, shares: parsed.shares || 1, giver: message.from.first_name || message.from.username || 'a friend' });
-  await send(chatId, text, { inline_keyboard: [[keyboard]] });
-  item.used = true;
+  const height = await nearBlockHeight();
+  const notes = await liveEnvelopeNotes(state[giver], parsed.sats, parsed.shares, (tokenId) => nearView('note', { token_id: tokenId }), height);
+  if (!notes.length) return send(chatId, `Could not find ${parsed.shares} distinct live sealed notes registered to you totaling exactly ${parsed.sats.toLocaleString('en-US')} sats. No links were consumed.`);
+  const keyboards = notes.map(({ item }) => [buttonFor({ claimUrl: parseClaimUrl(item.claimUrl, webUrl).claimUrl, botUsername, appShortname, chatType: message.chat.type })]);
+  await send(chatId, envelopeText({ sats: parsed.sats, shares: parsed.shares, giver: message.from.first_name || message.from.username || 'a friend' }), { inline_keyboard: keyboards });
+  for (const { item } of notes) item.used = true;
   await saveState(state);
 }
 
