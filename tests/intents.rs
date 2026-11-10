@@ -308,6 +308,20 @@ async fn nep199_nft_payout_uses_post_transfer_owner() {
 }
 
 #[tokio::test]
+async fn nep199_sealed_transfer_payout_maps_entire_balance_only_to_new_owner() {
+    let w = World::new(2).await;
+    let (id, _) = w.sealed_note(&w.alice, 75_000).await;
+    let r = w.transfer(&w.alice, &id, w.bob.id().as_str()).await;
+    assert!(r.is_success(), "{}", fail_text(&r));
+
+    let full_balance = u128::MAX.to_string();
+    let r = payout(&w, &id, &full_balance, None).await;
+    assert!(r.is_success(), "{}", fail_text(&r));
+    let v: Value = r.json().unwrap();
+    assert_eq!(v, json!({"payout": {w.bob.id().to_string(): full_balance}}));
+}
+
+#[tokio::test]
 async fn nep199_nft_payout_rejects_missing_token() {
     let w = World::new(2).await;
     let r = payout(&w, "999", "42", Some(1)).await;
