@@ -1,0 +1,43 @@
+{
+  "contract": "cachet.testnet",
+  "token_id": "4",
+  "owner": "cachet-holder-1104.testnet",
+  "attest_tx": "G9w9TgqYpRYojEgcyGbn3xz6r1g9ugFk1BENoSBxApdH",
+  "attacks": [
+    {
+      "scenario": "replay",
+      "signer": "cachet-holder-1104.testnet",
+      "method": "claim",
+      "tx": "F9iRcq6tbimaRmKuKu7oaEsHj1hQoEzK2Fq1s4mU9kep",
+      "reason": "no claim link"
+    },
+    {
+      "scenario": "former-owner-unseal",
+      "signer": "cachet-ops.testnet",
+      "method": "unseal",
+      "tx": "2ByHt1Zi5mnjpBXSEwqb2ybi2swe3Gm3hqENoRtPMNge",
+      "reason": "only the note owner can request a signature"
+    },
+    {
+      "scenario": "active-lock",
+      "signer": "cachet-holder-1104.testnet",
+      "method": "nft_transfer",
+      "tx": "389c5F9piYHKPQrsRhRsSCH9eAJu8pDpX5pZiD3rWK9E",
+      "reason": "claim link is active"
+    },
+    {
+      "scenario": "active-lock",
+      "signer": "cachet-holder-1104.testnet",
+      "method": "unseal",
+      "tx": "G8MYQ6ozMh1Tup75s8T8TdxPLeJie1dZBj2PoQwvBdE7",
+      "reason": "claim link is active"
+    }
+  ],
+  "payout": {
+    "contract": "cachet-payout.testnet",
+    "token_id": "1",
+    "owner": "cachet-holder-1104.testnet",
+    "mint_tx": "kouy1qtJDmEU4eyKygCLnv8me1C6ZeZNzTikN8GLnh7",
+    "deploy_tx": "Ae267gBpvTijuiqonz4s9eyoDDSnf6Z2TrspPxiM6pXf"
+  }
+}

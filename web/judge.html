@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cachet judge view: live proof on testnet</title>
+  <meta name="description" content="A sealed Bitcoin note on cachet.testnet, read live from NEAR and Bitcoin testnet3, with the payout it returns and the attacks it rejected.">
+  <link rel="stylesheet" href="style.css">
+  <script>document.documentElement.classList.add("js");</script>
+</head>
+<body>
+  <div class="frame">
+    <header class="bar">
+      <a class="wordmark" href="index.html" aria-label="Cachet home">Cachet</a>
+      <nav class="nav" aria-label="Sections">
+        <a href="index.html">Home</a>
+        <a href="claim.html">Claim a gift</a>
+      </nav>
+    </header>
+  </div>
+
+  <main id="main">
+    <div class="frame">
+      <section aria-labelledby="judge-title">
+        <h1 class="display" id="judge-title">Live proof on testnet</h1>
+        <p class="lead" id="judge-status" role="status" aria-live="polite">Reading cachet.testnet and Bitcoin testnet3.</p>
+
+        <h2>The sealed note</h2>
+        <dl id="judge-note">
+          <dt>Contract</dt><dd id="j-contract"></dd>
+          <dt>Note</dt><dd id="j-token"></dd>
+          <dt>Owner</dt><dd id="j-owner"></dd>
+          <dt>State</dt><dd id="j-state"></dd>
+          <dt>Sats</dt><dd id="j-sats"></dd>
+          <dt>Bitcoin transaction</dt><dd id="j-txid"></dd>
+          <dt>Bitcoin block</dt><dd id="j-block"></dd>
+          <dt>Confirmations</dt><dd id="j-confirmations"></dd>
+          <dt>NEAR attestation receipt</dt><dd id="j-attest"></dd>
+        </dl>
+
+        <h2>Payout to the current owner</h2>
+        <p id="j-payout">Reading nft_payout.</p>
+
+        <h2>Rejected attacks</h2>
+        <p>Each call below is a real testnet transaction. The page reads it from the chain and shows it only when it failed with the named guard.</p>
+        <ol id="j-attacks"></ol>
+      </section>
+    </div>
+  </main>
+
+  <script src="chain.js" defer></script>
+  <script src="judge.js" defer></script>
+</body>
+</html>

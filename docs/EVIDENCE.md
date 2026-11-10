@@ -71,3 +71,16 @@ The note address then shows one funded and one spent 107,894-sat output. `script
 | Fund `tb1qdwk5fzlt9e4w280tlfmthwmc2qzpdt698fvump` with 50,000 sats from the Satloot testnet3 faucet | Bitcoin `6462352d2eaec5924a8437e205f405ab0e1f0758fe0c2e32ad229a5260c1fc55`, output 0 | Confirmed in Bitcoin testnet3 block 5,303,453 |
 | `attest` as `cachet-ops.testnet` | NEAR `Apa7MAK7PRohUiQwtUNd2RDmJ2WVzbZF5WPkKffYcDiL` | Returns `true` through `btc-client-v4.testnet`; `note("3")` is `Sealed` with block hash `00000000000000c8de6e4df31ef1266f78913b7df5673bf459f9a2ee9ccca5d0` |
 | `create_claim` as `cachet-ops.testnet` | NEAR `DLgEdQCDAo9F7iHiEqdgUFb3sgtC8KCQY6mwfmuwy4oT` | `note.claim.key` equals the public key derived from the link secret |
+
+<!-- attacks:start -->
+## Rejected attacks on a Sealed note, 2026-11-10
+
+Note 4 on `cachet.testnet` is Sealed and owned by `cachet-holder-1104.testnet` before and after every call below. Each call is a real testnet transaction that fails with the named guard, and none of them moves value or state.
+
+| Row | Scenario | Signer | NEAR transaction | Guard | Method | Note | Link |
+|---|---|---|---|---|---|---|---|
+| attack | replay | cachet-holder-1104.testnet | `F9iRcq6tbimaRmKuKu7oaEsHj1hQoEzK2Fq1s4mU9kep` | `no claim link` | claim | "4" | [explorer](https://explorer.testnet.near.org/transactions/F9iRcq6tbimaRmKuKu7oaEsHj1hQoEzK2Fq1s4mU9kep) |
+| attack | former-owner-unseal | cachet-ops.testnet | `2ByHt1Zi5mnjpBXSEwqb2ybi2swe3Gm3hqENoRtPMNge` | `only the note owner can request a signature` | unseal | "4" | [explorer](https://explorer.testnet.near.org/transactions/2ByHt1Zi5mnjpBXSEwqb2ybi2swe3Gm3hqENoRtPMNge) |
+| attack | active-lock | cachet-holder-1104.testnet | `389c5F9piYHKPQrsRhRsSCH9eAJu8pDpX5pZiD3rWK9E` | `claim link is active` | nft_transfer | "4" | [explorer](https://explorer.testnet.near.org/transactions/389c5F9piYHKPQrsRhRsSCH9eAJu8pDpX5pZiD3rWK9E) |
+| attack | active-lock | cachet-holder-1104.testnet | `G8MYQ6ozMh1Tup75s8T8TdxPLeJie1dZBj2PoQwvBdE7` | `claim link is active` | unseal | "4" | [explorer](https://explorer.testnet.near.org/transactions/G8MYQ6ozMh1Tup75s8T8TdxPLeJie1dZBj2PoQwvBdE7) |
+<!-- attacks:end -->
