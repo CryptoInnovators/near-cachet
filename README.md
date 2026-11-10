@@ -41,6 +41,19 @@ Two static pages in `web/`, no build step and no install.
 
 The address derivation is checked against the `bitcoin` crate and the contract by `tests/web_parity.rs`, which reads the same `web/vectors.json` as `web/web.test.mjs`. Details: `web/README.md`.
 
+## Telegram Hongbao
+
+Deploy the Worker to serve the Cachet web app and share previews, then configure a Telegram bot with a Mini App named `hongbao` pointing to the Worker URL. Set `TELEGRAM_APP_SHORTNAME` to that exact short name.
+
+```sh
+npx wrangler deploy --config worker/wrangler.toml
+TELEGRAM_BOT_TOKEN=<BotFather token> TELEGRAM_APP_SHORTNAME=hongbao CACHET_WEB_URL=<Worker URL> node bot/index.mjs
+```
+
+1. In the Cachet web app, connect a NEAR wallet, create a note, fund its Bitcoin address, wait for confirmation, and attest the funding output until the note is Sealed.
+2. Create a claim link for that note in the web app. In a private chat with the bot, register it with `/link <note id> <claim URL>`, then share the sealed note using `/envelope <total-sats> <shares>`.
+3. The recipient opens the inline button in Telegram's Mini App, connects a NEAR wallet, and taps **Claim this gift**. The Mini App submits the claim and confirms the recipient owns the note.
+
 ## State machine
 
 | State | Entered by | Leaves by |
