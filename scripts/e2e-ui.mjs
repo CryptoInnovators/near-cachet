@@ -5,9 +5,9 @@
 // headline, a hero without live chain data above the fold, or a gift claim flow whose sealed state,
 // satoshi amount, funding txid or holder differ from the chain.
 // usage: node scripts/e2e-ui.mjs [--web DIR] [--shots DIR] [--contract cachet.testnet]
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -114,8 +114,18 @@ async function shot(name, width) {
   await evalJs(`window.scrollTo({ top: 0, behavior: "instant" })`);
   await sleep(700);
   const height = Math.ceil(await evalJs("document.documentElement.scrollHeight"));
-  const r = await S("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width, height: Math.min(height, 12000), scale: 1 } });
-  writeFileSync(`${SHOTS}/${name}-${width}.png`, Buffer.from(r.data, "base64"));
+  // tall captures past Chrome's 16384px texture limit repeat the top of the page, so capture in slices and stitch with PIL
+  const slice = 4000, parts = [];
+  for (let y = 0; y < height; y += slice) {
+    const r = await S("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y, width, height: Math.min(slice, height - y), scale: 1 } });
+    const part = `${SHOTS}/.part-${name}-${width}-${y}.png`;
+    writeFileSync(part, Buffer.from(r.data, "base64"));
+    parts.push(part);
+  }
+  const out = `${SHOTS}/${name}-${width}.png`;
+  const stitch = spawnSync("/usr/bin/python3", ["-c", "import sys\nfrom PIL import Image\nps=[Image.open(p) for p in sys.argv[2:]]\nim=Image.new('RGB',(ps[0].width,sum(p.height for p in ps)))\ny=0\nfor p in ps:\n im.paste(p,(0,y)); y+=p.height\nim.save(sys.argv[1])", out, ...parts]);
+  if (stitch.status !== 0) throw new Error(`stitch failed: ${stitch.stderr}`);
+  for (const p of parts) unlinkSync(p);
   console.log(`shot ${SHOTS}/${name}-${width}.png`);
 }
 const overflow = () => evalJs("document.documentElement.scrollWidth - document.documentElement.clientWidth");
