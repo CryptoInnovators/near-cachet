@@ -168,8 +168,9 @@ try {
   await waitFor(`document.body.dataset.ready === "1"`, "index reads (motion on)");
   const total = await evalJs("document.documentElement.scrollHeight");
   for (let y = 0; y < total; y += 400) { await evalJs(`window.scrollTo({ top: ${y}, behavior: "instant" })`); await sleep(150); }
-  await sleep(900);
-  check("with motion on every .rise element ends visible", (await evalJs(`document.querySelectorAll(".rise:not(.in)").length`)) === 0);
+  await waitFor(`document.querySelectorAll(".rise:not(.in)").length === 0`, "every .rise element revealed", 4000);
+  const hidden = await evalJs(`[...document.querySelectorAll(".rise:not(.in)")].map((e) => e.id || e.className)`);
+  check("with motion on every .rise element ends visible", hidden.length === 0, hidden.join(", "));
   await motion(false);
 
   // ---- index at 390 ----

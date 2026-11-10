@@ -81,18 +81,21 @@ button, input, select { font: inherit; color: inherit; }
 /* hero */
 .hero { display: grid; grid-template-columns: repeat(12, 1fr); column-gap: var(--gap); row-gap: 40px; padding-block: 16px 128px; }
 .hero-copy { grid-column: 1 / -1; display: grid; gap: 28px; align-content: start; }
+.hero .strip { grid-column: 1 / -1; order: 3; }
 .hero h1 { font-size: clamp(40px, 4.5vw, 80px); line-height: 1; }
 .hero .lead { max-width: 40ch; font-weight: 500; }
 .cta { display: flex; flex-wrap: wrap; gap: 20px 28px; align-items: center; }
 .cta .btn { width: 100%; }
 .cta-note { min-height: 1.45em; color: var(--bad); font-weight: 600; font-size: var(--s-small); width: 100%; }
 .cta-note:empty { display: none; }
-.hero-card { grid-column: 1 / -1; margin-top: 56px; align-content: start; }
+.hero-card { grid-column: 1 / -1; margin-top: 56px; align-content: start; order: 2; }
 @media (min-width: 900px) {
   .hero { padding-block: 24px 160px; }
-  .hero-copy { grid-column: 1 / span 5; gap: 28px; padding-top: 8px; }
+  .hero { row-gap: 32px; }
+  .hero-copy { grid-column: 1 / span 5; grid-row: 1; gap: 28px; padding-top: 8px; }
+  .hero .strip { grid-column: 1 / span 5; grid-row: 2; align-self: start; order: 0; }
   .cta .btn { width: auto; }
-  .hero-card { grid-column: 6 / -1; margin-top: 0; }
+  .hero-card { grid-column: 6 / -1; grid-row: 1 / span 2; margin-top: 0; order: 0; }
 }
 
 /* the provenance card: paper, the wax seal pressed over its bottom right corner */
@@ -130,7 +133,7 @@ button, input, select { font: inherit; color: inherit; }
 .card[data-state="loading"] .card-state, .card[data-state="none"] .card-state, .card[data-state="error"] .card-state { font-size: 28px; }
 @media (min-width: 900px) {
   .card { --seal: 312px; padding: 32px 32px 0; grid-template-columns: minmax(0, 1fr) var(--seal); grid-template-areas: "head seal" "amount seal" "note seal" "rows rows" "micro micro"; column-gap: 24px; row-gap: 20px; }
-  .card-seal { margin: 0 -24px -60px 0; justify-self: end; align-self: end; position: relative; z-index: 2; }
+  .card-seal { margin: 0 -56px -60px 0; justify-self: end; align-self: end; position: relative; z-index: 2; }
   .card-note { align-self: start; }
   .card[data-state="loading"], .card[data-state="none"], .card[data-state="error"] { padding-bottom: 32px; grid-template-areas: "head seal" "amount seal"; }
   .card[data-state="loading"] .card-seal, .card[data-state="none"] .card-seal, .card[data-state="error"] .card-seal { --seal: 144px; margin: 0; }
@@ -173,8 +176,8 @@ button, input, select { font: inherit; color: inherit; }
 .steps { display: grid; gap: 8px; }
 .step { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 16px; align-items: center; background: var(--paper-2); padding: 20px 16px; }
 .step-seal { width: 72px; height: 72px; }
-.step-seal .seal-die { fill: var(--ground); }
-.step-seal .seal-token-die { fill: var(--ground-dim); }
+.step-seal .seal-die { fill: var(--ink-3); }
+.step-seal .seal-token-die { fill: var(--ink-dim); }
 .step-say { min-width: 0; }
 .step-title { font: 600 var(--s-lead)/1.3 var(--f-text); text-wrap: balance; }
 .step-call { grid-column: 1 / -1; display: grid; gap: 6px; min-width: 0; }
