@@ -84,3 +84,26 @@ Note 4 on `cachet.testnet` is Sealed and owned by `cachet-holder-1104.testnet` b
 | attack | active-lock | cachet-holder-1104.testnet | `389c5F9piYHKPQrsRhRsSCH9eAJu8pDpX5pZiD3rWK9E` | `claim link is active` | nft_transfer | "4" | [explorer](https://explorer.testnet.near.org/transactions/389c5F9piYHKPQrsRhRsSCH9eAJu8pDpX5pZiD3rWK9E) |
 | attack | active-lock | cachet-holder-1104.testnet | `G8MYQ6ozMh1Tup75s8T8TdxPLeJie1dZBj2PoQwvBdE7` | `claim link is active` | unseal | "4" | [explorer](https://explorer.testnet.near.org/transactions/G8MYQ6ozMh1Tup75s8T8TdxPLeJie1dZBj2PoQwvBdE7) |
 <!-- attacks:end -->
+
+## Judge view, 2026-11-10
+
+`web/judge.html` reads note 4 on `cachet.testnet` live and renders its proof fields only after the NEAR and Bitcoin testnet3 reads agree. The note was funded with 50,000 sats in Bitcoin `ca578925f9440280955e7a5b8a3ea3f0b826d31047d93bb356a37cf5f504f23f` (block 5323292) and sealed by `attest` as `cachet-ops.testnet`.
+
+| Step | Transaction | Result |
+|---|---|---|
+| `attest` for note 4 | NEAR `G9w9TgqYpRYojEgcyGbn3xz6r1g9ugFk1BENoSBxApdH` | Final success, returns `true`, note `Sealed` |
+| `cargo test --test intents nep199_sealed_transfer_payout_maps_entire_balance_only_to_new_owner -- --exact` | Blacksmith VM | `1 passed; 0 failed`: after a transfer, `nft_payout` returns the whole balance to the new owner only |
+
+The four rejected receipts are listed in the attacks section above. `scripts/check-judge-page.mjs` repeats every read and fails on a missing, stale or mismatched field.
+
+### Payout instance
+
+`cachet.testnet` keeps the code it launched with (no keys after deploy), which predates NEP-199 `nft_payout`. The current build (`cachet.wasm`, SHA-256 `e8fbbf45d95f5647accc6b4c8ce08b9aaed3ef6f280d3698dead73c67c610453`, the same hash CI produces) runs on `cachet-payout.testnet` with the same config: signer `v1.signer-prod.testnet`, light client `btc-client-v4.testnet`, HRP `tb`, 2 confirmations. The judge view reads the payout panel from that instance.
+
+| Step | Transaction | Result |
+|---|---|---|
+| Deploy and `new` | NEAR `Ae267gBpvTijuiqonz4s9eyoDDSnf6Z2TrspPxiM6pXf` | Final success |
+| `mint_note` as `cachet-holder-1104.testnet` | NEAR `kouy1qtJDmEU4eyKygCLnv8me1C6ZeZNzTikN8GLnh7` | Token `"1"` owned by the holder |
+| Delete the deploy key | NEAR `EaikCHsyjeruzqGCdoqkQJdunQrVt7U42tfvhRKKFAEM` | `list-keys` returns an empty list |
+
+`nft_payout("1", 1000000000000000000000000, 1)` returns `{"cachet-holder-1104.testnet": "1000000000000000000000000"}`.
