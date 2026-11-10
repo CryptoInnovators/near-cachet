@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <meta name="description" content="Cachet notes are NFTs that own one Bitcoin output, sealed by the block that proves the funds exist. Claim one by link.">
-  <title>Cachet, hand over Bitcoin by link</title>
+  <meta name="description" content="Fund one sealed Bitcoin note, then hand over its claim link. The recipient claims it with a NEAR account and your seed phrase never leaves your wallet.">
+  <title>Cachet, give a child Bitcoin they can claim when ready</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%238b1a22'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%236a1118'/%3E%3C/svg%3E">
   <link rel="preload" href="fonts/gloock-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/schibsted-grotesk-var.woff2" as="font" type="font/woff2" crossorigin>
@@ -19,8 +19,9 @@
     <header class="bar">
       <a class="wordmark" href="index.html" aria-label="Cachet home">Cachet</a>
       <nav class="nav" aria-label="Sections">
-        <a href="claim.html" id="nav-claim">Claim a note</a>
-        <a href="#record">The record</a>
+        <a href="claim.html" id="nav-claim">Claim a gift</a>
+        <a href="#how">How a gift moves</a>
+        <a href="#record">Proof view</a>
         <a href="#desk">Your notes<sup id="notes-count" hidden></sup></a>
       </nav>
       <div class="net" id="net" role="group" aria-label="Network"><a id="net-testnet" href="?network=testnet">Testnet</a><a id="net-mainnet" href="?network=mainnet">Mainnet</a></div>
@@ -31,15 +32,15 @@
   <main id="main">
     <div class="frame">
       <section class="hero" aria-labelledby="hero-title">
-        <h1 class="display rise" id="hero-title">Hand over Bitcoin by link.</h1>
         <div class="hero-copy">
-          <p class="lead rise" style="--d:1">Each Cachet is an NFT that owns one Bitcoin output. Its seal is the block that proves the funds exist, so a buyer sees the whole claim before paying.</p>
+          <h1 class="display rise" id="hero-title">Give a child Bitcoin they can claim when ready.</h1>
+          <p class="lead rise" id="hero-sub" style="--d:1">Fund one sealed Bitcoin note, then hand over its claim link. The recipient claims it with a NEAR account; your seed phrase never leaves your wallet.</p>
           <div class="cta rise" style="--d:2">
-            <a class="btn btn-primary" id="claim-cta" href="claim.html">Claim a sealed note</a>
-            <a class="textlink" href="#record">Read the record</a>
+            <a class="btn btn-primary" id="claim-cta" href="claim.html">Claim a Bitcoin gift</a>
+            <a class="textlink" href="#how">How a gift moves</a>
             <p class="cta-note" id="cta-note" role="status" aria-live="polite"></p>
           </div>
-          <dl class="strip rise" id="strip" style="--d:3" aria-label="Where this note was read"></dl>
+          <dl class="strip rise" id="strip" style="--d:3" aria-label="Where this gift was read"></dl>
         </div>
         <div class="hero-card rise" style="--d:3">
           <div id="card-slot" aria-live="polite"></div>
@@ -47,15 +48,30 @@
       </section>
     </div>
 
+    <section class="how section field-paper" id="how" aria-labelledby="how-title">
+      <div class="frame">
+        <div class="section-head">
+          <h2 class="title" id="how-title">How a gift moves, call by call.</h2>
+          <p class="lead dim">Each step names the call on <span id="how-contract">cachet.testnet</span> and shows what it reads right now.</p>
+        </div>
+        <div class="journey" id="journey">
+          <h3 class="who">The sender prepares it</h3>
+          <ol class="steps" id="steps-sender"></ol>
+          <h3 class="who">The recipient takes it</h3>
+          <ol class="steps" id="steps-recipient" start="5"></ol>
+        </div>
+      </div>
+    </section>
+
     <section class="record section field-ink on-ink" id="record" aria-labelledby="record-title">
       <div class="frame">
         <div class="section-head">
-          <h2 class="title" id="record-title">Every figure is read from a chain.</h2>
-          <p class="lead dim">Five checks, run in your browser against the contract, the signer, the light client and Bitcoin, each with the call that produced it.</p>
+          <h2 class="title" id="record-title">Proof view</h2>
+          <p class="lead dim">Five checks on this note, run in your browser against the contract, the signer, the light client and Bitcoin, each with the call that produced it.</p>
         </div>
         <div class="tiles" id="tiles" aria-live="polite"></div>
         <div class="lookup">
-          <h3>Read any note</h3>
+          <h3>Read another note</h3>
           <form id="read-form" novalidate>
             <div class="field"><label for="network-input">Network</label><select id="network-input" name="network"><option value="testnet">Testnet</option><option value="mainnet">Mainnet</option></select></div>
             <div class="field"><label for="contract-input">Contract account</label><input id="contract-input" name="contract" type="text" spellcheck="false" autocomplete="off" autocapitalize="none"></div>
@@ -67,28 +83,12 @@
       </div>
     </section>
 
-    <section class="life section field-paper" id="life" aria-labelledby="life-title">
-      <div class="frame">
-        <div class="section-head">
-          <h2 class="title" id="life-title">A seal has four lives.</h2>
-          <p class="lead dim">Drawn from this note's own block hash. Each change is one call to the contract.</p>
-        </div>
-        <ol class="stages" id="stages"></ol>
-      </div>
-    </section>
-
     <section class="section field-ground" id="desk" aria-labelledby="desk-title">
       <div class="frame">
         <div class="desk">
           <div class="section-head">
             <h2 class="title" id="desk-title">Your notes.</h2>
-            <p class="lead dim">A NEAR account is all it takes. No Bitcoin wallet is needed to hold, sell or hand over a note.</p>
-            <ol class="moves">
-              <li>Mint<span>Derive a Bitcoin address for a new note.</span></li>
-              <li>Fund once<span>Send one output to that address.</span></li>
-              <li>Attest<span>The light client proves the output is in a block, and the wax goes on.</span></li>
-              <li>Hand it over<span>Make a claim link, or transfer the NFT.</span></li>
-            </ol>
+            <p class="lead dim">Connect the owner account to mint a note, seal its funding proof and create the claim link. A NEAR account is all it takes.</p>
           </div>
           <div class="tools">
             <div id="owner-actions" aria-live="polite"></div>
@@ -100,10 +100,7 @@
   </main>
 
   <footer class="foot field-ink on-ink">
-    <div class="frame">
-      <dl class="foot-facts" id="foot-facts"></dl>
-      <div class="ghost-mark" aria-hidden="true">Cachet</div>
-    </div>
+    <div class="frame"><p class="prov" id="foot-facts"></p></div>
   </footer>
 
   <noscript><p class="noscript">Cachet reads live chain data with JavaScript. Enable JavaScript to see the note.</p></noscript>

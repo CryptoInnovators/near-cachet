@@ -561,38 +561,52 @@ function mountPage() {
     return exemplarCache;
   }
 
-  const LIVES = [
-    { state: "Minted", name: "Minted", method: "mint_note", text: "The contract asks the signer for a Bitcoin address that belongs to this token. The die is empty." },
-    { state: "Sealed", name: "Sealed", method: "attest", text: "The light client proves the funding output sits in a block. That block's hash becomes the die, and the wax goes on." },
-    { state: "Unsealed", name: "Unsealed", method: "unseal", text: "The owner asks the signer for a signed sweep. The seal breaks and the Bitcoin can leave." },
-    { state: "Finalized", name: "Finalized", method: "finalize", text: "The light client proves the sweep is in a block. The note is burned and the die is empty again." },
+  /* ---- the journey: seven steps, each tied to the contract call it names and what that call reads now ---- */
+  const STEPS = [
+    { who: "sender", seal: "Minted", say: "Open Your notes and connect the owner account.", call: "config(), note(token_id), nft_token(token_id)",
+      read: (c) => `config reads signer ${c.config.signer_id} and ${c.config.confirmations} confirmations. nft_token(${c.tokenId}).owner_id reads ${c.nft?.owner_id ?? "no owner"}.` },
+    { who: "sender", seal: "Minted", say: "Choose a funded note and check its funding output.", call: "note(token_id).address, then the Bitcoin explorer",
+      read: (c) => !c.note.utxo ? "No funding output is attested on this note." : c.tx ? `Address ${short(c.note.address, 10, 6)} receives output ${c.note.utxo.vout}: ${int(c.note.utxo.sats)} sats, in Bitcoin block ${int(c.tx.status?.block_height)}.` : `Address ${short(c.note.address, 10, 6)} receives output ${c.note.utxo.vout}.` },
+    { who: "sender", seal: "Sealed", say: "Seal the funding proof.", call: "attest(token_id, raw_tx, vout, proof)",
+      read: (c) => c.note.utxo ? `note(${c.tokenId}).state reads ${c.note.state}: ${short(c.note.utxo.txid, 8, 6)}:${c.note.utxo.vout}, ${int(c.note.utxo.sats)} sats, block ${short(c.note.utxo.block_hash, 14, 6)}.` : `note(${c.tokenId}).state reads ${c.note.state}.` },
+    { who: "sender", seal: "Sealed", say: "Create the claim link.", call: "create_claim(token_id, claim_key, expires_at_block)",
+      read: (c) => c.note.claim ? `note(${c.tokenId}).claim.key reads ${short(c.note.claim.key, 10, 6)}, ${c.note.claim.locked ? "locked" : "open"} until NEAR block ${int(c.note.claim.expires_at_block)}.` : `note(${c.tokenId}).claim reads null.` },
+    { who: "recipient", seal: "Sealed", say: "Open the link, connect a NEAR account and sign the claim.", call: "claim(token_id, new_owner, signature)",
+      read: (c) => `nft_token(${c.tokenId}).owner_id reads ${c.nft?.owner_id ?? "no owner"}. After the claim it reads the recipient and note(${c.tokenId}).claim reads null.` },
+    { who: "recipient", seal: "Unsealed", say: "Choose a Bitcoin destination and fee, then unseal.", call: "unseal(token_id, btc_dest, fee_rate)",
+      read: (c) => `note(${c.tokenId}).state reads ${c.note.state}. It reads Unsealed when the signer answers, and the note then holds signed_sweep_tx.` },
+    { who: "recipient", seal: "Finalized", say: "Broadcast the sweep, then finalize.", call: "finalize(token_id, sweep_raw_tx, proof)",
+      read: (c) => `After finalize, note(${c.tokenId}) and nft_token(${c.tokenId}) both read null.` },
   ];
 
-  async function renderLife(note, tokenId) {
-    const sample = await exemplar(note);
-    const token = sample?.token_id || tokenId;
-    const items = LIVES.map((life) => {
-      let svg;
-      if (life.state === "Minted") svg = cachetSeal.seal({ state: "Minted", token });
-      else if (life.state === "Finalized") svg = cachetSeal.seal({ state: "Minted", token }).replace(/<text[^>]*>.*?<\/text>/, "");
-      else if (sample?.utxo) svg = cachetSeal.seal({ blockHash: sample.utxo.block_hash, txid: sample.utxo.txid, state: life.state, token });
-      else svg = cachetSeal.seal({ state: "Minted", token });
-      const art = h("div", { class: "seal-art", role: "presentation" });
-      art.innerHTML = svg;
-      art.querySelectorAll(".seal-tick").forEach((tick) => tick.style.setProperty("--i", tick.dataset.i));
-      return h("li", { class: "stage rise" }, art, h("h3", null, life.name), h("p", { class: "method" }, life.method), h("p", null, life.text));
-    });
-    $("stages").replaceChildren(...items);
-    cachetUi.reveal($("stages"));
+  function sealFor(state, sample, token) {
+    if (state === "Finalized") return cachetSeal.seal({ state: "Minted", token }).replace(/<text[^>]*>.*?<\/text>/, "");
+    if (state === "Minted" || !sample?.utxo) return cachetSeal.seal({ state: "Minted", token });
+    return cachetSeal.seal({ blockHash: sample.utxo.block_hash, txid: sample.utxo.txid, state, token });
   }
 
-  function renderFoot(contract, config) {
-    const pair = (k, v) => h("div", null, h("dt", null, k), h("dd", null, v));
-    $("foot-facts").replaceChildren(
-      pair("Contract", link(explorerAccount(contract), contract)),
-      pair("Signer", config ? link(explorerAccount(config.signer_id), config.signer_id) : "Not read"),
-      pair("Bitcoin light client", config ? link(explorerAccount(config.btc_light_client), config.btc_light_client) : "Not read"),
-    );
+  // c: { tokenId, config, note, nft, tx } or null while the first reads are in flight.
+  async function renderJourney(c) {
+    const first = !$("steps-sender").children.length;
+    const sample = c ? await exemplar(c.note) : null;
+    const token = sample?.token_id || c?.tokenId || "?";
+    const li = STEPS.map((step, i) => {
+      const art = h("div", { class: "step-seal", role: "presentation" });
+      art.innerHTML = sealFor(step.seal, sample, token);
+      art.querySelectorAll(".seal-tick").forEach((tick) => tick.style.setProperty("--i", tick.dataset.i));
+      let read = "Reading from the contract…";
+      if (c?.config && c.note) read = step.read(c);
+      else if (c?.config) read = `${c.contract} holds no note ${c.tokenId}, so there is nothing to read.`;
+      else if (c) read = "The contract did not answer this read.";
+      return { who: step.who, el: h("li", { class: first ? "step rise" : "step" }, art, h("div", { class: "step-say" }, h("h4", { class: "step-title" }, step.say)), h("div", { class: "step-call" }, h("p", { class: "call" }, h("span", { class: "call-name" }, step.call)), h("p", { class: "read" }, read))) };
+    });
+    $("steps-sender").replaceChildren(...li.filter((x) => x.who === "sender").map((x) => x.el));
+    $("steps-recipient").replaceChildren(...li.filter((x) => x.who === "recipient").map((x) => x.el));
+    cachetUi.reveal($("journey"));
+  }
+
+  function renderFoot(contract, config, block) {
+    cachetUi.provenance($("foot-facts"), { net, contract, config, block });
   }
 
   /* ---- one read of a contract and token ---- */
@@ -637,14 +651,16 @@ function mountPage() {
     ];
     $("tiles").replaceChildren(...tiles.map((tile) => tile.el));
     cachetUi.reveal($("tiles"));
+    if (!$("steps-sender").children.length) renderJourney(null);
     cachetCard.loading(slot, tokenId);
 
     try {
-      const [configR, noteR, keysR, latestR] = await Promise.allSettled([
+      const [configR, noteR, keysR, latestR, nftR] = await Promise.allSettled([
         callView(contract, "config", {}),
         callView(contract, "note", { token_id: tokenId }),
         viewAccessKeys(contract),
         cachetChain.latestTx(contract, net),
+        callView(contract, "nft_token", { token_id: tokenId }),
       ]);
       if (run !== currentRun) return;
       const config = configR.status === "fulfilled" && typeof configR.value.value === "object" ? configR.value.value : null;
@@ -652,14 +668,15 @@ function mountPage() {
       const ctx = { contract, tokenId, config, note, noteBlock: noteR.value?.blockHeight, configBlock: configR.value?.blockHeight };
 
       renderStrip(contract, latestR.value || null, latestR.status === "rejected" ? latestR.reason : null, noteR.value?.blockHeight || configR.value?.blockHeight);
-      renderFoot(contract, config);
+      renderFoot(contract, config, noteR.value?.blockHeight || configR.value?.blockHeight);
+      const nft = nftR.status === "fulfilled" ? nftR.value.value : null;
 
       if (!config) {
         const reason = configR.reason;
         const missing = reason && isUnknownAccount(reason);
         cachetCard.failed(slot, tokenId, missing ? `No Cachet contract exists at ${contract} on ${net.name}.` : `The contract config could not be read. ${formatError(reason)}`);
         for (const tile of tiles) fill(tile, { v: "unread", body: [h("p", null, missing ? `${contract} does not exist on ${net.name}, so there is nothing to check.` : formatError(reason))] });
-        await renderLife(null, tokenId);
+        await renderJourney({ tokenId, contract, config: null, note: null });
         if (globalThis.cachetOwner) globalThis.cachetOwner.refresh(contract, tokenId, null, null);
         return;
       }
@@ -677,10 +694,11 @@ function mountPage() {
         keyTile(tiles[2], ctx).catch((e) => failTile(tiles[2], e, "signer")),
         Promise.resolve(keysTile(tiles[3], keysR.value, keysR.reason, ctx)),
         Promise.resolve(systemsTile(tiles[4], ctx)),
-        renderLife(note, tokenId),
+        ctx.txRead.catch(() => null).then((tx) => renderJourney({ tokenId, contract, config, note, nft, tx })),
       ];
       await Promise.all(jobs);
       if (run !== currentRun) return;
+
       if (note && cachetOutcome.fundingAddressVisible(note) && ctx.derived) {
         let activity = null;
         try { activity = await activityAt(ctx.derived.address, config.hrp); } catch {}
@@ -720,7 +738,8 @@ function mountPage() {
     $("contract-input").value = isAccountId(wantContract) ? wantContract : net.contract;
     $("token-input").value = isTokenId(wantToken) ? wantToken : defaults?.token || "1";
     $("read-form").addEventListener("submit", (event) => { event.preventDefault(); readAll(); });
-    $("claim-cta").href = `claim.html${location.search ? `?network=${net.name}` : ""}`;
+    $("claim-cta").href = `claim.html?network=${net.name}`;
+    $("how-contract").textContent = net.contract;
     $("claim-cta").addEventListener("click", async (event) => {
       event.preventDefault();
       const note = $("cta-note");

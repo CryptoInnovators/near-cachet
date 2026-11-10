@@ -4,58 +4,57 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <meta name="description" content="Claim and unseal a Cachet Bitcoin note with a NEAR wallet.">
-  <title>Cachet claim links</title>
-  <link rel="icon" href="data:,">
+  <meta name="description" content="Open a Bitcoin gift. Its sealed state and satoshi amount are read live from the chain, then you claim it with a NEAR account.">
+  <title>Cachet, claim a Bitcoin gift</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%238b1a22'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%236a1118'/%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/gloock-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/schibsted-grotesk-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
+  <script>document.documentElement.classList.add("js");</script>
 </head>
 <body>
-  <a class="skip" href="#main">Skip to the claim tools</a>
+  <a class="skip" href="#main">Skip to the gift</a>
 
-  <div class="sheet">
-    <header class="masthead">
-      <div class="kicker">
-        <span>Cachet</span>
-        <span><a href="index.html">Manage notes</a></span>
-      </div>
-      <h1>Your Bitcoin<br>note</h1>
-      <p class="standfirst">Claim the sealed note, choose a Bitcoin destination, then release and broadcast its signed sweep.</p>
-      <p class="masthead-note">The claim secret lives after the # in this address, which the browser keeps on your device.</p>
+  <div class="frame">
+    <header class="bar">
+      <a class="wordmark" href="index.html" aria-label="Cachet home">Cachet</a>
+      <nav class="nav" aria-label="Sections">
+        <a href="claim.html" id="nav-claim" aria-current="page">Claim a gift</a>
+        <a href="index.html#how">How a gift moves</a>
+        <a href="index.html#desk">Your notes</a>
+      </nav>
+      <p class="conn" id="claim-connect-status" aria-live="polite"></p>
+      <button class="btn btn-quiet" id="claim-connect" type="button">Connect wallet</button>
     </header>
-
-    <main id="main">
-      <section class="panel" id="claim-panel" aria-labelledby="claim-title">
-        <div class="panel-head">
-          <h2 id="claim-title">Claim a note</h2>
-          <p class="panel-sub">The linked note is read from the contract before the claim is signed.</p>
-        </div>
-        <div id="claim-intro" aria-live="polite">
-          <p class="reading">Open a claim link to fill this in. A link looks like claim.html#v=1&amp;contract=...&amp;token=...&amp;key=...</p>
-        </div>
-        <div class="owner-connect"><button id="judge-note" type="button">Get a judge note</button><button id="claim-connect" type="button" hidden>Connect</button><span id="claim-connect-status" class="meta" aria-live="polite"></span></div>
-        <div id="claim-actions"></div>
-        <p id="claim-status" class="control-status" role="status" aria-live="polite"></p>
-        <div id="claim-out" aria-live="polite"></div>
-      </section>
-    </main>
-
-    <footer>
-      <div class="footer-grid">
-        <div>
-          <p class="footer-label">Reads</p>
-          <p>Fastnear reads the selected NEAR network and mempool.space reads Bitcoin testnet or mainnet.</p>
-        </div>
-        <div>
-          <p class="footer-label">How the contract checks it</p>
-          <p><code>claim</code> verifies an ed25519 signature over <code>cachet-claim:&lt;contract&gt;:&lt;token&gt;:&lt;new owner&gt;</code> against the public key registered by <code>create_claim</code>. A signature for one account does not move the note to another.</p>
-        </div>
-      </div>
-    </footer>
   </div>
+
+  <main id="main">
+    <div class="frame">
+      <section class="gift" aria-labelledby="gift-title">
+        <div class="gift-copy">
+          <h1 class="display rise" id="gift-title">Claim your Bitcoin gift.</h1>
+          <p class="lead rise" id="gift-sub" style="--d:1">Opening the gift pool on the contract.</p>
+          <p class="gift-status" id="claim-status" role="status" aria-live="polite"></p>
+        </div>
+        <div class="gift-card rise" style="--d:2"><div id="card-slot" aria-live="polite"></div></div>
+        <ol class="stations rise" id="stations" style="--d:3" aria-label="The four steps of the claim"></ol>
+      </section>
+    </div>
+  </main>
+
+  <footer class="foot field-ink on-ink">
+    <div class="frame"><p class="prov" id="foot-facts"></p></div>
+  </footer>
+
+  <noscript><p class="noscript">Cachet reads the gift live from the chain with JavaScript. Enable JavaScript to open it.</p></noscript>
+
   <script src="chain.js" defer></script>
   <script src="outcome.js" defer></script>
   <script src="btc-proof.js" defer></script>
   <script src="claim-lib.js" defer></script>
+  <script src="ui.js" defer></script>
+  <script src="seal.js" defer></script>
+  <script src="card.js" defer></script>
   <script type="module" src="wallet.js"></script>
   <script src="claim.js" defer></script>
 </body>

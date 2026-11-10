@@ -83,6 +83,7 @@ function render(slot, note, ctx) {
         ? [h("p", { class: "figure" }, figure, h("span", { class: "figure-u" }, " sats")), h("p", { class: "figure-sub" }, btc(note.utxo.sats))]
         : h("p", { class: "figure figure-wait" }, "Not funded yet"),
       h("p", { class: "consequence" }, consequence(note))),
+    note.utxo ? h("p", { class: "card-note" }, `Each tick is one hex digit of the Bitcoin block hash. ${leadingZeros(note.utxo.block_hash)} leading zeros are the gap at the top.`) : null,
     facts(note, ctx),
     note.utxo ? h("p", { class: "microprint", "aria-hidden": "true" }, microprint(note.utxo.txid)) : null,
   ]);

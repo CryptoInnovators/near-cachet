@@ -90,7 +90,19 @@ function reveal(root = document) {
   items.forEach((el) => io.observe(el));
 }
 
-const lib = { h, int, sats, btc, groupHex, short, ago, link, copyButton, reducedMotion, countUp, reveal };
+// The footer's one provenance line: contract, signer, light client and the NEAR block the page was read at.
+function provenance(el, { net, contract, config, block }) {
+  const account = (name) => link(`${net.nearExplorer}/address/${encodeURIComponent(name)}`, name);
+  const part = (label, value) => h("span", { class: "prov-part" }, `${label} `, value);
+  el.replaceChildren(
+    part("Contract", account(contract)),
+    config ? part("Signer", account(config.signer_id)) : null,
+    config ? part("Bitcoin light client", account(config.btc_light_client)) : null,
+    part("Read at", block ? `NEAR block ${INT.format(block)}` : "not read"),
+  );
+}
+
+const lib = { h, provenance, int, sats, btc, groupHex, short, ago, link, copyButton, reducedMotion, countUp, reveal };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetUi = lib;
 
