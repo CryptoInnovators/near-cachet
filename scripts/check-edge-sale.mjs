@@ -18,6 +18,8 @@ const NEARRPC = process.env.NEARRPC || 'https://test.rpc.fastnear.com';
 const MEMPOOL = process.env.MEMPOOL || 'https://mempool.space/testnet/api';
 const SEPOLIA_RPC = process.env.SEPOLIA_RPC || 'https://rpc.sepolia.org';
 const SEPOLIA_CHAIN_ID = 11155111;
+const SEPOLIA_USDC = '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238';
+const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 async function rpc(method, params = []) {
   const res = await fetch(NEARRPC, {
@@ -97,8 +99,20 @@ async function verifySepoliaTx(txid) {
     ok: true,
     block_number: receipt.result.blockNumber,
     block_hash: block.result?.hash,
-    status: receipt.result.status
+    status: receipt.result.status,
+    timestamp: block.result?.timestamp,
+    logs: receipt.result.logs
   };
+}
+
+async function verifyNearTx(txid, sender) {
+  const res = await rpc('tx', [txid, sender]);
+  if (!res.result?.transaction_outcome?.outcome?.receipt_ids || !res.result.transaction_outcome.block_hash) {
+    return { ok: false, reason: 'no transaction outcome' };
+  }
+  const block = await rpc('block', { block_id: res.result.transaction_outcome.block_hash });
+  if (!block.result?.header?.timestamp_nanosec) return { ok: false, reason: 'no block timestamp' };
+  return { ok: true, timestamp: BigInt(block.result.header.timestamp_nanosec) / 1000000000n };
 }
 
 async function checkNote(contract, note) {
@@ -177,7 +191,7 @@ async function checkNote(contract, note) {
   return { ok, currentOwner, checks };
 }
 
-async function checkSale(sale) {
+async function checkSale(contract, sale) {
   console.log(`\n💰 Checking sale for note ${sale.token_id}...`);
   let ok = true;
   const checks = [];
@@ -194,6 +208,22 @@ async function checkSale(sale) {
       ok = false;
     } else {
       checks.push(`✅ Sepolia tx succeeded`);
+      const buyer = sale.buyer_evm?.toLowerCase();
+      const seller = sale.seller_evm?.toLowerCase();
+      const transfer = sepoliaCheck.logs?.find(log => log.topics?.[0]?.toLowerCase() === TRANSFER_TOPIC
+        && log.address?.toLowerCase() === SEPOLIA_USDC
+        && `0x${log.topics?.[1]?.slice(-40)}`.toLowerCase() === buyer
+        && `0x${log.topics?.[2]?.slice(-40)}`.toLowerCase() === seller
+        && BigInt(log.data) === BigInt(sale.amount_usdc));
+      if (transfer && buyer && seller && sale.amount_usdc !== undefined) checks.push('✅ USDC Transfer matches token, buyer, seller, and amount');
+      else { checks.push('❌ No matching USDC Transfer log'); ok = false; }
+      const nft = await viewNftToken(contract, sale.token_id);
+      if (nft?.owner_id === sale.buyer) checks.push(`✅ NFT owner is buyer: ${sale.buyer}`);
+      else { checks.push(`❌ NFT owner mismatch: expected ${sale.buyer}, got ${nft?.owner_id || 'missing'}`); ok = false; }
+      const nearCheck = sale.near_txid && sale.buyer ? await verifyNearTx(sale.near_txid, sale.buyer) : { ok: false, reason: 'missing NEAR claim transaction or buyer' };
+      if (!nearCheck.ok || !sepoliaCheck.timestamp) { checks.push(`❌ Cannot compare payment and claim times: ${nearCheck.reason || 'missing Sepolia block time'}`); ok = false; }
+      else if (BigInt(sepoliaCheck.timestamp) > nearCheck.timestamp) { checks.push('❌ Payment block is after NEAR claim transaction'); ok = false; }
+      else checks.push('✅ Payment block is no later than NEAR claim transaction');
     }
   } else {
     checks.push(`❌ Sepolia tx not found: ${sepoliaCheck.reason}`);
@@ -253,6 +283,11 @@ async function main() {
   }
 
   const data = JSON.parse(fs.readFileSync(EDGE_JSON, 'utf-8'));
+  const emptyCollections = ['notes', 'sales', 'refused_sales'].filter(key => !Array.isArray(data[key]) || data[key].length === 0);
+  if (emptyCollections.length) {
+    console.error(`❌ Required records missing: ${emptyCollections.join(', ')}`);
+    process.exit(1);
+  }
   const contract = data.accounts?.contract || 'cachet.testnet';
 
   console.log(`Contract: ${contract}`);
@@ -274,7 +309,7 @@ async function main() {
   if (data.sales?.length) {
     console.log(`\n💰 Found ${data.sales.length} sale(s) to verify`);
     for (const sale of data.sales) {
-      const result = await checkSale(sale);
+      const result = await checkSale(contract, sale);
       if (!result.ok) allOk = false;
     }
   }
