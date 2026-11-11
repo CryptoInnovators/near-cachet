@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Create a Bitcoin red envelope from sealed Cachet notes and share each claim in Telegram.">
+  <title>Cachet: send a Bitcoin red envelope</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%238b1a22'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%236a1118'/%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/gloock-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/schibsted-grotesk-var.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <script>document.documentElement.classList.add("js");</script>
+</head>
+<body>
+  <div class="frame">
+    <header class="bar">
+      <a class="wordmark" href="index.html" aria-label="Cachet home">Cachet</a>
+      <nav class="nav" aria-label="Sections"><a href="index.html">Your notes</a><a href="claim.html">Claim a gift</a></nav>
+      <button class="btn btn-quiet" id="hongbao-connect" type="button">Connect wallet</button>
+    </header>
+    <main class="hongbao" id="main">
+      <section class="hongbao-intro">
+        <p class="small dim">BITCOIN TESTNET</p>
+        <h1 class="title">Send one red envelope. Let friends claim a share.</h1>
+        <p class="lead">Create one sealed note per share, fund every address in one Bitcoin transaction, then share each verified claim link.</p>
+      </section>
+      <form id="hongbao-form" class="hongbao-form">
+        <label class="field">Total satoshis<input id="hongbao-sats" type="number" min="2" step="1" value="10000" required></label>
+        <label class="field">Number of shares<input id="hongbao-count" type="number" min="2" max="8" step="1" value="4" required></label>
+        <p id="hongbao-preview" class="hongbao-preview" aria-live="polite"></p>
+        <button class="btn btn-primary" id="hongbao-create" type="submit">Create notes</button>
+      </form>
+      <section class="hongbao-funding" aria-labelledby="funding-title">
+        <h2 class="title" id="funding-title">Fund and seal the shares</h2>
+        <p>Send the previewed amounts to the note addresses in one Bitcoin testnet transaction. Paste that transaction ID to verify and attest each output.</p>
+        <label class="field">Bitcoin testnet transaction ID<input id="hongbao-txid" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="64-character transaction ID"></label>
+        <button class="btn btn-primary" id="hongbao-seal" type="button" disabled>Verify funding and seal</button>
+      </section>
+      <p id="hongbao-status" class="gift-status" role="status" aria-live="polite"></p>
+      <ol id="hongbao-notes" class="hongbao-notes" aria-live="polite"></ol>
+    </main>
+  </div>
+  <script src="chain.js" defer></script>
+  <script src="btc-proof.js" defer></script>
+  <script src="claim-lib.js" defer></script>
+  <script src="outcome.js" defer></script>
+  <script type="module" src="wallet.js"></script>
+  <script src="hongbao.js" defer></script>
+</body>
+</html>

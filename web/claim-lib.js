@@ -62,6 +62,17 @@ function parseFragment(hash) {
   return { contract, token, key: key.toLowerCase() };
 }
 
+function parseMiniAppStartParam(value) {
+  if (!value) return null;
+  let candidate = String(value);
+  try {
+    const url = new URL(candidate, "https://cachet.invalid/");
+    candidate = url.hash || (url.searchParams.has("v") ? url.search.slice(1) : candidate);
+  } catch {}
+  const parsed = parseFragment(candidate);
+  return parsed ? buildFragment(parsed) : null;
+}
+
 // The first judge-pool fragment for this network whose note is still Sealed with an open claim link, or null.
 async function pickJudgeFragment(net, readNote, entries) {
   const list = entries || await (await fetch("judge-links.json", { cache: "no-store" })).json();
@@ -74,7 +85,7 @@ async function pickJudgeFragment(net, readNote, entries) {
   return null;
 }
 
-const lib = { pickJudgeFragment, PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment };
+const lib = { pickJudgeFragment, PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment, parseMiniAppStartParam };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetClaim = lib;
 

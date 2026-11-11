@@ -292,6 +292,23 @@ button, input, select { font: inherit; color: inherit; }
 
 .noscript { padding: 24px var(--m); font-weight: 600; }
 
+.hongbao { max-width: 920px; margin: 48px auto 120px; }
+.hongbao-intro { display: grid; gap: 20px; max-width: 720px; padding-bottom: 56px; }
+.hongbao-intro h1 { max-width: 16ch; }
+.hongbao-intro .lead { max-width: 52ch; }
+.hongbao-form, .hongbao-funding { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 28px; padding: 28px; background: var(--paper); }
+.hongbao-form .field, .hongbao-preview, .hongbao-funding h2, .hongbao-funding > p, .hongbao-funding .field, #hongbao-seal { grid-column: 1 / -1; }
+.hongbao-preview { font: 600 15px/1.6 var(--f-text); }
+.hongbao-funding { margin-top: 24px; background: var(--ink); color: var(--paper); }
+.hongbao-funding > p { color: var(--ink-dim); max-width: 65ch; }
+.hongbao-funding .field { color: var(--paper); }
+.hongbao-funding input { color: var(--ink); }
+.hongbao-notes { display: grid; gap: 1px; margin-top: 40px; background: var(--ground-dim); }
+.hongbao-notes li { display: grid; grid-template-columns: 1fr auto; gap: 12px 24px; align-items: center; padding: 20px; background: var(--paper); }
+.hongbao-notes code { grid-column: 1 / -1; overflow-wrap: anywhere; font: 13px/1.5 var(--f-text); }
+.hongbao-notes a { font-size: var(--s-small); font-weight: 700; }
+@media (max-width: 640px) { .hongbao { margin: 36px auto 80px; } .hongbao-form, .hongbao-funding { grid-template-columns: 1fr; padding: 20px; } .hongbao-notes li { grid-template-columns: 1fr; } .hongbao-notes code { grid-column: auto; } }
+
 /* motion: only where something changes. Content is never hidden when scripts fail (.js is added by the page). */
 @media (prefers-reduced-motion: no-preference) {
   .js .rise { opacity: 0; transform: translateY(24px); }

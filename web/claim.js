@@ -266,6 +266,14 @@ async function openGift() {
 async function init() {
   $("claim-connect").addEventListener("click", async () => { if (await connect()) await render(); });
   frag = cachetClaim.parseFragment(location.hash);
+  if (!frag) {
+    const start = new URLSearchParams(location.search).get("tgWebAppStartParam");
+    const fragment = cachetClaim.parseMiniAppStartParam(start);
+    if (fragment) {
+      history.replaceState(null, "", `${location.pathname}${location.search}#${fragment}`);
+      frag = cachetClaim.parseFragment(location.hash);
+    }
+  }
   if (!frag) return openGift();
   cachetCard.loading($("card-slot"), frag.token);
   try { await render(); }
