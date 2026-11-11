@@ -25,7 +25,9 @@ test("card and metadata render a live sealed testnet judge note", async () => {
     assert.match(svg, /width="1200" height="630"/);
     assert.match(svg, /Bitcoin red envelope/i);
     assert.match(svg, new RegExp(`${formatSats(note.utxo?.sats || 0)} sats`));
-    assert.match(page, /property="og:title" content="A Bitcoin red envelope"/);
+    assert.match(page, new RegExp(`<title>${note.state} Bitcoin red envelope #${id}</title>`));
+    assert.match(page, new RegExp(`property="og:description" content="${formatSats(note.utxo?.sats || 0)} sats · ${note.state}"`));
+    assert.match(page, new RegExp(`claim\\?network=testnet&amp;note=${id}`));
     assert.match(page, new RegExp(`og:image" content="https://cachet\\.example/og/${id}\\.svg`));
     assert.match(page, new RegExp(`${note.state}`));
   }
@@ -36,4 +38,3 @@ test("escaping and satoshi formatting handle hostile values", () => {
   assert.equal(formatSats(50000), "50,000");
   assert.doesNotMatch(cardSvg({ state: `<script>`, utxo: { sats: 50000 } }), /<script>/);
 });
-

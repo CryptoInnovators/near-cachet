@@ -26,6 +26,11 @@ const errorResponse = (error) => new Response(error, { status: error === "Note n
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/hongbao" || url.pathname === "/hongbao/") {
+      const target = new URL("/hongbao.html", url.origin);
+      target.search = url.search;
+      return Response.redirect(target, 302);
+    }
     let match = url.pathname.match(/^\/e\/(\d+)\/?$/);
     if (match) {
       try {
@@ -34,6 +39,7 @@ export default {
         const isCrawler = /bot|crawler|spider|facebookexternalhit|twitterbot|whatsapp|telegrambot|slackbot|discordbot|preview/i.test(request.headers.get("user-agent") || "");
         if (isCrawler) return html(envelopeHtml({ id, note, origin: url.origin }));
         const target = new URL("/claim", url.origin);
+        target.searchParams.set("network", "testnet");
         target.searchParams.set("note", id);
         for (const [key, value] of url.searchParams) if (key !== "note") target.searchParams.append(key, value);
         return Response.redirect(target, 302);

@@ -14,9 +14,9 @@ export function cardSvg(note) {
 
 export function envelopeHtml({ id, note, origin }) {
   const sats = Number(note?.utxo?.sats || 0);
-  const title = "A Bitcoin red envelope";
+  const title = `${note?.state === "Sealed" ? "Sealed " : ""}Bitcoin red envelope #${id}`;
   const description = `${formatSats(sats)} sats · ${note?.state || "Unknown"}`;
   const image = `${origin}/og/${encodeURIComponent(id)}.svg`;
-  const target = new URL(`/claim?note=${encodeURIComponent(id)}`, origin);
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:title" content="${title}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(origin)}/e/${encodeURIComponent(id)}"><meta property="og:image" content="${escapeHtml(image)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${escapeHtml(description)}"><meta name="twitter:image" content="${escapeHtml(image)}"><meta http-equiv="refresh" content="0;url=${escapeHtml(target)}"></head><body><a href="${escapeHtml(target)}">Open your Bitcoin red envelope</a></body></html>`;
+  const target = new URL(`/claim?network=testnet&note=${encodeURIComponent(id)}`, origin);
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(origin)}/e/${encodeURIComponent(id)}"><meta property="og:image" content="${escapeHtml(image)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(title)}"><meta name="twitter:description" content="${escapeHtml(description)}"><meta name="twitter:image" content="${escapeHtml(image)}"><meta http-equiv="refresh" content="0;url=${escapeHtml(target)}"></head><body><a href="${escapeHtml(target)}">Open your Bitcoin red envelope</a></body></html>`;
 }

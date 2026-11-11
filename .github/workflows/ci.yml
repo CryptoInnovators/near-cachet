@@ -32,7 +32,7 @@ jobs:
           tar -xzf cn.tgz --strip-components=1 -C "$HOME/.cargo/bin" cargo-near-x86_64-unknown-linux-gnu/cargo-near
           cargo near --version
       - name: web tests
-        run: node --test web/web.test.mjs web/hongbao.test.mjs
+        run: node --test web/web.test.mjs web/hongbao.test.mjs worker/test/*.test.mjs
       - name: fetch fixtures
         run: ./scripts/fetch-fixtures.sh
       - name: build wasm

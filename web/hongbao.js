@@ -64,7 +64,9 @@ function renderNotes() {
     row.querySelector("code").textContent = note.address || `Note ${note.token} is waiting for its live address read.`;
     if (note.link) {
       const link = document.createElement("a"); link.href = note.link; link.textContent = "Open claim link"; row.append(link);
-      const share = document.createElement("a"); share.href = `https://t.me/share/url?url=${encodeURIComponent(note.link)}&text=${encodeURIComponent("A Bitcoin gift is waiting for you")}`; share.textContent = "Share in Telegram"; row.append(share);
+      const envelope = new URL(`/e/${note.token}`, location.origin);
+      envelope.hash = new URL(note.link).hash;
+      const share = document.createElement("a"); share.href = `https://t.me/share/url?url=${encodeURIComponent(envelope.href)}&text=${encodeURIComponent("A Bitcoin gift is waiting for you")}`; share.textContent = "Share in Telegram"; share.target = "_blank"; share.rel = "noopener noreferrer"; row.append(share);
     }
     return row;
   }));
@@ -127,6 +129,8 @@ $("hongbao-connect").addEventListener("click", async () => {
   catch (error) { status(error.message, true); }
 });
 renderPreview();
+globalThis.Telegram?.WebApp?.ready();
+globalThis.Telegram?.WebApp?.expand();
 
 const api = { splitSats };
 if (typeof module !== "undefined" && module.exports) module.exports = api;

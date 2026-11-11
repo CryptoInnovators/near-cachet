@@ -1,4 +1,4 @@
-name = "cachet-envelope"
+name = "near-cachet"
 main = "src/index.mjs"
 compatibility_date = "2026-11-10"
 
