@@ -117,3 +117,13 @@ The sender's `cachet-ops.testnet` account added an Ed25519 function-call key wit
 | `linkdrop claim GSW4DggXdSpFUWbXiV3TQLz6STGo25C9CGZS1BsMuzPJ` | Final success, one `claim` function call to `cachet.testnet` |
 | `nft_token("2").owner_id` | `17c33dd760d581e9126c9fcd122bcef6a66b35cbcbef34eab846fd74892af30f` |
 | `note("2")` | `Sealed`, 50,000 sats, `claim` is null after transfer |
+
+## Stale claim-key cleanup, 2026-11-11
+
+`scripts/ops-judge-envelope.sh check` compares each sender claim-only access key with the live claims on sender-owned notes. With the claim key for note 2 restored after its claim was cleared, the check reports one stale key. `cleanup` deletes it, waits for finality, and confirms the key is absent. The same cleanup runs before the sender prepares new judge links and before Hongbao creates new claim keys.
+
+| Action | NEAR transaction | Result |
+|---|---|---|
+| Add a disposable stale claim-only key | `zBy4pVkEL2B1T6VppbQH4iHXDKu3ViCri34hJoimC5i` | Final success |
+| Delete the disposable stale key | `A2Fu171yNfL3aLUuQVTb3FCPsjtpxTVJuK6thJvXUeKo` | Final success; check reports zero stale keys |
+| Delete the claim key for claimed note 2 | `FjALFsgntXjT15EfFh2dc1HZ1c9QmLhJ5cAcrMSVc2C2` | Final success; `view_access_key_list` confirms the key is absent |

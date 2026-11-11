@@ -49,6 +49,13 @@ test("already-claimed or mismatched shares are refused before signing", () => {
   assert.throws(() => linkdrop.assertUnclaimed({ ...open, state: "Minted" }, "ab".repeat(32)), /not sealed/);
 });
 
+test("claim key is added only for a sealed note that has not been claimed", () => {
+  assert.equal(linkdrop.canAddClaimKey({ state: "Sealed", claim: null }), true);
+  assert.equal(linkdrop.canAddClaimKey({ state: "Sealed", claim: { key: "ab".repeat(32) } }), false);
+  assert.equal(linkdrop.canAddClaimKey({ state: "Unsealed", claim: null }), false);
+  assert.equal(linkdrop.canAddClaimKey(null), false);
+});
+
 test("walletless claim key is a NEAR 64-byte Ed25519 secret key and needs backup acknowledgement", async () => {
   const seed = "01".repeat(32);
   const encoded = await linkdrop.secretKeyString(seed);

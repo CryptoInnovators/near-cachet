@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 
 CONTRACT=${CONTRACT:-cachet.testnet}
 OWNER=${OWNER:-cachet-ops.testnet}
-NEARRPC=${NEARRPC:-https://rpc.testnet.near.org}
+NEARRPC=${NEARRPC:-https://near-testnet.drpc.org}
 LINKS=${LINKS:-web/judge-links.json}
 ALLOWANCE='0.15 NEAR'
 MIN_ALLOWANCE='150000000000000000000000'
@@ -33,17 +33,78 @@ view() {
 
 note() { view note "$(jq -cn --arg t "$1" '{token_id:$t}')"; }
 
+owned_token_ids() {
+  local offset=0 page args
+  while :; do
+    args=$(jq -cn --arg o "$OWNER" --argjson i "$offset" '{account_id:$o,from_index:($i|tostring),limit:100}')
+    page=$(view nft_tokens_for_owner "$args")
+    jq -r '.[].token_id' <<<"$page"
+    (( $(jq 'length' <<<"$page") < 100 )) && break
+    offset=$((offset + 100))
+  done
+}
+
+cleanup_claim_keys() {
+  local mode=${1:-delete} tokens live_keys='[]' token live hex public_keys stale csv output tx_hash started status access candidates stale_count
+  tokens=$(owned_token_ids)
+  while IFS= read -r token; do
+    [[ -n $token ]] || continue
+    live=$(note "$token")
+    hex=$(jq -r '.claim.key // empty' <<<"$live")
+    [[ $hex =~ ^[0-9a-fA-F]{64}$ ]] || continue
+    public_keys=$(node -e 'const c=require("./web/linkdrop-claim.js");process.stdout.write(`ed25519:${c.b58encode(Uint8Array.from(process.argv[1].match(/../g),x=>parseInt(x,16)))}`)' "$hex")
+    live_keys=$(jq -c --arg p "$public_keys" '. + [$p]' <<<"$live_keys")
+  done <<<"$tokens"
+
+  access=$(rpc "$(jq -cn --arg a "$OWNER" '{jsonrpc:"2.0",id:1,method:"query",params:{request_type:"view_access_key_list",finality:"final",account_id:$a}}')")
+  candidates=$(jq '[.keys[] | select((.access_key.permission | type) == "object") | select(.access_key.permission.FunctionCall.receiver_id == $c and .access_key.permission.FunctionCall.method_names == ["claim"])] | length' --arg c "$CONTRACT" <<<"$access")
+  stale=$(jq -r --arg c "$CONTRACT" --argjson live "$live_keys" '.keys[] | select((.access_key.permission | type) == "object") | select(.access_key.permission.FunctionCall.receiver_id == $c and .access_key.permission.FunctionCall.method_names == ["claim"]) | select(.public_key as $p | ($live | index($p) | not)) | .public_key' <<<"$access")
+  stale_count=0; [[ -z $stale ]] || stale_count=$(wc -l <<<"$stale" | tr -d ' ')
+  if [[ $mode == check ]]; then
+    if [[ -n $stale ]]; then echo "FAIL: $stale_count stale, $((candidates - stale_count)) of $candidates claim-only keys match live note claims" >&2; return 1; fi
+    echo "PASS: 0 stale, $candidates claim-only keys match live note claims"
+    return 0
+  fi
+  [[ -n $stale ]] || { echo "no stale claim-only keys for $OWNER"; return 0; }
+
+  csv=$(tr '\n' ',' <<<"$stale" | sed 's/,$//')
+  output=$(near account delete-keys "$OWNER" public-keys "$csv" network-config testnet sign-with-legacy-keychain send 2>&1) || { echo "$output" >&2; return 1; }
+  tx_hash=$(sed -nE 's#.*(txns|transactions)/([1-9A-HJ-NP-Za-km-z]{40,}).*#\2#p; s/.*Transaction ID: ([1-9A-HJ-NP-Za-km-z]{40,}).*/\1/p' <<<"$output" | head -1)
+  [[ $tx_hash =~ ^[1-9A-HJ-NP-Za-km-z]{40,}$ ]] || { echo "DeleteKey completed without a readable explorer transaction hash" >&2; return 1; }
+  started=$(date +%s)
+  while :; do
+    status=$(rpc "$(jq -cn --arg h "$tx_hash" --arg a "$OWNER" '{jsonrpc:"2.0",id:1,method:"EXPERIMENTAL_tx_status",params:[$h,$a]}')")
+    jq -e '.status.Failure == null' <<<"$status" >/dev/null || { echo "DeleteKey transaction $tx_hash failed" >&2; return 1; }
+    [[ $(jq -r '.final_execution_status // empty' <<<"$status") == FINAL ]] && break
+    (( $(date +%s) - started < WAIT_SECONDS )) || { echo "Timed out waiting for DeleteKey transaction $tx_hash to reach FINAL" >&2; return 1; }
+    sleep 3
+  done
+  access=$(rpc "$(jq -cn --arg a "$OWNER" '{jsonrpc:"2.0",id:1,method:"query",params:{request_type:"view_access_key_list",finality:"final",account_id:$a}}')")
+  while IFS= read -r public_keys; do
+    [[ -n $public_keys ]] || continue
+    jq -e --arg p "$public_keys" '.keys[] | select(.public_key == $p)' <<<"$access" >/dev/null && { echo "stale claim key remains live after DeleteKey" >&2; return 1; }
+  done <<<"$stale"
+  echo "deleted stale claim-only keys for $OWNER; final tx $tx_hash"
+}
+
+if [[ ${1:-} == cleanup || ${1:-} == check ]]; then
+  (( $# == 1 )) || { echo "Usage: $0 {cleanup|check}" >&2; exit 2; }
+  cleanup_claim_keys "${1}"
+  exit
+fi
+
 if (( $# )); then
   (( $# == 3 )) || { echo "Usage: $0 [SEALED_TOKEN_1 SEALED_TOKEN_2 SEALED_TOKEN_3]" >&2; exit 2; }
   tokens=("$@")
 else
   tokens=()
-  while IFS= read -r token; do tokens+=("$token"); done < <(view nft_tokens_for_owner "$(jq -cn --arg o "$OWNER" '{account_id:$o}')" | jq -r '.[].token_id')
+  while IFS= read -r token; do tokens+=("$token"); done < <(owned_token_ids)
 fi
 
 mkdir -p "$(dirname "$LINKS")"
 [[ -e $LINKS ]] || echo '[]' > "$LINKS"
 jq -e 'type == "array"' "$LINKS" >/dev/null || { echo "$LINKS must contain a JSON array" >&2; exit 1; }
+cleanup_claim_keys
 prepared=0
 new_links='[]'
 

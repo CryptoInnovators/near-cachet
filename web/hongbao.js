@@ -84,6 +84,8 @@ async function sealNotes() {
   if (confirmations < Number(config.confirmations)) throw new Error(`Funding has ${confirmations} confirmations; ${config.confirmations} are required.`);
   const proof = await cachetBtcProof.inclusionProof(base, txid);
   const usedVouts = new Set();
+  const cleanup = await cachetWallet.cleanupClaimKeys(net.contract);
+  if (cleanup) txHash(cleanup);
   for (let i = 0; i < notes.length; i++) {
     const note = notes[i];
     const funding = await cachetBtcProof.fundingOf(base, note.address);
@@ -99,7 +101,7 @@ async function sealNotes() {
     const key = await cachetClaim.publicKeyHexFromSeed(seed);
     const block = await cachetChain.rpc("block", { finality: "final" }, net);
     const expiry = block.header.height + 86400;
-    txHash(await cachetWallet.addClaimKey(net.contract, key));
+    txHash(await cachetWallet.addClaimKey(net.contract, note.token, key));
     txHash(await cachetWallet.call(net.contract, "create_claim", { token_id: note.token, claim_key: key, expires_at_block: expiry }, { tgas: 100 }));
     const live = (await cachetChain.callView(net.contract, "note", { token_id: note.token }, net)).value;
     if (live?.state !== "Sealed" || live.claim?.key?.toLowerCase() !== key.toLowerCase()) throw new Error(`The live claim key for note ${note.token} did not verify.`);

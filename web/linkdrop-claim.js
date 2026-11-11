@@ -67,6 +67,8 @@ function assertUnclaimed(note, keyHex) {
   return true;
 }
 
+function canAddClaimKey(note) { return note?.state === "Sealed" && !note.claim; }
+
 function concat(...parts) {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
   let at = 0;
@@ -116,7 +118,7 @@ async function createImplicitAccount(storage, netName) {
   return account;
 }
 
-const api = { b58decode, b58encode, secretKeyString, submitWalletlessClaim, assertClaimKey, assertUnclaimed, transactionBytes, signAndSend, createImplicitAccount };
+const api = { b58decode, b58encode, secretKeyString, submitWalletlessClaim, assertClaimKey, assertUnclaimed, canAddClaimKey, transactionBytes, signAndSend, createImplicitAccount };
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 globalThis.cachetLinkdrop = api;
 })();
