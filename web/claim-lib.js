@@ -49,8 +49,8 @@ async function signClaim(seedHex, contract, tokenId, newOwner) {
   return bytesToHex(new Uint8Array(sig));
 }
 
-function buildFragment({ contract, token, key }) {
-  return new URLSearchParams({ v: "1", contract, token, key }).toString();
+function buildFragment({ contract, token, key, sender }) {
+  return new URLSearchParams({ v: sender ? "2" : "1", contract, token, key, ...(sender ? { sender } : {}) }).toString();
 }
 
 function parseFragment(hash) {
@@ -58,8 +58,11 @@ function parseFragment(hash) {
   const contract = p.get("contract");
   const token = p.get("token");
   const key = p.get("key");
-  if (p.get("v") !== "1" || !contract || !token || !/^[0-9a-f]{64}$/i.test(key || "")) return null;
-  return { contract, token, key: key.toLowerCase() };
+  const sender = p.get("sender");
+  const version = p.get("v");
+  if (!(["1", "2"].includes(version)) || !contract || !token || !/^[0-9a-f]{64}$/i.test(key || "")) return null;
+  if (version === "2" && (!sender || !/^(?:[a-z0-9]+[._-])*[a-z0-9]+$/.test(sender) || sender.length > 64)) return null;
+  return { contract, token, key: key.toLowerCase(), ...(version === "2" ? { sender } : {}) };
 }
 
 function parseMiniAppStartParam(value) {

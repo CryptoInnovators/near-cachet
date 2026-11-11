@@ -77,17 +77,38 @@ async function claim() {
   if (busy) return;
   busy = true;
   try {
-    const account = cachetWallet.accountId || await connect();
-    if (!account) return;
-    const signature = await cachetClaim.signClaim(frag.key, frag.contract, frag.token, account);
-    status("Waiting for the claim transaction.");
-    const result = await cachetWallet.call(frag.contract, "claim", { token_id: frag.token, new_owner: account, signature }, { tgas: 100 });
+    let account = cachetWallet.accountId;
+    let result;
+    if (frag.sender) {
+      if (net.name !== "testnet" || frag.contract !== net.contract) throw new Error("Walletless claim links are testnet only.");
+      const saved = await cachetLinkdrop.createImplicitAccount(localStorage, net.name);
+      account = saved.accountId;
+      const note = (await view("note", { token_id: frag.token })).value;
+      const keyHex = await cachetClaim.publicKeyHexFromSeed(frag.key);
+      cachetLinkdrop.assertUnclaimed(note, keyHex);
+      const signature = await cachetClaim.signClaim(frag.key, frag.contract, frag.token, account);
+      status("Waiting for the sender-funded claim transaction.");
+      result = await cachetLinkdrop.signAndSend({
+        signerId: frag.sender, seedHex: frag.key, contract: frag.contract,
+        args: { token_id: frag.token, new_owner: account, signature }, net,
+      });
+      $("claim-connect-status").textContent = `Your claim account: ${account}`;
+      $("claim-connect").hidden = true;
+    } else {
+      account = account || await connect();
+      if (!account) return;
+      const signature = await cachetClaim.signClaim(frag.key, frag.contract, frag.token, account);
+      status("Waiting for the claim transaction.");
+      result = await cachetWallet.call(frag.contract, "claim", { token_id: frag.token, new_owner: account, signature }, { tgas: 100 });
+    }
     const failed = cachetOutcome.failureText(result);
     if (failed) return status(failed, true);
     session.tx.claim = txHash(result);
+    if (session.tx.claim) localStorage.setItem(`cachet:claim-tx:${frag.contract}:${frag.token}`, session.tx.claim);
     const token = await poll(async () => (await view("nft_token", { token_id: frag.token })).value, (value) => value?.owner_id === account, 20000, 1000);
     if (token?.owner_id !== account) return status("The claim transaction returned, but nft_token did not show your account within 20 seconds.", true);
-    status(`You own note ${frag.token}.`);
+    const claimedNote = (await view("note", { token_id: frag.token })).value;
+    status(frag.sender ? `Gift opened: ${int(claimedNote?.utxo?.sats || 0)} sats moved to your claim account.` : `You own note ${frag.token}.`);
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
 }
@@ -182,9 +203,9 @@ async function stations(s, matches) {
   // 1 Claim
   if (!note) out.push(station("Claim", "done", h("p", { class: "say" }, `Note ${frag.token} is finalized. Its Bitcoin left to the address the owner chose.`)));
   else if (note.claim) {
-    const claimBtn = h("button", { class: "btn btn-primary", id: "claim-go", type: "button", disabled: !matches, onclick: claim }, "Claim this gift");
+    const claimBtn = h("button", { class: "btn btn-primary", id: "claim-go", type: "button", disabled: !matches, onclick: claim }, frag.sender ? "Open this gift" : "Claim this gift");
     out.push(station("Claim", "current",
-      h("p", { class: "say" }, matches ? `Connect a NEAR account and sign. The contract moves note ${frag.token} to it, and the link stops working.` : "This link no longer matches the claim key on the note."),
+      h("p", { class: "say" }, matches ? (frag.sender ? `No NEAR wallet needed. The sender's claim-only link key pays the transaction fee and moves note ${frag.token} to a new claim account in this browser.` : `Connect a NEAR account and sign. The contract moves note ${frag.token} to it, and the link stops working.`) : "This link no longer matches the claim key on the note."),
       claimBtn));
   } else out.push(station("Claim", "done", h("p", { class: "say" }, `nft_token(${frag.token}).owner_id reads ${owner}.`), txLink(session.tx.claim, "Claim transaction")));
 
@@ -247,8 +268,14 @@ async function draw() {
   if (!s.note) cachetCard.none(slot, frag.token, frag.contract);
   else cachetCard.render(slot, s.note, { net, hrp: s.config.hrp, contract: frag.contract });
   $("stations").replaceChildren(...await stations(s, matches));
+  if (frag.sender && s.nft?.owner_id) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`cachet:claim-account:${net.name}`) || "null");
+      if (saved?.accountId === s.nft.owner_id) $("claim-connect-status").textContent = `Your claim account: ${saved.accountId}`;
+    } catch { status("The saved claim account could not be read.", true); }
+  }
   cachetUi.provenance($("foot-facts"), { net, contract: frag.contract, config: s.config, block: s.height });
-  $("gift-sub").textContent = s.note ? (s.note.claim ? `A sealed Bitcoin note, ${int(s.note.utxo?.sats || 0)} sats, read live from ${frag.contract}. Connect a NEAR account to take it.` : `Note ${frag.token} belongs to ${s.nft?.owner_id}. Read live from ${frag.contract}.`) : `Note ${frag.token} is finalized on ${frag.contract}.`;
+  $("gift-sub").textContent = s.note ? (s.note.claim ? `A sealed Bitcoin note, ${int(s.note.utxo?.sats || 0)} sats, read live from ${frag.contract}. ${frag.sender ? "Open it without a NEAR wallet." : "Connect a NEAR account to take it."}` : `Note ${frag.token} belongs to ${s.nft?.owner_id}. Read live from ${frag.contract}.`) : `Note ${frag.token} is finalized on ${frag.contract}.`;
   document.body.dataset.ready = "1";
 }
 
@@ -275,6 +302,10 @@ async function init() {
     }
   }
   if (!frag) return openGift();
+  if (frag.sender) {
+    $("claim-connect").hidden = true;
+    session.tx.claim = localStorage.getItem(`cachet:claim-tx:${frag.contract}:${frag.token}`);
+  }
   cachetCard.loading($("card-slot"), frag.token);
   try { await render(); }
   catch (error) { $("gift-sub").textContent = error.message; status(error.message, true); document.body.dataset.ready = "1"; }

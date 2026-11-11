@@ -138,7 +138,7 @@ test("rpc moves to the next provider on a 429, remembers it, and does not retry 
 
 test("rpc override parameter replaces the provider list and must be https", () => {
   assert.deepEqual(chain.network("?network=testnet&rpc=https://near-testnet.drpc.org").rpcs, ["https://near-testnet.drpc.org"]);
-  assert.equal(chain.network("?rpc=http://evil.example").rpcs.length, 2);
+  assert.equal(chain.network("?rpc=http://evil.example").rpcs.length, 3);
 });
 
 test("sweepVsize matches the contract formula for each script length", () => {

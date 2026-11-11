@@ -20,5 +20,16 @@ async function call(contract, method, args, { tgas, yocto = "0" }) {
   });
 }
 
-const api = { connect, call, get accountId() { return accountId; } };
+async function addClaimKey(contract, publicKeyHex) {
+  if (!wallet || !accountId) throw new Error("Connect the sender wallet before creating claim links.");
+  const publicKey = `ed25519:${cachetLinkdrop.b58encode(Uint8Array.from(publicKeyHex.match(/../g), (x) => parseInt(x, 16)))}`;
+  return wallet.signAndSendTransaction({
+    receiverId: accountId,
+    actions: [{ type: "AddKey", params: { publicKey, accessKey: { nonce: 0, permission: {
+      receiverId: contract, allowance: "150000000000000000000000", methodNames: ["claim"],
+    } } } }],
+  });
+}
+
+const api = { connect, call, addClaimKey, get accountId() { return accountId; } };
 globalThis.cachetWallet = api;

@@ -280,6 +280,7 @@ button, input, select { font: inherit; color: inherit; }
 .station-tx { font-size: var(--s-small); font-weight: 600; overflow-wrap: anywhere; }
 .consequence-box { background: var(--paper-2); padding: 14px 16px; text-wrap: pretty; max-width: 52ch; overflow-wrap: anywhere; }
 .conn { font-size: var(--s-small); font-weight: 600; min-height: 1.45em; }
+button[hidden] { display: none; }
 @media (max-width: 899px) { .conn:empty { display: none; } .gift .btn-primary { width: 100%; } .stations { order: 2; } .gift-card { order: 3; margin-top: 40px; } }
 @media (min-width: 900px) {
   .gift { padding-block: 24px 144px; }

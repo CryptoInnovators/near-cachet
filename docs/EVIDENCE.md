@@ -107,3 +107,13 @@ The four rejected receipts are listed in the attacks section above. `scripts/che
 | Delete the deploy key | NEAR `EaikCHsyjeruzqGCdoqkQJdunQrVt7U42tfvhRKKFAEM` | `list-keys` returns an empty list |
 
 `nft_payout("1", 1000000000000000000000000, 1)` returns `{"cachet-holder-1104.testnet": "1000000000000000000000000"}`.
+
+## Walletless linkdrop claim, 2026-11-11
+
+The sender's `cachet-ops.testnet` account added an Ed25519 function-call key with receiver `cachet.testnet`, method `claim`, and a 0.15 NEAR allowance. A signed-in wallet was not used by the recipient. The browser generated the implicit account `17c33dd760d581e9126c9fcd122bcef6a66b35cbcbef34eab846fd74892af30f`, and the link key submitted the claim for sealed note 2, worth 50,000 sats.
+
+| Check | Live testnet result |
+|---|---|
+| `linkdrop claim GSW4DggXdSpFUWbXiV3TQLz6STGo25C9CGZS1BsMuzPJ` | Final success, one `claim` function call to `cachet.testnet` |
+| `nft_token("2").owner_id` | `17c33dd760d581e9126c9fcd122bcef6a66b35cbcbef34eab846fd74892af30f` |
+| `note("2")` | `Sealed`, 50,000 sats, `claim` is null after transfer |
