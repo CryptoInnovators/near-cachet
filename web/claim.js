@@ -111,6 +111,7 @@ async function claim() {
     status(frag.sender ? `Gift opened: ${int(claimedNote?.utxo?.sats || 0)} sats moved to your claim account.` : `You own note ${frag.token}.`);
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
+  cachetUi.reveal(document);
 }
 
 async function unseal(note, config, dest, fee) {
@@ -134,6 +135,7 @@ async function unseal(note, config, dest, fee) {
     status("The seal is broken. The signed sweep is ready to broadcast.");
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
+  cachetUi.reveal(document);
 }
 
 async function broadcast(note, signed, base) {
@@ -160,6 +162,7 @@ async function broadcast(note, signed, base) {
     status("The sweep is in the Bitcoin mempool and spends the sealed output.");
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
+  cachetUi.reveal(document);
 }
 
 async function finalize(note, config, base) {
@@ -182,6 +185,7 @@ async function finalize(note, config, base) {
     status("The note is finalized and no longer exists.");
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
+  cachetUi.reveal(document);
 }
 
 /* ---- the four stations ---- */
@@ -275,6 +279,7 @@ async function draw() {
     } catch { status("The saved claim account could not be read.", true); }
   }
   cachetUi.provenance($("foot-facts"), { net, contract: frag.contract, config: s.config, block: s.height });
+  cachetUi.reveal(document);
   $("gift-sub").textContent = s.note ? (s.note.claim ? `A sealed Bitcoin note, ${int(s.note.utxo?.sats || 0)} sats, read live from ${frag.contract}. ${frag.sender ? "Open it without a NEAR wallet." : "Connect a NEAR account to take it."}` : `Note ${frag.token} belongs to ${s.nft?.owner_id}. Read live from ${frag.contract}.`) : `Note ${frag.token} is finalized on ${frag.contract}.`;
   document.body.dataset.ready = "1";
 }
@@ -291,6 +296,7 @@ async function openGift() {
 }
 
 async function init() {
+  cachetUi.reveal(document);
   $("claim-connect").addEventListener("click", async () => { if (await connect()) await render(); });
   frag = cachetClaim.parseFragment(location.hash);
   if (!frag) {
