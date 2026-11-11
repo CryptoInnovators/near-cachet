@@ -33,6 +33,8 @@ jobs:
           cargo near --version
       - name: web tests
         run: node --test web/web.test.mjs web/hongbao.test.mjs worker/test/*.test.mjs
+      - name: hongbao live routes
+        run: node scripts/check-hongbao-live.mjs
       - name: fetch fixtures
         run: ./scripts/fetch-fixtures.sh
       - name: build wasm

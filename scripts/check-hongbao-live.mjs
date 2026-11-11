@@ -39,11 +39,10 @@ assert.equal(destination.searchParams.get('network'), 'testnet', 'claim route st
 assert.equal(destination.searchParams.get('note'), id, 'claim route names note 4');
 
 const entry = await request(`${DEFAULT_WEB_URL}/hongbao`, { redirect: 'manual' });
-assert.equal(entry.status, 302, 'Hongbao route resolves to its Mini App page');
-assert.equal(new URL(entry.headers.get('location'), DEFAULT_WEB_URL).pathname, '/hongbao.html');
-const page = await request(`${DEFAULT_WEB_URL}/hongbao.html`);
-assert.equal(page.status, 200, 'sender Mini App page is served');
-const html = await page.text();
+assert.equal(entry.status, 200, 'Hongbao route serves the sender Mini App page');
+const html = await entry.text();
+assert.ok(html.includes('<title>Cachet: send a Bitcoin red envelope</title>'), 'sender route returns the Hongbao page');
+assert.ok(html.includes('id="hongbao-form"'), 'sender route contains the note creation form');
 assert.ok(html.includes('https://telegram.org/js/telegram-web-app.js'), 'sender page loads the Telegram Mini App SDK');
 const app = await request(`${DEFAULT_WEB_URL}/hongbao.js`);
 assert.equal(app.status, 200, 'sender application module is served');
