@@ -1,23 +1,30 @@
 import { cardSvg, envelopeHtml } from "./card.mjs";
 
-const RPC = "https://rpc.testnet.near.org";
+const RPCS = ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"];
 const CONTRACT = "cachet.testnet";
 const isId = (id) => /^\d+$/.test(id);
 
 async function getNote(id) {
   const args = btoa(JSON.stringify({ token_id: id }));
-  const response = await fetch(RPC, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-card", method: "query", params: { request_type: "call_function", finality: "final", account_id: CONTRACT, method_name: "note", args_base64: args } }),
-  });
-  if (!response.ok) throw new Error(`NEAR RPC HTTP ${response.status}`);
-  const payload = await response.json();
-  if (payload.error) throw new Error(payload.error.message || "NEAR RPC error");
-  const raw = new Uint8Array(payload.result.result);
-  const note = JSON.parse(new TextDecoder().decode(raw));
-  if (!note) throw new Error("Note not found");
-  return note;
+  let failure;
+  for (const rpc of RPCS) {
+    try {
+      const response = await fetch(rpc, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-card", method: "query", params: { request_type: "call_function", finality: "final", account_id: CONTRACT, method_name: "note", args_base64: args } }),
+      });
+      if (!response.ok) { failure = new Error(`NEAR RPC HTTP ${response.status}`); continue; }
+      const payload = await response.json();
+      if (payload?.error?.code === -429 || [429,502,503,504].includes(response.status)) { failure = new Error(payload?.error?.message || `NEAR RPC HTTP ${response.status}`); continue; }
+      if (payload?.error) throw new Error(payload.error.message || "NEAR RPC error");
+      const raw = new Uint8Array(payload.result.result);
+      const note = JSON.parse(new TextDecoder().decode(raw));
+      if (!note) throw new Error("Note not found");
+      return note;
+    } catch (error) { failure = error; }
+  }
+  throw failure || new Error("No RPC provider answered.");
 }
 
 const html = (body, status = 200) => new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=30" } });

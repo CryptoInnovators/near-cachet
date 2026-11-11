@@ -3,7 +3,7 @@
 (() => {
 
 const NETWORKS = {
-  testnet: { name: "testnet", rpc: "https://rpc.testnet.near.org", rpcs: ["https://rpc.testnet.near.org", "https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org"], txApi: "https://tx.test.fastnear.com", contract: "cachet.testnet", nearExplorer: "https://testnet.nearblocks.io", poolOwner: "cachet-ops.testnet" },
+  testnet: { name: "testnet", rpc: "https://near-testnet.drpc.org", rpcs: ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"], txApi: "https://tx.test.fastnear.com", contract: "cachet.testnet", nearExplorer: "https://testnet.nearblocks.io", poolOwner: "cachet-ops.testnet" },
   mainnet: { name: "mainnet", rpc: "https://rpc.mainnet.fastnear.com", rpcs: ["https://rpc.mainnet.fastnear.com", "https://free.rpc.fastnear.com", "https://rpc.mainnet.near.org"], txApi: "https://tx.main.fastnear.com", contract: "cachet.near", nearExplorer: "https://nearblocks.io", poolOwner: null },
 };
 const REQUEST_TIMEOUT_MS = 15000;

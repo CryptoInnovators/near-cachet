@@ -8,7 +8,7 @@ test("card and metadata render a live sealed testnet judge note", async () => {
   assert.ok(ids.length >= 1, "judge links provide at least one real note id");
   for (const id of ids) {
     const args = btoa(JSON.stringify({ token_id: id }));
-    const response = await fetch("https://rpc.testnet.near.org", {
+    const response = await fetch("https://near-testnet.drpc.org", {
       method: "POST",
       headers: { "content-type": "application/json" },
       signal: AbortSignal.timeout(15000),

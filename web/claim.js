@@ -35,15 +35,21 @@ async function poll(read, done, timeoutMs, stepMs) {
 
 const view = (method, args, account = frag.contract) => cachetChain.callView(account, method, args, net);
 
-async function readAll() {
+async function readFast() {
   const [noteR, nftR, configR] = await Promise.all([view("note", { token_id: frag.token }), view("nft_token", { token_id: frag.token }), view("config", {})]);
   const note = noteR.value && typeof noteR.value === "object" ? noteR.value : null;
   const config = configR.value;
   const base = cachetChain.mempoolBase(config.hrp);
-  const outspend = note?.utxo ? await cachetChain.outspendStatus(base, note.utxo.txid, note.utxo.vout) : null;
+  return { note, nft: nftR.value, config, height: noteR.blockHeight, base, outspend: null, spend: null };
+}
+
+// Slower Bitcoin-side proof checks. Run after the card and claim button are already on screen.
+async function bitcoinChecks(s) {
+  if (!s?.note?.utxo) return { outspend: null, spend: null };
+  const outspend = await cachetChain.outspendStatus(s.base, s.note.utxo.txid, s.note.utxo.vout);
   let spend = null;
-  if (outspend?.spent === true) { try { spend = await cachetChain.mempoolJson(base, `/tx/${encodeURIComponent(note.utxo.txid)}/outspend/${note.utxo.vout}`); } catch {} }
-  return { note, nft: nftR.value, config, height: noteR.blockHeight, base, outspend, spend };
+  if (outspend?.spent === true) { try { spend = await cachetChain.mempoolJson(s.base, `/tx/${encodeURIComponent(s.note.utxo.txid)}/outspend/${s.note.utxo.vout}`); } catch {} }
+  return { outspend, spend };
 }
 
 function accountAddress(value, hrp) {
@@ -103,12 +109,27 @@ async function claim() {
     }
     const failed = cachetOutcome.failureText(result);
     if (failed) return status(failed, true);
-    session.tx.claim = txHash(result);
-    if (session.tx.claim) localStorage.setItem(`cachet:claim-tx:${frag.contract}:${frag.token}`, session.tx.claim);
+    const claimTx = txHash(result);
+    session.tx.claim = claimTx;
+    if (claimTx) localStorage.setItem(`cachet:claim-tx:${frag.contract}:${frag.token}`, claimTx);
+    const signer = frag.sender || account;
+    if (claimTx) {
+      const optimistic = await poll(async () => cachetChain.rpc("EXPERIMENTAL_tx_status", [claimTx, signer], net), (value) => {
+        const finality = value?.final_execution_status;
+        return finality === "EXECUTED_OPTIMISTIC" || finality === "FINAL" || Boolean(cachetOutcome.failureText(value));
+      }, 60000, 1000);
+      const optimisticFailure = cachetOutcome.failureText(optimistic);
+      if (optimisticFailure) return status(optimisticFailure, true);
+    }
+    status(frag.sender ? "Gift opened." : `You own note ${frag.token}.`);
+    cachetUi.reveal(document);
     const token = await poll(async () => (await view("nft_token", { token_id: frag.token })).value, (value) => value?.owner_id === account, 20000, 1000);
     if (token?.owner_id !== account) return status("The claim transaction returned, but nft_token did not show your account within 20 seconds.", true);
     const claimedNote = (await view("note", { token_id: frag.token })).value;
     status(frag.sender ? `Gift opened: ${int(claimedNote?.utxo?.sats || 0)} sats moved to your claim account.` : `You own note ${frag.token}.`);
+    if (claimTx && signer) {
+      poll(async () => cachetChain.rpc("EXPERIMENTAL_tx_status", [claimTx, signer], net), (value) => value?.final_execution_status === "FINAL", 120000, 3000).catch(() => {});
+    }
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
   cachetUi.reveal(document);
@@ -266,7 +287,7 @@ let rendering = Promise.resolve();
 function render() { rendering = rendering.then(draw, draw); return rendering; }
 
 async function draw() {
-  const s = await readAll();
+  const s = await readFast();
   const matches = Boolean(s.note?.claim && s.note.claim.key === await cachetClaim.publicKeyHexFromSeed(frag.key));
   const slot = $("card-slot");
   if (!s.note) cachetCard.none(slot, frag.token, frag.contract);
@@ -282,6 +303,16 @@ async function draw() {
   cachetUi.reveal(document);
   $("gift-sub").textContent = s.note ? (s.note.claim ? `A sealed Bitcoin note, ${int(s.note.utxo?.sats || 0)} sats, read live from ${frag.contract}. ${frag.sender ? "Open it without a NEAR wallet." : "Connect a NEAR account to take it."}` : `Note ${frag.token} belongs to ${s.nft?.owner_id}. Read live from ${frag.contract}.`) : `Note ${frag.token} is finalized on ${frag.contract}.`;
   document.body.dataset.ready = "1";
+  // Slower Bitcoin proof checks run only after the card and claim button are usable.
+  if (s.note?.utxo) {
+    bitcoinChecks(s).then((checks) => {
+      s.outspend = checks.outspend;
+      s.spend = checks.spend;
+      const st = $("stations");
+      if (st) stations(s, matches).then((nodes) => st.replaceChildren(...nodes)).catch(() => {});
+      cachetUi.reveal(document);
+    }).catch(() => {});
+  }
 }
 
 async function openGift() {
