@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+globalThis.cachetClaim = require("../claim-lib.js");
 const linkdrop = require("../linkdrop-claim.js");
 
 test("link key permits exactly claim on its configured contract", () => {
@@ -46,4 +47,19 @@ test("already-claimed or mismatched shares are refused before signing", () => {
   assert.throws(() => linkdrop.assertUnclaimed({ ...open, claim: null }, "ab".repeat(32)), /already been claimed/);
   assert.throws(() => linkdrop.assertUnclaimed(open, "cd".repeat(32)), /already been claimed/);
   assert.throws(() => linkdrop.assertUnclaimed({ ...open, state: "Minted" }, "ab".repeat(32)), /not sealed/);
+});
+
+test("walletless claim key is a NEAR 64-byte Ed25519 secret key and needs backup acknowledgement", async () => {
+  const seed = "01".repeat(32);
+  const encoded = await linkdrop.secretKeyString(seed);
+  const secret = linkdrop.b58decode(encoded.replace(/^ed25519:/, ""));
+  assert.equal(secret.length, 64);
+  assert.equal(Buffer.from(secret.slice(0, 32)).toString("hex"), seed);
+  assert.equal(Buffer.from(secret.slice(32)).toString("hex"), await cachetClaim.publicKeyHexFromSeed(seed));
+
+  let sent = false;
+  await assert.rejects(linkdrop.submitWalletlessClaim({ acknowledged: false, send: () => { sent = true; } }), /Back up/);
+  assert.equal(sent, false);
+  await linkdrop.submitWalletlessClaim({ acknowledged: true, send: () => { sent = true; } });
+  assert.equal(sent, true);
 });

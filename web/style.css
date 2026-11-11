@@ -275,6 +275,8 @@ button, input, select { font: inherit; color: inherit; }
 .station[data-state="done"] .where { color: var(--ok); }
 .station .say { text-wrap: pretty; max-width: 46ch; overflow-wrap: anywhere; }
 .station .tool-form { max-width: 520px; }
+.station .claim-key-backup code { overflow-wrap: anywhere; }
+.station .claim-key-backup input { width: auto; min-height: auto; accent-color: var(--wax); }
 .station .btn { justify-self: start; }
 .station .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .station-tx { font-size: var(--s-small); font-weight: 600; overflow-wrap: anywhere; }

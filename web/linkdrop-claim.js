@@ -27,6 +27,18 @@ function b58encode(bytes) {
   return out || "1";
 }
 
+async function secretKeyString(seedHex) {
+  const seed = hexBytes(seedHex);
+  if (seed.length !== 32) throw new Error("Invalid Ed25519 seed.");
+  const publicKey = hexBytes(await cachetClaim.publicKeyHexFromSeed(seedHex));
+  return `ed25519:${b58encode(concat(seed, publicKey))}`;
+}
+
+async function submitWalletlessClaim({ acknowledged, send }) {
+  if (!acknowledged) throw new Error("Back up your claim account key before opening this gift.");
+  return send();
+}
+
 function hexBytes(hex) {
   if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) throw new Error("Invalid hex value.");
   return Uint8Array.from(hex.match(/../g), (x) => parseInt(x, 16));
@@ -104,7 +116,7 @@ async function createImplicitAccount(storage, netName) {
   return account;
 }
 
-const api = { b58decode, b58encode, assertClaimKey, assertUnclaimed, transactionBytes, signAndSend, createImplicitAccount };
+const api = { b58decode, b58encode, secretKeyString, submitWalletlessClaim, assertClaimKey, assertUnclaimed, transactionBytes, signAndSend, createImplicitAccount };
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 globalThis.cachetLinkdrop = api;
 })();

@@ -85,7 +85,7 @@ async function claim() {
   try {
     let account = cachetWallet.accountId;
     let result;
-    if (frag.sender) {
+    if (frag.sender && !cachetWallet.accountId) {
       if (net.name !== "testnet" || frag.contract !== net.contract) throw new Error("Walletless claim links are testnet only.");
       const saved = await cachetLinkdrop.createImplicitAccount(localStorage, net.name);
       account = saved.accountId;
@@ -94,9 +94,12 @@ async function claim() {
       cachetLinkdrop.assertUnclaimed(note, keyHex);
       const signature = await cachetClaim.signClaim(frag.key, frag.contract, frag.token, account);
       status("Waiting for the sender-funded claim transaction.");
-      result = await cachetLinkdrop.signAndSend({
-        signerId: frag.sender, seedHex: frag.key, contract: frag.contract,
-        args: { token_id: frag.token, new_owner: account, signature }, net,
+      result = await cachetLinkdrop.submitWalletlessClaim({
+        acknowledged: $("claim-key-backup")?.checked === true,
+        send: () => cachetLinkdrop.signAndSend({
+          signerId: frag.sender, seedHex: frag.key, contract: frag.contract,
+          args: { token_id: frag.token, new_owner: account, signature }, net,
+        }),
       });
       $("claim-connect-status").textContent = `Your claim account: ${account}`;
       $("claim-connect").hidden = true;
@@ -112,7 +115,7 @@ async function claim() {
     const claimTx = txHash(result);
     session.tx.claim = claimTx;
     if (claimTx) localStorage.setItem(`cachet:claim-tx:${frag.contract}:${frag.token}`, claimTx);
-    const signer = frag.sender || account;
+    const signer = frag.sender && !cachetWallet.accountId ? frag.sender : account;
     if (claimTx) {
       const optimistic = await poll(async () => cachetChain.rpc("EXPERIMENTAL_tx_status", [claimTx, signer], net), (value) => {
         const finality = value?.final_execution_status;
@@ -125,8 +128,7 @@ async function claim() {
     cachetUi.reveal(document);
     const token = await poll(async () => (await view("nft_token", { token_id: frag.token })).value, (value) => value?.owner_id === account, 20000, 1000);
     if (token?.owner_id !== account) return status("The claim transaction returned, but nft_token did not show your account within 20 seconds.", true);
-    const claimedNote = (await view("note", { token_id: frag.token })).value;
-    status(frag.sender ? `Gift opened: ${int(claimedNote?.utxo?.sats || 0)} sats moved to your claim account.` : `You own note ${frag.token}.`);
+    status(frag.sender ? `Gift opened into ${account}. Its Bitcoin stays sealed until you unseal it.` : `You own note ${frag.token}.`);
     if (claimTx && signer) {
       poll(async () => cachetChain.rpc("EXPERIMENTAL_tx_status", [claimTx, signer], net), (value) => value?.final_execution_status === "FINAL", 120000, 3000).catch(() => {});
     }
@@ -212,6 +214,25 @@ async function finalize(note, config, base) {
 /* ---- the four stations ---- */
 function txLink(hash, label) { return hash ? h("p", { class: "station-tx" }, label, " ", link(`${net.nearExplorer}/txns/${hash}`, short(hash, 10, 6), "hexlink")) : null; }
 
+function exportClaimKey(saved, key) {
+  const url = URL.createObjectURL(new Blob([key], { type: "text/plain" }));
+  const anchor = h("a", { href: url, download: `cachet-${saved.accountId}.key`, class: "btn btn-paper" }, "Export claim key");
+  anchor.addEventListener("click", () => setTimeout(() => URL.revokeObjectURL(url), 1000), { once: true });
+  return anchor;
+}
+
+async function walletlessKeyControls() {
+  const saved = await cachetLinkdrop.createImplicitAccount(localStorage, net.name);
+  const key = await cachetLinkdrop.secretKeyString(saved.seedHex);
+  return [
+    h("div", { class: "field claim-key-backup" },
+      h("span", null, "Claim account key. Save it somewhere safe before opening the gift."),
+      h("code", null, key), cachetUi.copyButton(key, "Copy key"),
+      h("label", { for: "claim-key-backup" }, h("input", { id: "claim-key-backup", type: "checkbox" }), " I saved this key and can access the claim account.")),
+    exportClaimKey(saved, key),
+  ];
+}
+
 function station(title, state, ...body) {
   const word = { done: "Done", current: "Now", waiting: "Waiting" }[state];
   return h("li", { class: "station", dataset: { state } }, h("div", { class: "station-head" }, h("h3", null, title), h("p", { class: "where" }, word)), ...body);
@@ -229,10 +250,16 @@ async function stations(s, matches) {
   if (!note) out.push(station("Claim", "done", h("p", { class: "say" }, `Note ${frag.token} is finalized. Its Bitcoin left to the address the owner chose.`)));
   else if (note.claim) {
     const claimBtn = h("button", { class: "btn btn-primary", id: "claim-go", type: "button", disabled: !matches, onclick: claim }, frag.sender ? "Open this gift" : "Claim this gift");
+    const details = frag.sender && !cachetWallet.accountId ? await walletlessKeyControls() : [];
     out.push(station("Claim", "current",
-      h("p", { class: "say" }, matches ? (frag.sender ? `No NEAR wallet needed. The sender's claim-only link key pays the transaction fee and moves note ${frag.token} to a new claim account in this browser.` : `Connect a NEAR account and sign. The contract moves note ${frag.token} to it, and the link stops working.`) : "This link no longer matches the claim key on the note."),
+      h("p", { class: "say" }, matches ? (frag.sender ? `No NEAR wallet needed. The sender's claim-only link key pays the transaction fee and assigns note ${frag.token} to your claim account.` : `Connect a NEAR account and sign. The contract moves note ${frag.token} to it, and the link stops working.`) : "This link no longer matches the claim key on the note."),
+      ...details,
       claimBtn));
-  } else out.push(station("Claim", "done", h("p", { class: "say" }, `nft_token(${frag.token}).owner_id reads ${owner}.`), txLink(session.tx.claim, "Claim transaction")));
+  } else {
+    const saved = frag.sender ? JSON.parse(localStorage.getItem(`cachet:claim-account:${net.name}`) || "null") : null;
+    const controls = saved?.accountId === owner ? [h("p", { class: "say" }, `Claim account: ${saved.accountId}`), exportClaimKey(saved, await cachetLinkdrop.secretKeyString(saved.seedHex))] : [];
+    out.push(station("Claim", "done", h("p", { class: "say" }, `nft_token(${frag.token}).owner_id reads ${owner}.`), ...controls, txLink(session.tx.claim, "Claim transaction")));
+  }
 
   // 2 Unseal
   const sealed = note && !note.claim && note.state === "Sealed";
@@ -340,7 +367,6 @@ async function init() {
   }
   if (!frag) return openGift();
   if (frag.sender) {
-    $("claim-connect").hidden = true;
     session.tx.claim = localStorage.getItem(`cachet:claim-tx:${frag.contract}:${frag.token}`);
   }
   cachetCard.loading($("card-slot"), frag.token);
