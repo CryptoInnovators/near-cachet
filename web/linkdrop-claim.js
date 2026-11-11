@@ -103,7 +103,7 @@ async function signAndSend({ signerId, seedHex, contract, args, net }) {
   const signature = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, privateKey, txHash));
   const signed = concat(tx, Uint8Array.of(0), signature);
   const binary = Array.from(signed, (b) => String.fromCharCode(b)).join("");
-  const result = await cachetChain.rpc("broadcast_tx_commit", [btoa(binary)], net);
+  const result = await cachetChain.rpc("send_tx", { signed_tx_base64: btoa(binary), wait_until: "EXECUTED_OPTIMISTIC" }, net);
   return result;
 }
 

@@ -6,6 +6,7 @@ mod common;
 use bitcoin::absolute::LockTime;
 use bitcoin::consensus::{deserialize, serialize};
 use bitcoin::hashes::Hash;
+use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, Secp256k1};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::transaction::Version;
 use bitcoin::{Address, Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness};
@@ -163,6 +164,92 @@ async fn unseal_input_validation() {
     assert_reverts(&w.unseal(&w.alice, &id, DEST, 20).await, "fee leaves the sweep below dust");
     assert!(w.sign_log().await.is_empty());
     assert!(w.unseal(&w.alice, &id, DEST, 10).await.is_success());
+}
+
+fn extra_output(f: &Funding) -> Value {
+    json!({"raw_tx": f.raw_hex, "vout": f.vout, "proof": inclusion_proof(&f.txid)})
+}
+
+#[tokio::test]
+async fn extra_confirmed_outputs_are_swept() {
+    let w = World::new(2).await;
+    let (id, base) = w.sealed_note(&w.alice, 60_000).await;
+    let extra_a = w.fund(&id, 20_000, 6).await;
+    let extra_b = w.fund(&id, 15_000, 6).await;
+    let duplicate = w.alice.call(w.cachet.id(), "unseal")
+        .args_json(json!({"token_id": id, "btc_dest": DEST, "fee_rate": 10, "additional_outputs": [extra_output(&extra_a), extra_output(&extra_a)]}))
+        .max_gas().transact().await.unwrap();
+    assert_reverts(&duplicate, "duplicate additional output");
+    assert_eq!(w.state(&id).await, "Sealed");
+    assert!(w.sign_log().await.is_empty());
+    let r = w.alice.call(w.cachet.id(), "unseal")
+        .args_json(json!({"token_id": id, "btc_dest": DEST, "fee_rate": 10, "additional_outputs": [extra_output(&extra_a), extra_output(&extra_b)]}))
+        .max_gas().transact().await.unwrap();
+    assert!(r.is_success(), "unseal failed: {}", fail_text(&r));
+    assert_eq!(r.json::<bool>().unwrap(), true);
+    let raw = signed_tx(&w, &id).await;
+    let tx: Transaction = deserialize(&hex::decode(raw).unwrap()).unwrap();
+    let funds = [&base, &extra_a, &extra_b];
+    let note = w.note(&id).await.unwrap();
+    let funded = Address::from_str(note["address"].as_str().unwrap()).unwrap().assume_checked();
+    let dest = Address::from_str(DEST).unwrap().assume_checked();
+    assert_eq!(tx.input.len(), funds.len());
+    assert_eq!(tx.output.len(), 1);
+    assert_eq!(tx.output[0].script_pubkey, dest.script_pubkey());
+    let total = funds.iter().map(|f| f.sats).sum::<u64>();
+    let fee = total - tx.output[0].value.to_sat();
+    let vsize = cachet::btc::sweep_vsize(dest.script_pubkey().len(), funds.len());
+    assert_eq!(fee, 10 * vsize);
+    assert!(vsize >= tx.vsize() as u64, "worst-case estimate {vsize} below actual vsize {}", tx.vsize());
+    let key = PublicKey::from_slice(&hex::decode(note["pubkey"].as_str().unwrap()).unwrap()).unwrap();
+    let spk = funded.script_pubkey();
+    let mut cache = SighashCache::new(&tx);
+    for (i, f) in funds.iter().enumerate() {
+        assert_eq!(tx.input[i].previous_output, OutPoint { txid: Txid::from_str(&f.txid).unwrap(), vout: f.vout });
+        let witness = tx.input[i].witness.to_vec();
+        assert_eq!(witness.len(), 2);
+        let sig = Signature::from_der(&witness[0][..witness[0].len() - 1]).unwrap();
+        let sighash = cache.p2wpkh_signature_hash(i, &spk, Amount::from_sat(f.sats), EcdsaSighashType::All).unwrap();
+        Secp256k1::verification_only().verify_ecdsa(&Message::from_digest(sighash.to_byte_array()), &sig, &key).unwrap();
+    }
+    let txid = tx.compute_txid().to_string();
+    let mut missing_input = tx.clone();
+    missing_input.input.pop();
+    let missing_id = missing_input.compute_txid().to_string();
+    let rejected = w.finalize(&w.carol, &id, hex::encode(serialize(&missing_input)), &missing_id).await;
+    assert_reverts(&rejected, "transaction does not spend every note output");
+    assert_eq!(w.state(&id).await, "Unsealed");
+    w.confirm(&txid, 6).await;
+    let r = w.finalize(&w.carol, &id, hex::encode(serialize(&tx)), &txid).await;
+    assert!(r.is_success(), "finalize failed: {}", fail_text(&r));
+    assert!(r.json::<bool>().unwrap());
+    assert!(w.note(&id).await.is_none());
+}
+
+mod extra_confirmed_outputs_ {
+    use super::*;
+
+    #[tokio::test]
+    async fn extra_unproven_output_is_rejected() {
+        let w = World::new(2).await;
+        let (id, _) = w.sealed_note(&w.alice, 60_000).await;
+        let (other, _) = w.sealed_note(&w.bob, 30_000).await;
+        let misdirected = w.fund(&other, 10_000, 6).await;
+        let wrong_address = w.alice.call(w.cachet.id(), "unseal")
+            .args_json(json!({"token_id": id, "btc_dest": DEST, "fee_rate": 10, "additional_outputs": [extra_output(&misdirected)]}))
+            .max_gas().transact().await.unwrap();
+        assert_reverts(&wrong_address, "additional output does not pay this note");
+        assert_eq!(w.state(&id).await, "Sealed");
+        assert!(w.sign_log().await.is_empty());
+        let unconfirmed = w.fund(&id, 20_000, 1).await;
+        let r = w.alice.call(w.cachet.id(), "unseal")
+            .args_json(json!({"token_id": id, "btc_dest": DEST, "fee_rate": 10, "additional_outputs": [extra_output(&unconfirmed)]}))
+            .max_gas().transact().await.unwrap();
+        assert!(r.is_success());
+        assert!(!r.json::<bool>().unwrap(), "unconfirmed funding must reject the unseal");
+        assert_eq!(w.state(&id).await, "Sealed");
+        assert!(w.sign_log().await.is_empty(), "unproven output never reaches signer");
+    }
 }
 
 #[tokio::test]
@@ -409,11 +496,11 @@ async fn finalize_guards() {
     assert_reverts(&fin(&id, f.raw_hex.clone()).await, "note is not unsealed");
     assert!(w.unseal(&w.alice, &id, DEST, 10).await.json::<bool>().unwrap());
     // the funding tx itself does not spend the funded outpoint
-    assert_reverts(&fin(&id, f.raw_hex.clone()).await, "transaction does not spend this note");
+    assert_reverts(&fin(&id, f.raw_hex.clone()).await, "transaction does not spend every note output");
     // a real sweep of the other note does not spend this one
     assert!(w.unseal(&w.bob, &other, DEST, 10).await.json::<bool>().unwrap());
     let foreign = signed_tx(&w, &other).await;
-    assert_reverts(&fin(&id, foreign).await, "transaction does not spend this note");
+    assert_reverts(&fin(&id, foreign).await, "transaction does not spend every note output");
     assert_eq!(w.state(&id).await, "Unsealed");
     assert!(w.note(&id).await.is_some());
 }

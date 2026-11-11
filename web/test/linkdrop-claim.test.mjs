@@ -70,3 +70,31 @@ test("walletless claim key is a NEAR 64-byte Ed25519 secret key and needs backup
   await linkdrop.submitWalletlessClaim({ acknowledged: true, send: () => { sent = true; } });
   assert.equal(sent, true);
 });
+
+test("claim broadcast uses send_tx", async () => {
+  const calls = [];
+  const entry = { nonce: "7", permission: { FunctionCall: { receiver_id: "cachet.testnet", method_names: ["claim"], allowance: "150000000000000000000000" } } };
+  const blockHash = linkdrop.b58encode(new Uint8Array(32).fill(1));
+  globalThis.cachetChain = {
+    rpc: async (method, params, net) => {
+      calls.push({ method, params, net });
+      if (method === "query") return entry;
+      if (method === "block") return { header: { hash: blockHash } };
+      if (method === "send_tx") return { final_execution_status: "FINAL" };
+      throw new Error(`unexpected method ${method}`);
+    },
+  };
+  try {
+    const net = { name: "testnet", rpc: "https://example.test" };
+    const args = { token_id: "17", new_owner: "a".repeat(64), signature: "ab".repeat(64) };
+    await linkdrop.signAndSend({ signerId: "sender.testnet", seedHex: "01".repeat(32), contract: "cachet.testnet", args, net });
+  } finally {
+    delete globalThis.cachetChain;
+  }
+  const broadcast = calls.find((c) => c.method === "send_tx" || c.method === "broadcast_tx_commit");
+  assert.equal(broadcast.method, "send_tx");
+  assert.equal(typeof broadcast.params.signed_tx_base64, "string");
+  assert.ok(broadcast.params.signed_tx_base64.length > 0);
+  assert.equal(broadcast.params.wait_until, "EXECUTED_OPTIMISTIC");
+  assert.equal(calls.some((c) => c.method === "broadcast_tx_commit"), false);
+});

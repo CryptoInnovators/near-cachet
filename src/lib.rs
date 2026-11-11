@@ -45,9 +45,10 @@ pub const MIN_CLAIM_BLOCKS: u64 = 3_600;
 pub const MAX_CLAIM_BLOCKS: u64 = 3_000_000;
 /// The signer drops a yielded request after 200 blocks; recovery waits twice that.
 pub const RECOVER_AFTER_BLOCKS: u64 = 400;
-/// Bytes a note can still add after mint: the attested UTXO (76), a 34-byte destination
-/// script and a 72-byte DER signature.
-const LATE_GROWTH_BYTES: u64 = 76 + 34 + 72;
+/// Late-growth budget includes the attested UTXO, destination and signature, four extra
+/// UTXOs with signatures, and their token-scoped storage keys.
+const MAX_ADDITIONAL_OUTPUTS: usize = 4;
+const LATE_GROWTH_BYTES: u64 = 76 + 34 + 72 + 4 + 4 * 76 + 4 + 5 * (4 + 72) + 4 + 5 * 32;
 /// Bytes a transfer to a new owner can add: a 64-byte owner id replacing a shorter one in
 /// `owner_by_id`, plus a fresh per-owner token set keyed by a 64-byte account id (measured
 /// at 144 bytes for a 13-byte id).
@@ -120,17 +121,24 @@ impl Note {
         self.claim_key.is_some() && env::block_height() < self.claim_expiry
     }
 
-    fn sweep(&self, fee: u64) -> btc::Sweep {
+    fn sweep(&self, fee: u64, additional_utxos: &[Utxo]) -> btc::Sweep {
         let u = self.utxo.as_ref().unwrap_or_else(|| env::panic_str("note has no attested funding"));
         btc::Sweep {
-            prev_txid: u.txid,
-            vout: u.vout,
-            amount: u.sats,
+            inputs: std::iter::once(u).chain(additional_utxos.iter()).map(|u| btc::SweepInput {
+                prev_txid: u.txid, vout: u.vout, amount: u.sats,
+            }).collect(),
             pubkey: self.pubkey33(),
             dest_script: self.dest_script.clone(),
             fee,
         }
     }
+}
+
+#[near(serializers = [json])]
+pub struct AdditionalOutput {
+    pub raw_tx: String,
+    pub vout: u32,
+    pub proof: light_client::InclusionProof,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -141,6 +149,7 @@ pub enum SignOp {
 
 /// Proof that `authorize_sign` approved a signature request. It has no public
 /// constructor, so `request_signature` cannot be reached without passing the checks.
+#[derive(Clone, Copy)]
 pub struct SignPermit(());
 
 /// The single gate in front of `v1.signer.sign`.
@@ -282,12 +291,12 @@ impl Cachet {
     pub fn note(&self, token_id: TokenId) -> Option<NoteView> {
         let note = self.notes.get(&token_id)?;
         let owner_id = self.tokens.owner_by_id.get(&token_id)?;
-        Some(Self::view(&token_id, owner_id, note))
+        Some(self.view(&token_id, owner_id, note))
     }
 
     pub fn signed_sweep_tx(&self, token_id: TokenId) -> Option<String> {
         let note = self.notes.get(&token_id)?;
-        Self::signed_tx_hex(note)
+        self.signed_tx_hex(&token_id, note)
     }
 
     // ---- mint ----
@@ -427,9 +436,8 @@ impl Cachet {
 
     // ---- unseal ----
 
-    /// Owner only. Signs the one-input sweep of the attested UTXO to `btc_dest` through
-    /// chain signatures. The note is frozen afterwards.
-    pub fn unseal(&mut self, token_id: TokenId, btc_dest: String, fee_rate: u64) -> Promise {
+    /// Owner only. Signs a sweep of the attested output and confirmed additions to `btc_dest`.
+    pub fn unseal(&mut self, token_id: TokenId, btc_dest: String, fee_rate: u64, additional_outputs: Option<Vec<AdditionalOutput>>) -> Promise {
         let mut note = self.notes.get(&token_id).cloned().unwrap_or_else(|| panic_msg("unknown note"));
         let permit = authorize_sign(
             SignOp::Unseal,
@@ -440,20 +448,47 @@ impl Cachet {
         )
         .unwrap_or_else(|e| panic_msg(e));
         let dest = btc::address_to_script(&self.hrp, &btc_dest).unwrap_or_else(|e| panic_msg(e));
-        let fee = btc::sweep_fee(fee_rate, dest.len()).unwrap_or_else(|e| panic_msg(e));
-        let sats = note.utxo.as_ref().map(|u| u.sats).unwrap_or(0);
+        let extras = additional_outputs.unwrap_or_default();
+        require!(extras.len() <= MAX_ADDITIONAL_OUTPUTS, "too many additional outputs");
+        let mut proofs = Vec::with_capacity(extras.len());
+        let mut extra_utxos = Vec::with_capacity(extras.len());
+        let mut outpoints = vec![];
+        let mut raw_bytes = 0usize;
+        for extra in extras {
+            let raw = btc::hex_decode(&extra.raw_tx).unwrap_or_else(|e| panic_msg(e));
+            raw_bytes = raw_bytes.checked_add(raw.len()).unwrap_or_else(|| panic_msg("additional transactions too large"));
+            require!(raw_bytes <= btc::MAX_RAW_TX_BYTES, "additional transactions too large");
+            let tx = btc::parse_tx(&raw).unwrap_or_else(|e| panic_msg(e));
+            let out = tx.outputs.get(extra.vout as usize).unwrap_or_else(|| panic_msg("additional output vout out of range"));
+            require!(out.script == btc::p2wpkh_script(&note.pubkey33()), "additional output does not pay this note");
+            require!(!note.utxo.iter().chain(extra_utxos.iter()).any(|u| u.txid == tx.txid && u.vout == extra.vout)
+                && !outpoints.contains(&(tx.txid, extra.vout)), "duplicate additional output");
+            outpoints.push((tx.txid, extra.vout));
+            let args = light_client::proof_args_v2(tx.txid, &extra.proof, self.confirmations).unwrap_or_else(|e| panic_msg(e));
+            proofs.push(light_client::verify(self.btc_light_client.clone(), args));
+            extra_utxos.push(Utxo { txid: tx.txid, vout: extra.vout, sats: out.value, block_hash: [0; 32] });
+        }
+        self.store_additional_utxos(&token_id, &extra_utxos);
+        let count = extra_utxos.len() + 1;
+        let fee = btc::sweep_fee(fee_rate, dest.len(), count).unwrap_or_else(|e| panic_msg(e));
+        let sats = note.utxo.as_ref().map(|u| u.sats).unwrap_or(0)
+            .checked_add(extra_utxos.iter().map(|u| u.sats).sum()).unwrap_or_else(|| panic_msg("sweep amount overflow"));
         require!(sats >= fee + MIN_SWEEP_OUTPUT, "fee leaves the sweep below dust");
         note.claim_key = None;
         note.dest_script = dest;
         note.pending_fee = fee;
-        note.pending_sighash = note.sweep(fee).sighash();
+        self.store_additional_signatures(&token_id, &[]);
+        note.pending_sighash = [0; 32];
         note.state = State::Unsealing;
         note.pending_since = env::block_height();
-        let sighash = note.pending_sighash;
-        let path = path_of(&token_id, note.slot);
         self.notes.insert(token_id.clone(), note);
-        self.request_signature(permit, path, sighash)
-            .then(Self::ext(env::current_account_id()).with_static_gas(GAS_CALLBACK).on_signed(token_id, false))
+        if proofs.is_empty() {
+            self.start_signatures(permit, token_id, false)
+        } else {
+            let mut joined = proofs.remove(0);
+            for proof in proofs { joined = joined.and(proof); }
+            joined.then(Self::ext(env::current_account_id()).with_static_gas(GAS_CALLBACK).on_extra_outputs_verified(token_id))
+        }
     }
 
     /// Owner only, after `unseal`. Signs the same sweep, to the same destination, at a new
@@ -468,34 +503,79 @@ impl Cachet {
             false,
         )
         .unwrap_or_else(|e| panic_msg(e));
-        let fee = btc::sweep_fee(fee_rate, note.dest_script.len()).unwrap_or_else(|e| panic_msg(e));
-        let sats = note.utxo.as_ref().map(|u| u.sats).unwrap_or(0);
+        let additional_utxos = self.additional_utxos(&token_id);
+        let count = additional_utxos.len() + 1;
+        let fee = btc::sweep_fee(fee_rate, note.dest_script.len(), count).unwrap_or_else(|e| panic_msg(e));
+        let sats = note.utxo.as_ref().map(|u| u.sats).unwrap_or(0)
+            .checked_add(additional_utxos.iter().map(|u| u.sats).sum()).unwrap_or_else(|| panic_msg("sweep amount overflow"));
         require!(sats >= fee + MIN_SWEEP_OUTPUT, "fee leaves the sweep below dust");
         note.pending_fee = fee;
-        note.pending_sighash = note.sweep(fee).sighash();
+        note.pending_sighash = note.sweep(fee, &additional_utxos).sighashes()[0];
         note.state = State::Resigning;
         note.pending_since = env::block_height();
-        let sighash = note.pending_sighash;
-        let path = path_of(&token_id, note.slot);
         self.notes.insert(token_id.clone(), note);
-        self.request_signature(permit, path, sighash)
-            .then(Self::ext(env::current_account_id()).with_static_gas(GAS_CALLBACK).on_signed(token_id, true))
+        self.start_signatures(permit, token_id, true)
     }
 
     #[private]
-    pub fn on_signed(&mut self, token_id: TokenId, resign: bool) -> bool {
+    pub fn on_extra_outputs_verified(&mut self, token_id: TokenId) -> PromiseOrValue<bool> {
+        let mut note = self.notes.get(&token_id).cloned().unwrap_or_else(|| panic_msg("unknown note"));
+        if note.state != State::Unsealing { return PromiseOrValue::Value(false); }
+        let additional_utxos = self.additional_utxos(&token_id);
+        for i in 0..additional_utxos.len() {
+            if !light_client::included(i as u64) {
+                note.state = State::Sealed;
+                self.store_additional_utxos(&token_id, &[]);
+                self.store_additional_signatures(&token_id, &[]);
+                note.dest_script.clear();
+                self.notes.insert(token_id, note);
+                return PromiseOrValue::Value(false);
+            }
+        }
+        let permit = authorize_sign(
+            SignOp::Unseal,
+            State::Sealed,
+            true,
+            note.in_transfer,
+            false,
+        ).unwrap_or_else(|e| panic_msg(e));
+        self.notes.insert(token_id.clone(), note);
+        PromiseOrValue::Promise(self.start_signatures(permit, token_id, false))
+    }
+
+    fn start_signatures(&mut self, permit: SignPermit, token_id: TokenId, resign: bool) -> Promise {
+        let mut note = self.notes.get(&token_id).cloned().unwrap_or_else(|| panic_msg("unknown note"));
+        let additional_utxos = self.additional_utxos(&token_id);
+        let sighashes = note.sweep(note.pending_fee, &additional_utxos).sighashes();
+        note.pending_sighash = sighashes[0];
+        let path = path_of(&token_id, note.slot);
+        let mut requests = sighashes.iter().map(|h| self.request_signature(permit, path.clone(), *h));
+        let first = requests.next().unwrap_or_else(|| panic_msg("sweep must have an input"));
+        let joined = requests.fold(first, |all, next| all.and(next));
+        let count = sighashes.len() as u64;
+        self.notes.insert(token_id.clone(), note);
+        joined.then(Self::ext(env::current_account_id()).with_static_gas(GAS_CALLBACK).on_signed(token_id, resign, count))
+    }
+
+    #[private]
+    pub fn on_signed(&mut self, token_id: TokenId, resign: bool, count: u64) -> bool {
         let Some(mut note) = self.notes.get(&token_id).cloned() else { return false };
         let (pending, prior) = if resign { (State::Resigning, State::Unsealed) } else { (State::Unsealing, State::Sealed) };
         if note.state != pending {
             return false;
         }
-        let der = env::promise_result_checked(0, MAX_PROMISE_RESULT)
-            .ok()
-            .and_then(|b| near_sdk::serde_json::from_slice::<SignatureResponse>(&b).ok())
-            .and_then(|r| Self::signature_for(&note, r));
-        match der {
-            Some(der) => {
-                note.signature = der;
+        let additional_utxos = self.additional_utxos(&token_id);
+        let sighashes = note.sweep(note.pending_fee, &additional_utxos).sighashes();
+        if count as usize != sighashes.len() { return false; }
+        let signatures: Option<Vec<_>> = (0..count).map(|i| {
+            env::promise_result_checked(i, MAX_PROMISE_RESULT).ok()
+                .and_then(|b| near_sdk::serde_json::from_slice::<SignatureResponse>(&b).ok())
+                .and_then(|r| Self::signature_for(&note, sighashes[i as usize], r))
+        }).collect();
+        match signatures {
+            Some(signatures) => {
+                note.signature = signatures[0].clone();
+                self.store_additional_signatures(&token_id, &signatures[1..]);
                 note.fee = note.pending_fee;
                 note.state = State::Unsealed;
             }
@@ -503,6 +583,8 @@ impl Cachet {
                 note.state = prior;
                 if !resign {
                     note.dest_script.clear();
+                    self.store_additional_utxos(&token_id, &[]);
+                    self.store_additional_signatures(&token_id, &[]);
                 }
             }
         }
@@ -513,19 +595,19 @@ impl Cachet {
 
     // ---- finalize ----
 
-    /// Anyone. Proves that a confirmed Bitcoin transaction spent the note's UTXO to the
-    /// unseal destination, then burns the note.
+    /// Anyone. Proves that a confirmed Bitcoin transaction swept every recorded note output.
     pub fn finalize(&mut self, token_id: TokenId, sweep_raw_tx: String, proof: light_client::InclusionProof) -> Promise {
         let mut note = self.notes.get(&token_id).cloned().unwrap_or_else(|| panic_msg("unknown note"));
         require!(note.state == State::Unsealed && !note.in_transfer, "note is not unsealed");
         let raw = btc::hex_decode(&sweep_raw_tx).unwrap_or_else(|e| panic_msg(e));
         let tx = btc::parse_tx(&raw).unwrap_or_else(|e| panic_msg(e));
-        let u = note.utxo.clone().unwrap_or_else(|| panic_msg("note has no attested funding"));
-        require!(
-            tx.inputs.iter().any(|i| i.prev_txid == u.txid && i.vout == u.vout),
-            "transaction does not spend this note"
-        );
-        require!(tx.outputs.iter().any(|o| o.script == note.dest_script), "transaction does not pay the unseal destination");
+        let additional_utxos = self.additional_utxos(&token_id);
+        let utxos = note.utxo.iter().chain(additional_utxos.iter()).collect::<Vec<_>>();
+        require!(tx.inputs.len() == utxos.len(), "transaction does not spend every note output");
+        require!(utxos.iter().all(|u| tx.inputs.iter().filter(|i| i.prev_txid == u.txid && i.vout == u.vout).count() == 1), "transaction does not spend every note output");
+        let total = utxos.iter().try_fold(0u64, |sum, u| sum.checked_add(u.sats)).unwrap_or_else(|| panic_msg("sweep amount overflow"));
+        require!(tx.outputs.len() == 1 && tx.outputs[0].script == note.dest_script, "transaction does not pay the unseal destination");
+        require!(tx.outputs[0].value == total.checked_sub(note.fee).unwrap_or(0), "sweep output does not match fee");
         let args = light_client::proof_args_v2(tx.txid, &proof, self.confirmations).unwrap_or_else(|e| panic_msg(e));
         note.state = State::Finalizing;
         note.pending_since = env::block_height();
@@ -560,7 +642,13 @@ impl Cachet {
             // The signer may have signed even though `on_signed` never committed, and its
             // result is public in the signer's receipt. The unseal destination stays bound
             // and the note stays frozen: `resign` stores a signature, `finalize` burns it.
-            State::Unsealing | State::Resigning | State::Finalizing => State::Unsealed,
+            State::Unsealing => {
+                note.signature.clear();
+                self.store_additional_utxos(&token_id, &[]);
+                self.store_additional_signatures(&token_id, &[]);
+                State::Unsealed
+            }
+            State::Resigning | State::Finalizing => State::Unsealed,
             _ => panic_msg("note is not mid-request"),
         };
         require!(
@@ -646,6 +734,42 @@ impl Cachet {
         note
     }
 
+    fn extra_storage_key(token_id: &str, kind: &[u8]) -> Vec<u8> {
+        [b"cachet:recovery:".as_slice(), kind, b":", token_id.as_bytes()].concat()
+    }
+
+    fn additional_utxos(&self, token_id: &TokenId) -> Vec<Utxo> {
+        env::storage_read(&Self::extra_storage_key(token_id, b"utxos"))
+            .map(|b| near_sdk::borsh::from_slice(&b).unwrap_or_else(|_| panic_msg("corrupt recovery outputs")))
+            .unwrap_or_default()
+    }
+
+    fn store_additional_utxos(&self, token_id: &TokenId, utxos: &[Utxo]) {
+        let key = Self::extra_storage_key(token_id, b"utxos");
+        if utxos.is_empty() {
+            env::storage_remove(&key);
+        } else {
+            let value = near_sdk::borsh::to_vec(&utxos).unwrap_or_else(|_| panic_msg("could not store recovery outputs"));
+            env::storage_write(&key, &value);
+        }
+    }
+
+    fn additional_signatures(&self, token_id: &TokenId) -> Vec<Vec<u8>> {
+        env::storage_read(&Self::extra_storage_key(token_id, b"signatures"))
+            .map(|b| near_sdk::borsh::from_slice(&b).unwrap_or_else(|_| panic_msg("corrupt recovery signatures")))
+            .unwrap_or_default()
+    }
+
+    fn store_additional_signatures(&self, token_id: &TokenId, signatures: &[Vec<u8>]) {
+        let key = Self::extra_storage_key(token_id, b"signatures");
+        if signatures.is_empty() {
+            env::storage_remove(&key);
+        } else {
+            let value = near_sdk::borsh::to_vec(&signatures).unwrap_or_else(|_| panic_msg("could not store recovery signatures"));
+            env::storage_write(&key, &value);
+        }
+    }
+
     fn refund(to: &AccountId, yocto: u128) {
         if yocto > 0 {
             Promise::new(to.clone()).transfer(NearToken::from_yoctonear(yocto)).detach();
@@ -665,7 +789,7 @@ impl Cachet {
     }
 
     /// DER signature for the pending sighash, accepted only if it recovers to the note key.
-    fn signature_for(note: &Note, resp: SignatureResponse) -> Option<Vec<u8>> {
+    fn signature_for(note: &Note, sighash: [u8; 32], resp: SignatureResponse) -> Option<Vec<u8>> {
         let SignatureResponse::Secp256k1 { big_r, s, recovery_id } = resp else { return None };
         let point = btc::hex_decode(&big_r.affine_point).ok()?;
         if point.len() != 33 {
@@ -677,15 +801,17 @@ impl Cachet {
         let mut sig64 = [0u8; 64];
         sig64[..32].copy_from_slice(&r);
         sig64[32..].copy_from_slice(&s);
-        let recovers = |v: u8| env::ecrecover(&note.pending_sighash, &sig64, v, true) == Some(note.pubkey);
+        let recovers = |v: u8| env::ecrecover(&sighash, &sig64, v, true) == Some(note.pubkey);
         (recovers(v) || recovers(v ^ 1)).then(|| btc::der_signature(&r, &s))
     }
 
-    fn signed_tx_hex(note: &Note) -> Option<String> {
+    fn signed_tx_hex(&self, token_id: &TokenId, note: &Note) -> Option<String> {
         if note.signature.is_empty() || !matches!(note.state, State::Unsealed | State::Resigning | State::Finalizing) {
             return None;
         }
-        Some(btc::hex_encode(&note.sweep(note.fee).signed_tx(&note.signature)))
+        let additional_utxos = self.additional_utxos(token_id);
+        let signatures = std::iter::once(note.signature.clone()).chain(self.additional_signatures(token_id)).collect::<Vec<_>>();
+        Some(btc::hex_encode(&note.sweep(note.fee, &additional_utxos).signed_tx(&signatures)))
     }
 
     /// Puts the note view in `metadata.extra` so markets read the state without a second call.
@@ -697,7 +823,7 @@ impl Cachet {
         token
     }
 
-    fn view(token_id: &str, owner_id: AccountId, note: &Note) -> NoteView {
+    fn view(&self, token_id: &str, owner_id: AccountId, note: &Note) -> NoteView {
         NoteView {
             token_id: token_id.to_string(),
             owner_id,
@@ -714,7 +840,7 @@ impl Cachet {
             sweep: (!note.dest_script.is_empty()).then(|| SweepView {
                 destination_script: btc::hex_encode(&note.dest_script),
                 fee_sats: if note.signature.is_empty() { note.pending_fee } else { note.fee },
-                signed_tx: Self::signed_tx_hex(note),
+                signed_tx: self.signed_tx_hex(&token_id.to_string(), note),
             }),
             claim: note.claim_key.map(|k| ClaimView {
                 key: btc::hex_encode(&k),
@@ -728,6 +854,8 @@ impl Cachet {
 
     /// Removes the NEP-171 record and the note.
     fn burn(&mut self, token_id: &TokenId) {
+        env::storage_remove(&Self::extra_storage_key(token_id, b"utxos"));
+        env::storage_remove(&Self::extra_storage_key(token_id, b"signatures"));
         let owner = self.tokens.owner_by_id.get(token_id);
         self.tokens.owner_by_id.remove(token_id);
         if let Some(m) = &mut self.tokens.token_metadata_by_id {
@@ -935,7 +1063,7 @@ mod tests {
         let src = include_str!("lib.rs");
         let body = src.split("#[cfg(test)]").next().unwrap();
         assert_eq!(body.matches(".sign(SignArgs").count(), 1);
-        assert_eq!(body.matches("self.request_signature(permit").count(), 2);
+        assert_eq!(body.matches("self.request_signature(permit").count(), 1);
         assert_eq!(body.matches("fn request_signature(&self, _permit: SignPermit").count(), 1);
         assert_eq!(body.matches("SignPermit(())").count(), 2);
     }

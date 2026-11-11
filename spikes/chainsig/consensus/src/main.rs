@@ -27,7 +27,7 @@ fn sweep(pk: [u8; 33], outpoint_text: &str, sats: u64, dest: &str, rate: u64) ->
     let hrp = dest.split('1').next().unwrap();
     let script = btc::address_to_script(hrp, dest).unwrap();
     let (prev_txid, vout) = outpoint(outpoint_text).unwrap();
-    btc::Sweep { prev_txid, vout, amount: sats, pubkey: pk, dest_script: script.clone(), fee: btc::sweep_fee(rate, script.len()).unwrap() }
+    btc::Sweep { inputs: vec![btc::SweepInput { prev_txid, vout, amount: sats }], pubkey: pk, dest_script: script.clone(), fee: btc::sweep_fee(rate, script.len(), 1).unwrap() }
 }
 
 fn main() {
@@ -39,7 +39,7 @@ fn main() {
         }
         "sighash" => {
             let s = sweep(key(&a[2]), &a[3], a[4].parse().unwrap(), &a[5], a[6].parse().unwrap());
-            println!("{}", btc::hex_encode(&s.sighash()));
+            println!("{}", btc::hex_encode(&s.sighashes()[0]));
         }
         "verify" => {
             let pk = key(&a[2]);
@@ -49,18 +49,19 @@ fn main() {
             let r: [u8; 32] = big_r[1..].try_into().unwrap();
             let sc = btc::hex_32(v["s"]["scalar"].as_str().unwrap()).unwrap();
             let (r, sc, _) = btc::normalize_low_s(r, sc, v["recovery_id"].as_u64().unwrap() as u8).unwrap();
-            let raw = s.signed_tx(&btc::der_signature(&r, &sc));
+            let der = btc::der_signature(&r, &sc);
+            let raw = s.signed_tx(&[der.clone()]);
             let tx: Transaction = bitcoin::consensus::deserialize(&raw).unwrap();
             assert_eq!(serialize(&tx), raw);
             let spk = ScriptBuf::from_bytes(btc::p2wpkh_script(&pk));
-            let spent = TxOut { value: Amount::from_sat(s.amount), script_pubkey: spk.clone() };
+            let spent = TxOut { value: Amount::from_sat(s.inputs[0].amount), script_pubkey: spk.clone() };
             tx.verify(|_| Some(spent.clone())).expect("libbitcoinconsensus rejected the sweep");
             // negative case: the same signature on a sweep with one satoshi more fee must fail
             let mut worse = s.clone();
             worse.fee += 1;
-            let bad: Transaction = bitcoin::consensus::deserialize(&worse.signed_tx(&btc::der_signature(&r, &sc))).unwrap();
+            let bad: Transaction = bitcoin::consensus::deserialize(&worse.signed_tx(&[der])).unwrap();
             assert!(bad.verify(|_| Some(spent.clone())).is_err(), "tampered sweep must not verify");
-            println!("CONSENSUS OK txid {} input {}:{} vsize {} fee {} tampered_rejected true", tx.compute_txid(), a[3].split(':').next().unwrap(), s.vout, tx.vsize(), s.fee);
+            println!("CONSENSUS OK txid {} input {}:{} vsize {} fee {} tampered_rejected true", tx.compute_txid(), a[3].split(':').next().unwrap(), s.inputs[0].vout, tx.vsize(), s.fee);
             println!("{}", btc::hex_encode(&raw));
         }
         _ => panic!("unknown command"),

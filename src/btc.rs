@@ -378,12 +378,17 @@ pub fn compress_pubkey(xy: &[u8; 64]) -> [u8; 33] {
     out
 }
 
-/// One-input one-output sweep of a P2WPKH UTXO.
+/// One-output sweep of P2WPKH UTXOs controlled by the same key.
 #[derive(Debug, Clone)]
-pub struct Sweep {
+pub struct SweepInput {
     pub prev_txid: [u8; 32],
     pub vout: u32,
     pub amount: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct Sweep {
+    pub inputs: Vec<SweepInput>,
     pub pubkey: [u8; 33],
     pub dest_script: Vec<u8>,
     pub fee: u64,
@@ -391,12 +396,12 @@ pub struct Sweep {
 
 impl Sweep {
     pub fn out_value(&self) -> u64 {
-        self.amount - self.fee
+        self.inputs.iter().map(|i| i.amount).sum::<u64>() - self.fee
     }
 
-    fn outpoint(&self) -> Vec<u8> {
-        let mut o = self.prev_txid.to_vec();
-        o.extend_from_slice(&self.vout.to_le_bytes());
+    fn outpoint(input: &SweepInput) -> Vec<u8> {
+        let mut o = input.prev_txid.to_vec();
+        o.extend_from_slice(&input.vout.to_le_bytes());
         o
     }
 
@@ -407,58 +412,71 @@ impl Sweep {
         o
     }
 
-    /// BIP143 sighash (SIGHASH_ALL) for input 0 spending a P2WPKH output.
-    pub fn sighash(&self) -> [u8; 32] {
+    /// BIP143 sighash (SIGHASH_ALL) for each P2WPKH input.
+    pub fn sighashes(&self) -> Vec<[u8; 32]> {
+        let prevouts: Vec<u8> = self.inputs.iter().flat_map(Self::outpoint).collect();
+        let sequences = self.inputs.iter().flat_map(|_| SWEEP_SEQUENCE.to_le_bytes()).collect::<Vec<_>>();
+        let prevouts_hash = sha256d(&prevouts);
+        let sequences_hash = sha256d(&sequences);
+        let outputs_hash = sha256d(&self.output_bytes());
+        self.inputs.iter().map(|input| {
         let mut p = Vec::with_capacity(200);
         p.extend_from_slice(&2u32.to_le_bytes());
-        p.extend_from_slice(&sha256d(&self.outpoint()));
-        p.extend_from_slice(&sha256d(&SWEEP_SEQUENCE.to_le_bytes()));
-        p.extend_from_slice(&self.outpoint());
+        p.extend_from_slice(&prevouts_hash);
+        p.extend_from_slice(&sequences_hash);
+        p.extend_from_slice(&Self::outpoint(input));
         p.extend_from_slice(&[0x19, 0x76, 0xa9, 0x14]);
         p.extend_from_slice(&hash160(&self.pubkey));
         p.extend_from_slice(&[0x88, 0xac]);
-        p.extend_from_slice(&self.amount.to_le_bytes());
+        p.extend_from_slice(&input.amount.to_le_bytes());
         p.extend_from_slice(&SWEEP_SEQUENCE.to_le_bytes());
-        p.extend_from_slice(&sha256d(&self.output_bytes()));
+        p.extend_from_slice(&outputs_hash);
         p.extend_from_slice(&0u32.to_le_bytes());
         p.extend_from_slice(&SIGHASH_ALL.to_le_bytes());
         sha256d(&p)
+        }).collect()
     }
 
     /// Fully signed segwit serialization, ready for `sendrawtransaction`.
-    pub fn signed_tx(&self, der_sig: &[u8]) -> Vec<u8> {
+    pub fn signed_tx(&self, der_sigs: &[Vec<u8>]) -> Vec<u8> {
         let mut tx = Vec::new();
         tx.extend_from_slice(&2u32.to_le_bytes());
-        tx.extend_from_slice(&[0x00, 0x01, 0x01]);
-        tx.extend_from_slice(&self.outpoint());
-        tx.push(0x00);
-        tx.extend_from_slice(&SWEEP_SEQUENCE.to_le_bytes());
+        tx.extend_from_slice(&[0x00, 0x01]);
+        put_varint(&mut tx, self.inputs.len() as u64);
+        for input in &self.inputs {
+            tx.extend_from_slice(&Self::outpoint(input));
+            tx.push(0x00);
+            tx.extend_from_slice(&SWEEP_SEQUENCE.to_le_bytes());
+        }
         tx.push(0x01);
         tx.extend_from_slice(&self.output_bytes());
-        tx.push(0x02);
-        put_varint(&mut tx, der_sig.len() as u64 + 1);
-        tx.extend_from_slice(der_sig);
-        tx.push(SIGHASH_ALL as u8);
-        tx.push(33);
-        tx.extend_from_slice(&self.pubkey);
+        for sig in der_sigs {
+            tx.push(0x02);
+            put_varint(&mut tx, sig.len() as u64 + 1);
+            tx.extend_from_slice(sig);
+            tx.push(SIGHASH_ALL as u8);
+            tx.push(33);
+            tx.extend_from_slice(&self.pubkey);
+        }
         tx.extend_from_slice(&0u32.to_le_bytes());
         tx
     }
 }
 
 /// Virtual size of the sweep with a worst-case 72-byte signature element.
-pub fn sweep_vsize(dest_script_len: usize) -> u64 {
-    let base = 4 + 1 + 41 + 1 + (8 + 1 + dest_script_len as u64) + 4;
-    let witness = 2 + 1 + (1 + 72) + (1 + 33);
+pub fn sweep_vsize(dest_script_len: usize, inputs: usize) -> u64 {
+    let base = 4 + 1 + inputs as u64 * 41 + 1 + (8 + 1 + dest_script_len as u64) + 4;
+    let witness = 2 + inputs as u64 * (1 + (1 + 72) + (1 + 33));
     (base * 4 + witness + 3) / 4
 }
 
 /// Fee in satoshi for `rate` sat/vB, rejecting rates outside 1..=1000.
-pub fn sweep_fee(rate: u64, dest_script_len: usize) -> Result<u64, &'static str> {
+pub fn sweep_fee(rate: u64, dest_script_len: usize, inputs: usize) -> Result<u64, &'static str> {
     if rate == 0 || rate > MAX_FEE_RATE {
         return Err("fee rate must be 1 to 1000 sat/vB");
     }
-    Ok(rate * sweep_vsize(dest_script_len))
+    if inputs == 0 { return Err("sweep must have an input"); }
+    Ok(rate * sweep_vsize(dest_script_len, inputs))
 }
 
 fn be_ge(a: &[u8; 32], b: &[u8; 32]) -> bool {
@@ -658,9 +676,7 @@ mod tests {
 
     fn sweep() -> Sweep {
         Sweep {
-            prev_txid: [9u8; 32],
-            vout: 1,
-            amount: 50_000,
+            inputs: vec![SweepInput { prev_txid: [9u8; 32], vout: 1, amount: 50_000 }],
             pubkey: {
                 let sk = bitcoin::secp256k1::SecretKey::from_slice(&[0x11; 32]).unwrap();
                 bitcoin::secp256k1::PublicKey::from_secret_key(&bitcoin::secp256k1::Secp256k1::new(), &sk).serialize()
@@ -679,7 +695,7 @@ mod tests {
             version: Version::TWO,
             lock_time: LockTime::ZERO,
             input: vec![BTxIn {
-                previous_output: OutPoint { txid: Txid::from_byte_array(s.prev_txid), vout: s.vout },
+                previous_output: OutPoint { txid: Txid::from_byte_array(s.inputs[0].prev_txid), vout: s.inputs[0].vout },
                 script_sig: ScriptBuf::new(),
                 sequence: Sequence(SWEEP_SEQUENCE),
                 witness: Witness::new(),
@@ -689,9 +705,9 @@ mod tests {
         let spk = ScriptBuf::from_bytes(p2wpkh_script(&s.pubkey));
         let mut cache = SighashCache::new(&tx);
         let want = cache
-            .p2wpkh_signature_hash(0, &spk, Amount::from_sat(s.amount), EcdsaSighashType::All)
+            .p2wpkh_signature_hash(0, &spk, Amount::from_sat(s.inputs[0].amount), EcdsaSighashType::All)
             .unwrap();
-        assert_eq!(s.sighash(), want.to_byte_array());
+        assert_eq!(s.sighashes()[0], want.to_byte_array());
     }
 
     #[test]
@@ -700,32 +716,33 @@ mod tests {
         let secp = Secp256k1::new();
         let sk = SecretKey::from_slice(&[0x11; 32]).unwrap();
         let s = sweep();
-        let sig = secp.sign_ecdsa(&Message::from_digest(s.sighash()), &sk);
+        let sighash = s.sighashes()[0];
+        let sig = secp.sign_ecdsa(&Message::from_digest(sighash), &sk);
         let compact = sig.serialize_compact();
         let (r, ss) = (<[u8; 32]>::try_from(&compact[..32]).unwrap(), <[u8; 32]>::try_from(&compact[32..]).unwrap());
         let der = der_signature(&r, &ss);
         assert_eq!(der, sig.serialize_der().to_vec());
-        let raw = s.signed_tx(&der);
+        let raw = s.signed_tx(&[der]);
         let tx: Transaction = deserialize(&raw).unwrap();
         assert_eq!(serialize(&tx), raw);
         assert_eq!(tx.input[0].witness.len(), 2);
         let parsed = parse_tx(&raw).unwrap();
         assert_eq!(parsed.txid, tx.compute_txid().to_byte_array());
-        let est = sweep_vsize(s.dest_script.len());
+        let est = sweep_vsize(s.dest_script.len(), 1);
         assert!(est >= tx.vsize() as u64 && est <= tx.vsize() as u64 + 1, "estimate {est} vs vsize {}", tx.vsize());
         let w = tx.input[0].witness.to_vec();
         let parsed_sig = Signature::from_der(&w[0][..w[0].len() - 1]).unwrap();
         let pk = bitcoin::secp256k1::PublicKey::from_secret_key(&secp, &sk);
-        secp.verify_ecdsa(&Message::from_digest(s.sighash()), &parsed_sig, &pk).unwrap();
+        secp.verify_ecdsa(&Message::from_digest(sighash), &parsed_sig, &pk).unwrap();
     }
 
     #[test]
     fn vsize_estimate_is_an_upper_bound_within_one_vbyte() {
-        assert_eq!(sweep_vsize(22), 110);
-        assert_eq!(sweep_vsize(34), 122);
-        assert_eq!(sweep_fee(10, 22).unwrap(), 1100);
-        assert!(sweep_fee(0, 22).is_err());
-        assert!(sweep_fee(1001, 22).is_err());
+        assert_eq!(sweep_vsize(22, 1), 110);
+        assert_eq!(sweep_vsize(34, 1), 122);
+        assert_eq!(sweep_fee(10, 22, 1).unwrap(), 1100);
+        assert!(sweep_fee(0, 22, 1).is_err());
+        assert!(sweep_fee(1001, 22, 1).is_err());
     }
 
     #[test]

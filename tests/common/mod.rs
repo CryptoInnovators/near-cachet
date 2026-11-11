@@ -306,7 +306,7 @@ impl World {
 
     pub async fn unseal(&self, who: &Account, id: &str, dest: &str, rate: u64) -> ExecutionFinalResult {
         who.call(self.cachet.id(), "unseal")
-            .args_json(json!({"token_id": id, "btc_dest": dest, "fee_rate": rate}))
+            .args_json(json!({"token_id": id, "btc_dest": dest, "fee_rate": rate, "additional_outputs": null}))
             .max_gas()
             .transact()
             .await
@@ -348,7 +348,7 @@ pub fn verify_sweep(note: &Value, f: &Funding, signed_hex: &str, dest: &str, rat
     assert_eq!(tx.output.len(), 1);
     let dest_script = Address::from_str(dest).unwrap().assume_checked().script_pubkey();
     assert_eq!(tx.output[0].script_pubkey, dest_script);
-    let est = cachet::btc::sweep_vsize(dest_script.len());
+    let est = cachet::btc::sweep_vsize(dest_script.len(), tx.input.len());
     let fee = f.sats - tx.output[0].value.to_sat();
     assert_eq!(fee, rate * est, "fee is rate times the vsize estimate");
     assert!(est >= tx.vsize() as u64 && est <= tx.vsize() as u64 + 1, "estimate {} vs actual vsize {}", est, tx.vsize());

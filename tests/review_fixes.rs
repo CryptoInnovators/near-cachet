@@ -101,8 +101,17 @@ async fn the_mint_deposit_funds_every_later_byte_a_note_can_grow() {
     let t = w.transfer(&w.alice, &b, bob.id().as_str()).await;
     assert!(t.is_success(), "{}", fail_text(&t));
     gift(&w, &w.alice, &c, &carol, "storage link").await;
-    // a grows to its largest: 34-byte destination script and a stored signature
-    let r = w.unseal(&w.alice, &a, TAPROOT_DEST, 10).await;
+    // a grows to its largest: four additional confirmed outputs, five signatures and a 34-byte destination
+    let mut extras = Vec::new();
+    for n in 0..4 { extras.push(w.fund(&a, 10_000 + n, 6).await); }
+    let additional_outputs = extras.iter().map(|f| json!({
+        "raw_tx": f.raw_hex,
+        "vout": f.vout,
+        "proof": inclusion_proof(&f.txid),
+    })).collect::<Vec<_>>();
+    let r = w.alice.call(w.cachet.id(), "unseal")
+        .args_json(json!({"token_id": a, "btc_dest": TAPROOT_DEST, "fee_rate": 10, "additional_outputs": additional_outputs}))
+        .max_gas().transact().await.unwrap();
     assert!(r.is_success() && r.clone().json::<bool>().unwrap(), "unseal {}", fail_text(&r));
     let after = free_balance(&w).await;
     println!("free balance before mints {before}, after lifecycle {after}, slack {} bytes", (after - before) / BYTE as i128);
