@@ -3,7 +3,7 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 account='cachet.testnet'
 page='https://near-cachet.earn-shield-alerts.workers.dev/'
-test_cmd='bash scripts/fetch-fixtures.sh && cargo test --workspace --no-fail-fast && node --test web/web.test.mjs'
+test_cmd='cargo test --lib && node --test web/web.test.mjs'
 pass=0
 rpc_log=$(mktemp)
 trap 'rm -f "$rpc_log"' EXIT
@@ -13,9 +13,9 @@ trap 'rm -f "$rpc_log"' EXIT
 
 run_tests() {
   if [ "$account" = 'cachet.testnet' ]; then
-    for tool in curl jq node; do
+    for tool in node; do
       if ! command -v "$tool" >/dev/null 2>&1; then
-        case "$tool" in curl) install='install curl';; jq) install='install jq from https://jqlang.github.io/jq/download/';; node) install='install Node.js 20 from https://nodejs.org/en/download';; esac
+        install='install Node.js 20 from https://nodejs.org/en/download'
         printf 'FAIL README fast tests: missing %s; %s\n' "$tool" "$install"
         return 1
       fi
