@@ -15,6 +15,7 @@ export function parseCommand(text = '') {
     return Number.isSafeInteger(shares) && shares > 0 ? { command: 'envelope', sats: Number(args[0]), shares } : { command: 'invalid' };
   }
   if (name === '/link') return args.length === 2 ? { command: 'link', tokenId: args[0], claimUrl: args[1] } : { command: 'invalid' };
+  if (name === '/heir') return args.length >= 2 && /^(tb1|bc1)[ac-hj-np-z02-9]{20,90}$/i.test(args[0]) ? { command: 'heir', address: args[0].toLowerCase(), name: args.slice(1).join(' ').slice(0, 40) } : { command: 'invalid' };
   if (name === '/status') return args.length === 1 ? { command: 'status', tokenId: args[0] } : { command: 'invalid' };
   return null;
 }

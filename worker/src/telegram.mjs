@@ -41,6 +41,12 @@ async function telegram(env, method, payload) {
   return result.result;
 }
 
+const heirKey = (address) => `heirname:${address}`;
+export async function handleHeirName(request, env) {
+  const address = (new URL(request.url).searchParams.get("addr") || "").toLowerCase();
+  const found = /^(tb1|bc1)[ac-hj-np-z02-9]{20,90}$/.test(address) ? JSON.parse((await env.CACHET_STATE.get(heirKey(address))) || "null") : null;
+  return new Response(JSON.stringify({ name: found?.name || null }), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+}
 const stateKey = (giver) => `links:${giver}`;
 const loadLinks = async (env, giver) => JSON.parse((await env.CACHET_STATE.get(stateKey(giver))) || "{}");
 const saveLinks = (env, giver, links) => env.CACHET_STATE.put(stateKey(giver), JSON.stringify(links));
@@ -51,8 +57,12 @@ export async function handleMessage(env, message, origin) {
   if (!parsed) return null;
   const chatId = message.chat.id;
   const reply = (text, replyMarkup) => telegram(env, "sendMessage", { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
-  if (parsed.command === "invalid") return reply("Try /envelope <total-sats> <shares>, /link <note id> <claim url>, or /status <note id>.");
+  if (parsed.command === "invalid") return reply("Try /envelope <total-sats> <shares>, /link <note id> <claim url>, /heir <bitcoin address> <name>, or /status <note id>.");
   const giver = String(message.from.id);
+  if (parsed.command === "heir") {
+    await env.CACHET_STATE.put(heirKey(parsed.address), JSON.stringify({ name: parsed.name, by: giver }));
+    return reply(`${parsed.name} is now shown as the named person for ${parsed.address.slice(0, 12)}...${parsed.address.slice(-6)}.`);
+  }
   if (parsed.command === "status") return reply(statusFromNote(await view("note", { token_id: parsed.tokenId }), await blockHeight()));
   if (parsed.command === "link") {
     const { tokenId, claimUrl } = parseClaimUrl(parsed.claimUrl, origin);

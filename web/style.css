@@ -538,3 +538,24 @@ html.in-telegram body[data-heir-owned="1"] .station[data-state="current"] { bord
 .card.env[data-swept="1"] .env-lock svg { color: #7fe3a0; }
 .card.env[data-swept="1"] .env-lock svg path { stroke: #0f3d22; }
 .card.env[data-swept="1"] .consequence a { color: #fff; text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
+
+/* Mini App first screen: one slim wallet row, then the envelope and the two actions. */
+html.in-telegram .tma-wallet { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 14px; margin-top: 8px; }
+html.in-telegram .wallet-who .avatar, html.in-telegram .wallet-who > :first-child { width: 36px; height: 36px; }
+html.in-telegram .wallet-hi { font-size: 15px; }
+html.in-telegram .wallet-sub { font-size: 12px; }
+html.in-telegram .wallet-bal { text-align: right; }
+html.in-telegram .wallet-label { display: none; }
+html.in-telegram .wallet-amount { justify-content: flex-end; margin-top: 0; gap: 6px; }
+html.in-telegram .wallet-amount .ico-coin { width: 22px; height: 22px; }
+html.in-telegram .wallet-figure { font-size: 18px; }
+html.in-telegram .wallet-btc { display: none; }
+html.in-telegram .wallet-hot { margin-top: 0; flex-basis: 100%; }
+html.in-telegram .wallet-hot .btn { min-height: 30px; padding: 3px 12px; font-size: 13px; }
+.env-addr { font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; }
+.heir-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 8px; }
+.heir-actions .btn { width: 100%; min-height: 52px; font-size: 16px; font-weight: 700; }
+.btn-steal { background: transparent; color: #b3261e; border: 2px solid #b3261e; border-radius: 12px; cursor: pointer; font-family: inherit; }
+.btn-steal:hover:not(:disabled) { background: #b3261e; color: #fff; }
+.btn-steal:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 420px) { .heir-actions { grid-template-columns: 1fr; } }

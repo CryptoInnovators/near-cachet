@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { handleTelegram, publicKeyHex } from "../src/telegram.mjs";
+import { handleHeirName, handleTelegram, publicKeyHex } from "../src/telegram.mjs";
 
 const require = createRequire(import.meta.url);
 const claim = require("../../web/claim-lib.js");
@@ -57,4 +57,17 @@ test("/link refuses a claim URL whose key is not the note's claim key", async ()
   await handleTelegram(post(msg(`/link 12 ${link("12")}`)), e);
   assert.match(sent.at(-1).body.text, /does not match the live note claim/);
   assert.equal(e.CACHET_STATE.m.size, 0);
+});
+
+test("/heir names the person a Bitcoin address belongs to and the page reads it back", async () => {
+  const sent = []; const e = env(); chain({}, sent);
+  const addr = "tb1qjq6uvyjkdz08224h8tpsdte8hryazzjmrq50v9";
+  const read = async (a) => (await (await handleHeirName(new Request(`https://near-cachet.example/api/heir-name?addr=${a}`), e)).json()).name;
+  assert.equal(await read(addr), null);
+  await handleTelegram(post(msg(`/heir ${addr} Aarav K`)), e);
+  assert.match(sent.at(-1).body.text, /Aarav K is now shown/);
+  assert.equal(await read(addr), "Aarav K");
+  assert.equal(await read("not-an-address"), null);
+  await handleTelegram(post(msg("/heir not-an-address Someone")), e);
+  assert.match(sent.at(-1).body.text, /Try \/envelope/);
 });

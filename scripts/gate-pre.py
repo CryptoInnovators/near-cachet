@@ -62,6 +62,10 @@ async def main(out_file):
         log(f"bot answered /link {token}: " + re.sub(r"[0-9a-f]{64}", "<hex>", last.message)[:100])
         if "Linked sealed note" in last.message: break
     else: raise SystemExit("FAIL: no open heir note in web/judge-links.json")
+    heir_addr = "tb1qjq6uvyjkdz08224h8tpsdte8hryazzjmrq50v9"  # the address every pool note is bound to
+    named = await client.send_message(group, f"/heir {heir_addr} {me.first_name}")
+    await wait_bot(client, group, bot.id, named.id, r"is now shown as the named person|Try /envelope")
+    log("bot answered /heir: " + (await client.get_messages(group, limit=1))[0].message[:80])
     sent = await client.send_message(group, f"/envelope {sats} 1")
     reply = await wait_bot(client, group, bot.id, sent.id, r"envelope|Could not")
     button = None

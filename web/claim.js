@@ -12,7 +12,15 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const FEE_FLOOR = 50000000000000000000000n; // 0.05 NEAR, enough for an unseal call from a claim account
 const FEE_LOW = 350000000000000000000000n; // 0.35 NEAR: an unseal prepays 300 Tgas, which costs 0.3 NEAR before the refund
 
+const isSwept = (s) => Boolean(s?.outspend?.spent === true || session.tx.broadcast);
 const CLAIM_ACTION = "Take the note";
+// The person a heir note is bound to: a name the giver registered with /heir in the bot, else a plain role word.
+let heirName = null;
+const who = () => heirName || "the named heir";
+async function loadHeirName(address) {
+  if (!address || heirName !== null) return;
+  try { heirName = (await (await fetch(`/api/heir-name?addr=${encodeURIComponent(address)}`)).json()).name || ""; } catch { heirName = ""; }
+}
 const session = { tx: {}, keySaved: null, keyFile: null, claimed: false, steal: null };
 // The thief's address in the "Steal this link" attempt: any valid witness address that is not the bound heir.
 const THIEF_ADDRESS = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
@@ -484,8 +492,8 @@ async function ownedPanel(s, account) {
   }
   setBody(
     h("div", { class: "panel-state" },
-      h("h2", { class: "panel-title" }, session.passedIn ? "The note is yours." : session.claimed ? "You hold the note." : "Your note."),
-      h("p", { class: "panel-say" }, session.proof || (session.claimed ? sharesLine() : null))),
+      h("h2", { class: "panel-title" }, s.note?.heir && isSwept(s) ? "Delivered." : session.passedIn ? "The note is yours." : session.claimed ? "You hold the note." : "Your note."),
+      h("p", { class: "panel-say" }, s.note?.heir && isSwept(s) ? `${who()} holds the Bitcoin. The note's sweep paid no other address.` : session.proof || (session.claimed && !s.note?.heir ? sharesLine() : null))),
     ...(s.note?.heir ? [] : amountBlock(s.note).slice(0, 2)),
     ...((rowsNode, shareNode) => (s.note?.heir
       ? [h("details", { class: "more", id: "owner-details" }, h("summary", null, "Details: owner, claim transaction, key"), rowsNode, shareNode)]
@@ -649,13 +657,13 @@ async function stations(s) {
     const dest = h("input", { id: "claim-destination", autocomplete: "off", autocapitalize: "none", spellcheck: "false", placeholder: `${config.hrp}1...`, ...(heir ? { value: heir, readonly: true } : {}) });
     const feeIn = h("input", { id: "claim-fee", autocomplete: "off", inputmode: "numeric" });
     const consequence = h("p", { class: "consequence-box", id: "claim-consequence", "aria-live": "polite" });
-    const go = h("button", { class: "btn btn-primary", type: "submit", id: "heir-go", disabled: outspend?.spent !== false }, !outspend ? "Checking Bitcoin…" : heir ? "Open as the named heir" : "Unlock the Bitcoin");
+    const go = h("button", { class: "btn btn-primary", type: "submit", id: "heir-go", ...(heir ? { form: "heir-form" } : {}), disabled: outspend?.spent !== false }, !outspend ? "Checking Bitcoin…" : heir ? `Open as ${who()}` : "Unlock the Bitcoin");
     const destField = h("div", { class: "field" }, h("label", { for: "claim-destination" }, heir ? "Bound heir address, fixed when this note was created" : "Bitcoin destination"), dest);
     const feeField = h("div", { class: "field" }, h("label", { for: "claim-fee" }, "Fee rate, sat/vB"), feeIn);
     const fundsSlot = h("div", { class: "funds-slot" });
-    const form = h("form", { class: "tool-form", novalidate: true },
+    const form = h("form", { class: "tool-form", id: heir ? "heir-form" : undefined, novalidate: true },
       ...(heir ? [h("details", { class: "more" }, h("summary", null, "Sweep details: address, fee, network fee"), destField, feeField, consequence, fundsSlot)] : [destField, feeField, consequence]),
-      go);
+      ...(heir ? [] : [go]));
     const explain = () => {
       const len = destinationScriptLen(dest.value.trim());
       const rate = Number(feeIn.value.trim());
@@ -674,8 +682,10 @@ async function stations(s) {
     }).catch(() => { funds.textContent = ""; });
     const s2 = session.steal;
     const stealBox = !heir ? null : h("div", { class: "steal", id: "steal-box", "aria-live": "polite" },
-      h("p", { class: "say" }, "You hold the link, so try to steal it. The sweep goes to a thief address and the contract decides."),
-      h("button", { class: "btn btn-paper", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Sending the theft..." : outspend ? "Steal this link" : "Checking Bitcoin…"),
+      h("p", { class: "say" }, `You hold the link, so try to steal it. The sweep goes to a thief address and the contract decides. Only ${who()} is paid.`),
+      h("div", { class: "heir-actions" },
+        h("button", { class: "btn btn-steal", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Sending the theft..." : outspend ? "Steal this link" : "Checking Bitcoin…"),
+        go),
       !s2 || s2.pending ? null : s2.error ? h("p", { class: "consequence-box", id: "steal-result", dataset: { state: "error" } }, `The attempt did not reach the contract: ${s2.error}`)
         : h("div", { class: "consequence-box steal-receipt", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
           s2.refused ? h("strong", { class: "refused-stamp" }, "Refused") : null,
@@ -685,7 +695,7 @@ async function stations(s) {
           h("p", { class: "receipt-why" }, s2.refused ? `No Bitcoin moved. ${String(s2.reason || "").replace(/^./, (c) => c.toUpperCase())}. ` : "The contract accepted a sweep to the thief address. ",
             s2.hash ? link(txUrl(s2.hash), "View the refusal on NEAR", "hexlink") : null)));
     if (heir && funds) fundsSlot.append(funds);
-    out.push(station("Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), heir ? null : funds, stealBox, form));
+    out.push(station(heir ? "Try the lock" : "Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${who()} at ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), heir ? null : funds, stealBox, form));
     if (net.name === "testnet" && !heir) cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
     feeIn.value = "5"; // a sane testnet rate is in the field at once, so a press before the explorer answers still signs
     feeDefault(base).then((r) => { if (feeIn.value === "5") { feeIn.value = String(r); explain(); } }).catch(() => {});
@@ -710,6 +720,11 @@ async function stations(s) {
     h("button", { class: "btn btn-primary", type: "button", onclick: () => finalize(note, config, base) }, "Finalize")));
   else if (!note) out.push(station("Finalize", "done", h("p", { class: "say" }, "The note is finalized and no longer exists."), txLink(session.tx.finalize, "Finalize transaction")));
   else out.push(station("Finalize", "waiting", h("p", { class: "say" }, "After the sweep confirms, the light client checks its proof and the note is burned.")));
+  // A heir note shows one live step at a time: the envelope itself carries what happened once the Bitcoin is sent.
+  if (note?.heir) {
+    if (swept) return [];
+    return out.filter((st) => { const t = st.querySelector("h3")?.textContent; return !(t === "Unlock" && st.dataset.state === "done") && !(t === "Broadcast" && st.dataset.state === "waiting") && t !== "Finalize"; });
+  }
   return out;
 }
 
@@ -763,10 +778,10 @@ function renderWallet(s, account) {
 
 // A swept heir note shows what left and where it went: the Bitcoin transaction is the status.
 function cardCtx(s, account) {
-  const ctx = { net, hrp: s.config.hrp, contract: frag.contract, you: account, proofHref: "index.html#record" };
+  const ctx = { net, hrp: s.config.hrp, contract: frag.contract, you: account, proofHref: "index.html#record", heirName };
   const txid = s.spend?.txid || session.tx.broadcast;
   if (s.note?.heir && s.note.utxo && txid && (s.outspend?.spent === true || session.tx.broadcast)) {
-    ctx.swept = { sats: s.note.utxo.sats - (s.note.sweep?.fee_sats || 0), to: s.note.heir, url: `${s.base}/tx/${txid}` };
+    ctx.swept = { sats: s.note.utxo.sats - (s.note.sweep?.fee_sats || 0), fee: s.note.sweep?.fee_sats || 0, to: s.note.heir, url: `${s.base}/tx/${txid}` };
   }
   return ctx;
 }
@@ -775,6 +790,7 @@ async function draw() {
   nativeMain(null);
   T()?.back(null);
   const [s] = await Promise.all([readFast(), readShares()]);
+  await loadHeirName(s.note?.heir);
   const account = you();
   const owner = s.nft?.owner_id || null;
   const mine = Boolean(account && owner === account);
@@ -798,13 +814,14 @@ async function draw() {
     if (lastError) errorPanel(s.note, lastError, takeIt, "The note stays where it is.");
     else await receiverPanel(s);
   } else if (mine && s.note?.heir) {
-    heading("Whoever holds this link, the Bitcoin goes to one address.", `This NFT owns the Bitcoin and control moves with it, but the sweep can only pay ${short(s.note.heir, 12, 8)}, fixed when the note was created. Sent by ${sender} on Bitcoin testnet.`);
+    if (isSwept(s)) heading(`Sent to ${who()}.`, `The Bitcoin transaction paid only ${short(s.note.heir, 12, 8)}, the address fixed when the note was created.`);
+    else heading(`For ${who()}.`, `Whoever holds this link, the Bitcoin can only be paid to ${short(s.note.heir, 12, 8)}, fixed when the note was created.`);
     if (slow && !session.claimed) slowPanel(); else await ownedPanel(s, account);
   } else if (mine) {
     heading("Your Bitcoin share.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
     if (slow && !session.claimed) slowPanel(); else await ownedPanel(s, account);
   } else if (open && s.note?.heir) {
-    heading("A Bitcoin note that pays one person only.", `Bound when it was created to ${short(s.note.heir, 12, 8)}. A thief who gets the link can only sweep it there. ${sharesLine()}.`);
+    heading(`A Bitcoin note for ${who()}.`, `Bound when it was created to ${short(s.note.heir, 12, 8)}. A thief who gets the link can only sweep it there.`);
     if (slow) slowPanel();
     else if (lastError) errorPanel(s.note, lastError);
     else idlePanel(s.note);
@@ -829,9 +846,10 @@ async function draw() {
   if (s.note?.utxo && mine) {
     bitcoinChecks(s).then(async (checks) => {
       s.outspend = checks.outspend; s.spend = checks.spend;
-      if (s.note?.heir && s.outspend?.spent === true) { cachetCard.render($("gift-card"), s.note, cardCtx(s, you())); renderWallet(s, you()); }
+      if (s.note?.heir && s.outspend?.spent === true) { cachetCard.render($("gift-card"), s.note, cardCtx(s, you())); renderWallet(s, you()); heading(`Sent to ${who()}.`, `The Bitcoin transaction paid only ${short(s.note.heir, 12, 8)}, the address fixed when the note was created.`); await ownedPanel(s, you()); }
       if ($("stations").hidden && !stationsOpen) return;
       $("stations").replaceChildren(...await stations(s));
+      $("stations").hidden = !$("stations").children.length;
     }).catch(() => {});
   }
   recent();

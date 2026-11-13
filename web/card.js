@@ -107,10 +107,10 @@ function envelope(slot, note, ctx) {
       ? h("div", { class: "env-amount" }, t.icon("btc", "ico-coin"), h("p", { class: "figure" }, figure, h("span", { class: "figure-u" }, sw ? " sats sent" : " sats")))
       : h("p", { class: "figure figure-wait" }, "Not funded yet"),
     note.utxo ? h("p", { class: "figure-sub" }, btc(sw ? sw.sats : note.utxo.sats)) : null,
-    sw ? h("p", { class: "consequence" }, "Bitcoin paid to the bound address. ", link(sw.url, "View the Bitcoin transaction", "hexlink"))
+    sw ? h("p", { class: "consequence" }, `${int(sw.sats + sw.fee)} sat note, ${int(sw.fee)} sats network fee. `, link(sw.url, "View the Bitcoin transaction", "hexlink"))
       : consequence(note, ctx.you) ? h("p", { class: "consequence" }, consequence(note, ctx.you)) : null,
     note.heir
-      ? h("p", { class: "env-lock" }, t.icon(sw ? "check" : "lock"), h("span", null, sw ? "Sent to " : "Only the named heir ", t.avatar({ seed: note.heir, size: 22 }), h("strong", { class: "env-name" }, short(note.heir, 8, 5)), sw ? "" : " can open this"))
+      ? h("p", { class: "env-lock" }, t.icon(sw ? "check" : "lock"), h("span", null, sw ? "Sent to " : "Only ", t.avatar({ seed: note.heir, size: 22 }), h("strong", { class: "env-name" }, ctx.heirName || short(note.heir, 8, 5)), sw ? "" : " can open this", ctx.heirName ? h("span", { class: "env-addr" }, short(note.heir, 8, 5)) : null))
       : null,
     h("dl", { class: "rows rows-plain env-holder" }, row("Holder", h("span", { class: "holder" }, holder(note.owner_id, ctx.you)))),
     proofBlock(note, ctx));

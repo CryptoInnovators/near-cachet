@@ -1,6 +1,6 @@
 import { cardSvg, envelopeHtml } from "./card.mjs";
 import { handleSponsor } from "./sponsor.mjs";
-import { handleTelegram } from "./telegram.mjs";
+import { handleHeirName, handleTelegram } from "./telegram.mjs";
 import { handleTmaSend, isTransientRpcError, validateInitData } from "./initdata.mjs";
 import { handleHotChallenge, handleHotVerify } from "./hot.mjs";
 
@@ -93,6 +93,7 @@ export default {
     if (url.pathname === "/api/hot/challenge") return handleHotChallenge(request, env);
     if (url.pathname === "/api/hot/verify") return handleHotVerify(request, env);
     if (url.pathname === "/api/tma/send") return handleTmaSend(request, env, { contract: CONTRACT, rpc: sendRpc });
+    if (url.pathname === "/api/heir-name") return handleHeirName(request, env);
     if (url.pathname === "/api/telegram") return handleTelegram(request, env);
     if (url.pathname === "/claim") return env.ASSETS.fetch(new Request(new URL("/claim.html", url.origin), request));
     return env.ASSETS.fetch(request);

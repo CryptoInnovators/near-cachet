@@ -337,7 +337,7 @@ try {
     check("claim: the panel shows owner, claim transaction and key file", /Owner you, claim account/.test(done.rows || "") && (MINI ? /Saved as your Telegram cloud backup/ : /Saved as cachet-[0-9a-f]{8}\.key/).test(done.rows || "") && !!done.href, done.rows);
     check("claim: the card holder reads You", done.holder === "You", done.holder);
     check("claim: envelopes left dropped by one", done.shares === `${open.length - 1} of ${reads.length} envelopes left`, done.shares);
-    check("claim: the next action is offered", /^(Open as the named heir|Checking Bitcoin…)$/.test(done.next || "") || done.next === "Move it to a Bitcoin address", done.next);
+    check("claim: the next action is offered", /^(Open as .+|Checking Bitcoin…)$/.test(done.next || "") || done.next === "Move it to a Bitcoin address", done.next);
     console.log(`claim: ${seconds}s from page load to the confirmed owner. progress labels seen: ${[...labels].join(" | ")}. claim tx ${done.href}`);
     await shot("claimed", 1440);
     if (DO_PASS) await runPass(target);
@@ -345,7 +345,7 @@ try {
       const noteNow = async () => view(CONTRACT, "note", { token_id: target });
       const heir = (await noteNow())?.heir;
       check("heir: the note on chain names its heir", /^tb1q/.test(heir || ""), String(heir));
-      check("heir: the headline names one address only", /pays one person only/i.test(await text("#gift-title")) || /one address/i.test(await text("#gift-title")), await text("#gift-title"));
+      check("heir: the headline names one address only", /^(For|A Bitcoin note for) .+\.?$/.test(await text("#gift-title")) && /tb1q/.test(await text("#gift-sub")), await text("#gift-title"));
       await waitFor("document.querySelector('#steal-go') && !document.querySelector('#steal-go').disabled", "Steal this link enabled", 90000);
       const tSteal = Date.now();
       await click("#steal-go");
@@ -366,8 +366,11 @@ try {
       console.log(`heir: sweep signed in ${((Date.now() - tHeir) / 1000).toFixed(1)}s`);
       await waitFor("[...document.querySelectorAll('.station')].some((s) => s.querySelector('h3')?.textContent === 'Broadcast' && s.dataset.state === 'current')", "broadcast station current", 60000);
       await click("#stations .station[data-state=current] .btn-primary");
-      await waitFor("[...document.querySelectorAll('.station')].some((s) => s.querySelector('h3')?.textContent === 'Broadcast' && s.dataset.state === 'done')", "broadcast done", 120000);
-      const sweepTxid = await evalJs("([...document.querySelectorAll('.station')].find((s) => s.querySelector('h3')?.textContent === 'Broadcast')?.querySelector('.station-tx a')?.href || '').split('/tx/')[1] || ''");
+      await waitFor(`document.querySelector("#gift-card .card")?.dataset.swept === "1"`, "envelope reads sent", 120000);
+      const sweepTxid = await evalJs("(document.querySelector('#gift-card .consequence a')?.href || '').split('/tx/')[1] || ''");
+      const sent = await evalJs("({ title: document.querySelector('#gift-title')?.textContent, state: document.querySelector('#gift-card .card-state')?.textContent.trim(), fig: document.querySelector('#gift-card .figure')?.innerText.replace(/\\s+/g, ' '), panel: document.querySelector('.panel-title')?.textContent, waiting: document.querySelectorAll('.station[data-state=waiting]').length, balance: document.querySelector('.wallet-figure')?.textContent })");
+      check("heir: after the sweep the heading, status and figure say the Bitcoin was sent", /^Sent to /.test(sent.title) && sent.state === "Sent" && /sats sent/.test(sent.fig) && sent.panel === "Delivered.", JSON.stringify(sent));
+      check("heir: no dead waiting cards remain and the wallet balance dropped", sent.waiting === 0 && sent.balance === "0 sats", JSON.stringify(sent));
       let btcTx = null;
       for (let attempt = 0; sweepTxid && !btcTx && attempt < 12; attempt += 1) { btcTx = await (await fetch(`https://blockstream.info/testnet/api/tx/${sweepTxid}`).catch(() => ({ json: async () => null }))).json().catch(() => null); if (!btcTx?.vout) { btcTx = null; await sleep(5000); } }
       check("heir: the Bitcoin sweep pays only the bound heir address", !!btcTx && btcTx.vout.length === 1 && btcTx.vout[0].scriptpubkey_address === heir, `${sweepTxid} ${JSON.stringify(btcTx?.vout?.map((o) => o.scriptpubkey_address))}`);
