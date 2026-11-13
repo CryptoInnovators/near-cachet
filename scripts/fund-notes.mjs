@@ -98,7 +98,10 @@ async function api(path, init) {
 }
 
 async function send(fee, targets) {
-  const utxos = (await (await api(`/address/${myAddress}/utxo`)).json()).filter((u) => u.status.confirmed);
+  // REPLACE_TXID=<stuck tx> spends that tx's own inputs again at a higher fee (BIP125 replacement, inputs signal 0xfffffffd).
+  const utxos = process.env.REPLACE_TXID
+    ? (await (await api(`/tx/${process.env.REPLACE_TXID}`)).json()).vin.map((v) => ({ txid: v.txid, vout: v.vout, value: v.prevout.value, status: { confirmed: true } }))
+    : (await (await api(`/address/${myAddress}/utxo`)).json()).filter((u) => u.status.confirmed);
   if (!utxos.length) throw new Error(`no confirmed UTXO at ${myAddress}`);
   const total = utxos.reduce((a, u) => a + u.value, 0);
   const outs = targets.map(([addr, sats]) => ({ sats, spk: wpkh(decodeBech32(addr)) }));
