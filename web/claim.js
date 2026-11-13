@@ -665,7 +665,8 @@ async function stations(s) {
           s2.hash ? link(txUrl(s2.hash), short(s2.hash, 6, 6), "hexlink") : null));
     out.push(station("Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), funds, stealBox, form));
     if (net.name === "testnet" && !heir) cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
-    feeDefault(base).then((r) => { feeIn.value = String(r); explain(); }).catch(() => { feeIn.value = "5"; explain(); });
+    feeIn.value = "5"; // a sane testnet rate is in the field at once, so a press before the explorer answers still signs
+    feeDefault(base).then((r) => { if (feeIn.value === "5") { feeIn.value = String(r); explain(); } }).catch(() => {});
     explain();
   } else if (note && ["Unsealing", "Resigning"].includes(note.state)) out.push(station("Unlock", "current", h("p", { class: "say" }, "The signer is producing the sweep signature.")));
   else if (!note || note.state !== "Sealed") out.push(station("Unlock", "done", h("p", { class: "say" }, "The seal is broken and the sweep is signed."), txLink(session.tx.unseal, "Unseal transaction")));
