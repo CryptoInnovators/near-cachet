@@ -10,7 +10,7 @@
   <link rel="preload" href="fonts/gloock-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/schibsted-grotesk-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
-  <script>document.documentElement.classList.add("js");</script>
+  <script>if (/[?&]tgWebAppStartParam=/.test(location.search)) location.replace("claim.html" + location.search + location.hash); document.documentElement.classList.add("js");</script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to the note</a>
