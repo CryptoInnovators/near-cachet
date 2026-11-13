@@ -110,7 +110,7 @@ function envelope(slot, note, ctx) {
     sw ? h("p", { class: "consequence" }, "Bitcoin paid to the bound address. ", link(sw.url, "View the Bitcoin transaction", "hexlink"))
       : consequence(note, ctx.you) ? h("p", { class: "consequence" }, consequence(note, ctx.you)) : null,
     note.heir
-      ? h("p", { class: "env-lock" }, t.icon(sw ? "check" : "lock"), h("span", null, sw ? "Sent to " : "Only ", t.avatar({ seed: note.heir, size: 22 }), h("strong", { class: "env-name" }, short(note.heir, 8, 5)), sw ? "" : " can open this"))
+      ? h("p", { class: "env-lock" }, t.icon(sw ? "check" : "lock"), h("span", null, sw ? "Sent to " : "Only the named heir ", t.avatar({ seed: note.heir, size: 22 }), h("strong", { class: "env-name" }, short(note.heir, 8, 5)), sw ? "" : " can open this"))
       : null,
     h("dl", { class: "rows rows-plain env-holder" }, row("Holder", h("span", { class: "holder" }, holder(note.owner_id, ctx.you)))),
     proofBlock(note, ctx));

@@ -1,10 +1,5 @@
 [
   {
-    "fragment": "v=2&contract=heir.cachet-ops.testnet&token=26&key=89ec52e7d1e747d78eb0fe5021222678a95ebd1fc0ec9932f8699fb02b96f48d&sender=cachet-ops.testnet",
-    "token_id": "26",
-    "sats": 1700
-  },
-  {
     "fragment": "v=2&contract=heir.cachet-ops.testnet&token=27&key=02fb0cfd0240676ac3efd0e2f976a9fdaeba0e74edf0a501eccd330a4f838de0&sender=cachet-ops.testnet",
     "token_id": "27",
     "sats": 1700
