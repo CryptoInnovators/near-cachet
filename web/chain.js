@@ -3,7 +3,7 @@
 (() => {
 
 const NETWORKS = {
-  testnet: { name: "testnet", rpc: "https://near-testnet.drpc.org", rpcs: ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"], txApi: "https://tx.test.fastnear.com", contract: "cachet.testnet", nearExplorer: "https://testnet.nearblocks.io", poolOwner: "cachet-ops.testnet" },
+  testnet: { name: "testnet", rpc: "https://rpc.testnet.fastnear.com", rpcs: ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org", "https://archival-rpc.testnet.fastnear.com", "https://test.rpc.fastnear.com"], txApi: "https://tx.test.fastnear.com", contract: "cachet.testnet", nearExplorer: "https://testnet.nearblocks.io", poolOwner: "cachet-ops.testnet" },
   mainnet: { name: "mainnet", rpc: "https://rpc.mainnet.fastnear.com", rpcs: ["https://rpc.mainnet.fastnear.com", "https://free.rpc.fastnear.com", "https://rpc.mainnet.near.org"], txApi: "https://tx.main.fastnear.com", contract: "cachet.near", nearExplorer: "https://nearblocks.io", poolOwner: null },
 };
 const REQUEST_TIMEOUT_MS = 15000;
@@ -38,7 +38,7 @@ async function rpc(method, params, net = network()) {
     const text = await response.text();
     let payload;
     try { payload = JSON.parse(text); } catch {}
-    if (payload?.error?.code === -429 || [429, 502, 503, 504].includes(response.status)) { failure = new Error(`The RPC at ${url} answered HTTP ${response.status}, rate limited or unavailable.`); continue; }
+    if (payload?.error?.code === -429 || /timeout|rate limit/i.test(payload?.error?.message || "") || [408, 429, 502, 503, 504].includes(response.status)) { failure = new Error(`The RPC at ${url} answered HTTP ${response.status}, rate limited or unavailable.`); continue; }
     if (payload?.error) { const error = new Error(payload.error.message || "The RPC returned an error."); error.rpc = payload.error; throw error; }
     if (!payload) { failure = new Error(`The RPC returned HTTP ${response.status} with a non-JSON body: ${text.slice(0, 240)}`); continue; }
     if (!response.ok) { failure = new Error(`The RPC returned HTTP ${response.status}.`); continue; }

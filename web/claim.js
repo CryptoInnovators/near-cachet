@@ -170,8 +170,9 @@ async function claim(useWallet = false) {
   const go = $("claim-go");
   if (go) { go.disabled = true; go.textContent = useWallet ? "Waiting for your wallet…" : "Saving your key…"; }
   let account = null;
+  let walletless = false;
   try {
-    const walletless = !useWallet && !cachetWallet.accountId && Boolean(frag.sender);
+    walletless = !useWallet && !cachetWallet.accountId && Boolean(frag.sender);
     let result;
     let signer;
     if (walletless) {
@@ -210,7 +211,11 @@ async function claim(useWallet = false) {
     const token = await poll(async () => (await view("nft_token", { token_id: frag.token })).value, (v) => v?.owner_id === account, 30000, 1000);
     if (token?.owner_id === account) session.claimed = true; else slow = true;
     if (claimTx && signer) poll(() => cachetChain.rpc("EXPERIMENTAL_tx_status", [claimTx, signer], net), (v) => v?.final_execution_status === "FINAL", 120000, 3000).catch(() => {});
-  } catch (error) { lastError = error.message; }
+  } catch (error) {
+    // A submit that timed out or was rate limited may still have landed: the chain decides.
+    const landed = account ? await poll(async () => (await view("nft_token", { token_id: frag.token })).value, (v) => v?.owner_id === account, 12000, 1500).catch(() => null) : null;
+    if (landed?.owner_id === account) session.claimed = true; else lastError = error.message;
+  }
   finally { busy = false; await render(); }
 }
 
@@ -374,7 +379,10 @@ async function nextShare() {
 async function findClaimTx(token, owner) {
   const key = `cachet:claimtx:${net.contract}:${token}:${owner}`;
   try { const hit = JSON.parse(localStorage.getItem(key) || "null"); if (hit?.hash) return hit; } catch {}
-  const found = await cachetChain.claimTx(net.contract, token, owner, net);
+  let found = null;
+  for (let attempt = 0; attempt < 3 && !found; attempt++) {
+    try { found = await cachetChain.claimTx(net.contract, token, owner, net); } catch { await delay(800 * (attempt + 1)); }
+  }
   if (found) localStorage.setItem(key, JSON.stringify(found));
   return found;
 }
@@ -524,7 +532,7 @@ async function draw() {
     heading("Every share is claimed.", example.block ? `Here is the last one, claimed at NEAR block ${int(example.block)}.` : "Here is the last one.");
     await examplePanel(s);
   } else if (mine) {
-    heading(session.claimed ? "The envelope is yours to keep." : "Your Bitcoin share.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
+    heading("Your Bitcoin share.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
     if (slow && !session.claimed) slowPanel(); else await ownedPanel(s, account);
   } else if (open) {
     heading("A Bitcoin red envelope is waiting.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);

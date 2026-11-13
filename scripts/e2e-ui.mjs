@@ -27,7 +27,8 @@ const TX_API = "https://tx.test.fastnear.com";
 const HEADLINE = "A Bitcoin red envelope is waiting.";
 const ACTION = "Claim my share";
 const MIN_OPEN = 3; // the pool must never run dry during judging
-const DO_CLAIM = args.claim === true; // spends one share of the pool: one cold walletless claim through the real page
+const DO_UNSEAL = args.unseal === true; // claim, fund the claim account for gas, break the seal through the page (implies --claim)
+const DO_CLAIM = args.claim === true || DO_UNSEAL; // spends one share of the pool: one cold walletless claim through the real page
 
 const failures = [];
 const passes = [];
@@ -186,8 +187,8 @@ try {
     check(`${label}: the shown note is an open share`, open.some((r) => r.token === token), token);
     check(`${label}: strip names the contract, a read block and the latest tx`, g.strip.includes(CONTRACT) && /NEAR block [\d,]+/.test(g.strip) && g.strip.includes(tx.slice(0, 4)), g.strip);
     const order = await tabOrder("claim-go");
-    const want = width < 600 ? 4 : 5; // skip link, wordmark, then the header links (3 wide, 1 and Menu narrow), then the button
-    check(`${label}: the claim button is first in tab order after the header`, order.at(-1) === "claim-go" && order.length === want + (width < 600 ? 0 : 0), JSON.stringify(order));
+    const want = width < 600 ? 5 : 6; // skip link, wordmark, then the header links (3 wide, 1 and Menu narrow), then the button
+    check(`${label}: the claim button is first in tab order after the header`, order.at(-1) === "claim-go" && order.length === want, JSON.stringify(order));
     check(`${label}: no horizontal overflow`, (await overflow()) <= 0, String(await overflow()));
     await waitFor(`document.body.dataset.ready === "1"`, "reads finished");
     await shot("index", width);
@@ -221,11 +222,18 @@ try {
     await open_(`${BASE}/index.html?network=testnet`, 1440);
     await evalJs("localStorage.clear()");
     const t0 = Date.now();
-    await S("Page.navigate", { url: `${BASE}/index.html?network=testnet` });
+    const pin = args.token ? links.find((e) => new URLSearchParams(e.fragment).get("token") === String(args.token)) : null;
+    await S("Page.navigate", { url: `${BASE}/index.html?network=testnet${pin ? `#${pin.fragment}` : ""}` });
+    if (pin) { await sleep(500); await S("Page.reload"); } // a hash-only navigation does not reload the page
     await waitFor(`document.querySelector("#claim-go") && document.querySelector(".gift-card .figure-n")`, "cold first screen");
     const target = (await text(".gift-card .card-title")).match(/#(\d+)/)[1];
+    await waitFor(`document.body.dataset.ready === "1"`, "first draw finished");
+    await sleep(1000);
     const before = await evalJs("location.href");
+    console.log("pre-click", JSON.stringify(await evalJs("({ y: scrollY, w: innerWidth, h: innerHeight, r: JSON.stringify(document.querySelector('#claim-go').getBoundingClientRect()), hash: location.hash.slice(0, 40) })")));
     await click("#claim-go");
+    await sleep(1500);
+    console.log("post-click", JSON.stringify(await evalJs("({ btn: document.querySelector('#claim-go')?.textContent, say: document.querySelector('.panel-say')?.textContent, st: document.querySelector('#claim-status').textContent })")));
     const labels = new Set();
     const end = Date.now() + 120000;
     while (Date.now() < end && !(await evalJs("document.querySelector('.panel-title')?.textContent === 'Your share is yours.'"))) {
@@ -247,6 +255,22 @@ try {
     check("claim: the next action is offered", done.next === "Move it to a Bitcoin address", done.next);
     console.log(`claim: ${seconds}s from page load to the confirmed owner. progress labels seen: ${[...labels].join(" | ")}. claim tx ${done.href}`);
     await shot("claimed", 1440);
+    if (DO_UNSEAL) {
+      const funded = spawnSync("near", ["tokens", "cachet-ops.testnet", "send-near", account, "0.1 NEAR", "network-config", process.env.NETCFG || "testnet-archfn", "sign-with-legacy-keychain", "send"], { encoding: "utf8" });
+      check("unseal: the claim account is funded with 0.1 NEAR for gas", funded.status === 0, (funded.stderr || funded.stdout).split("\n").filter((l) => /Error|rate/.test(l)).join(" "));
+      await click("#move-go");
+      await waitFor("document.querySelector('#claim-destination')?.value && document.querySelector('#claim-fee')?.value", "destination and fee defaults");
+      await waitFor("document.querySelector('#claim-funds')?.textContent.includes('pays the network fee')", "claim account balance read", 60000);
+      check("unseal: the Unseal station is open with a Bitcoin destination and fee", await evalJs("!!document.querySelector('.tool-form button[type=submit]') && !document.querySelector('.tool-form button[type=submit]').disabled"));
+      await click(".tool-form button[type=submit]");
+      const noteNow = async () => view(CONTRACT, "note", { token_id: target });
+      const until = Date.now() + 240000;
+      let state;
+      while (Date.now() < until) { state = (await noteNow())?.state; if (state === "Unsealed") break; await sleep(4000); }
+      check("unseal: note state on chain is Unsealed, signed by the claim account", state === "Unsealed", String(state));
+      await waitFor("[...document.querySelectorAll('.station')].some((s) => s.querySelector('h3')?.textContent === 'Broadcast' && s.dataset.state === 'current')", "broadcast station current", 60000);
+      await shot("unsealed", 1440);
+    }
   }
 
   // The public NEAR RPC providers answer 429, or a 429 without CORS headers, under shared load; chain.js fails over to the next provider.
