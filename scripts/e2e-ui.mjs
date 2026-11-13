@@ -29,7 +29,8 @@ const ACTION = "Claim my share";
 const MIN_OPEN = 3; // the pool must never run dry during judging
 const DO_UNSEAL = args.unseal === true; // claim, fund the claim account for gas, break the seal through the page (implies --claim)
 const DO_PASS = args.pass === true; // after the claim: Pass it on, take it from the link in a clean browser, then replay the spent link (must fail)
-const DO_CLAIM = (args.claim === true || DO_UNSEAL || DO_PASS) && args.keep !== true; // spends one share of the pool: one cold walletless claim through the real page
+const DO_HEIR = args.heir === true; // claim, press Steal this link (the contract must refuse), press Open as the named heir, broadcast, read the sweep on Bitcoin testnet
+const DO_CLAIM = (args.claim === true || DO_UNSEAL || DO_PASS || DO_HEIR) && args.keep !== true; // spends one share of the pool: one cold walletless claim through the real page
 
 const failures = [];
 const passes = [];
@@ -331,6 +332,37 @@ try {
     console.log(`claim: ${seconds}s from page load to the confirmed owner. progress labels seen: ${[...labels].join(" | ")}. claim tx ${done.href}`);
     await shot("claimed", 1440);
     if (DO_PASS) await runPass(target);
+    if (DO_HEIR) {
+      const noteNow = async () => view(CONTRACT, "note", { token_id: target });
+      const heir = (await noteNow())?.heir;
+      check("heir: the note on chain names its heir", /^tb1q/.test(heir || ""), String(heir));
+      check("heir: the headline names one address only", /pays one person only/i.test(await text("#gift-title")) || /one address/i.test(await text("#gift-title")), await text("#gift-title"));
+      await waitFor("document.querySelector('#steal-go') && !document.querySelector('#steal-go').disabled", "Steal this link enabled", 90000);
+      const tSteal = Date.now();
+      await click("#steal-go");
+      await waitFor("document.querySelector('#steal-result')?.dataset.state", "steal result", 120000);
+      const stolen = await evalJs("({ state: document.querySelector('#steal-result').dataset.state, text: document.querySelector('#steal-result').innerText, href: document.querySelector('#steal-result a')?.href })");
+      check("heir: Steal this link is refused by the contract with its reason", stolen.state === "refused" && /sweeps only to its heir/.test(stolen.text) && !!stolen.href, `${stolen.state} ${stolen.text} ${stolen.href}`);
+      console.log(`heir: refusal in ${((Date.now() - tSteal) / 1000).toFixed(1)}s, tx ${stolen.href}`);
+      const afterSteal = await noteNow();
+      check("heir: after the refused theft the note is still Sealed and owned by the claim account", afterSteal?.state === "Sealed" && (await view(CONTRACT, "nft_token", { token_id: target }))?.owner_id === account, String(afterSteal?.state));
+      await shot("steal-refused", 1440);
+      const tHeir = Date.now();
+      await click("#heir-go");
+      const until = Date.now() + 240000;
+      let state;
+      while (Date.now() < until) { state = (await noteNow())?.state; if (state === "Unsealed") break; await sleep(4000); }
+      check("heir: Open as the named heir signs the sweep, note is Unsealed", state === "Unsealed", String(state));
+      console.log(`heir: sweep signed in ${((Date.now() - tHeir) / 1000).toFixed(1)}s`);
+      await waitFor("[...document.querySelectorAll('.station')].some((s) => s.querySelector('h3')?.textContent === 'Broadcast' && s.dataset.state === 'current')", "broadcast station current", 60000);
+      await click("#stations .station[data-state=current] .btn-primary");
+      await waitFor("[...document.querySelectorAll('.station')].some((s) => s.querySelector('h3')?.textContent === 'Broadcast' && s.dataset.state === 'done')", "broadcast done", 120000);
+      const sweepTxid = await evalJs("(document.querySelector('.station[data-state=done] .station-tx a')?.href || '').split('/tx/')[1] || ''");
+      const btcTx = sweepTxid ? await (await fetch(`https://blockstream.info/testnet/api/tx/${sweepTxid}`)).json().catch(() => null) : null;
+      check("heir: the Bitcoin sweep pays only the bound heir address", !!btcTx && btcTx.vout.length === 1 && btcTx.vout[0].scriptpubkey_address === heir, `${sweepTxid} ${JSON.stringify(btcTx?.vout?.map((o) => o.scriptpubkey_address))}`);
+      console.log(`heir: Bitcoin sweep https://blockstream.info/testnet/tx/${sweepTxid}`);
+      await shot("heir-swept", 1440);
+    }
     if (DO_UNSEAL) {
       const funded = spawnSync("near", ["tokens", "cachet-ops.testnet", "send-near", account, "0.1 NEAR", "network-config", process.env.NETCFG || "testnet-archfn", "sign-with-legacy-keychain", "send"], { encoding: "utf8" });
       check("unseal: the claim account is funded with 0.1 NEAR for gas", funded.status === 0, (funded.stderr || funded.stdout).split("\n").filter((l) => /Error|rate/.test(l)).join(" "));

@@ -1,42 +1,7 @@
 [
   {
-    "fragment": "v=2&contract=cachet.testnet&token=13&key=b7582d978134204c81568966d9679b99cd3dbaa77125b194fcbc9e418d6e0ed6&sender=cachet-ops.testnet",
-    "token_id": "13",
-    "sats": 1700
-  },
-  {
-    "fragment": "v=2&contract=cachet.testnet&token=15&key=45c10553cfb9177bc385213328e5041a8a300f38718d58b3b3b84a7e91aaeca7&sender=cachet-ops.testnet",
-    "token_id": "15",
-    "sats": 1700
-  },
-  {
-    "fragment": "v=2&contract=cachet.testnet&token=19&key=a415a6341bb7ca50479e59fa9dd297a1ffa75cb04c12f78c4d6b18cca3cbd674&sender=cachet-ops.testnet",
-    "token_id": "19",
-    "sats": 1700
-  },
-  {
-    "fragment": "v=2&contract=cachet.testnet&token=20&key=2fad0c4c74dfc296a089623dadb8f2e243fc848365c73046af1e56adcc839e48&sender=cachet-ops.testnet",
-    "token_id": "20",
-    "sats": 1700
-  },
-  {
-    "fragment": "v=2&contract=cachet.testnet&token=18&key=5ac5937179c07ab3fa53a22ae9df7d8da42ced4306d29cb2afa936b00ca2f91a&sender=cachet-ops.testnet",
-    "token_id": "18",
-    "sats": 1700
-  },
-  {
-    "fragment": "v=2&contract=cachet.testnet&token=21&key=b1e576f9b58a27267b7ccb38ace4382c0e87c7d75924c04defb6a6bd8f23a3c0&sender=cachet-ops.testnet",
-    "token_id": "21",
-    "sats": 1700
-  },
-  {
-    "fragment": "v=2&contract=cachet.testnet&token=22&key=ca43c081d8eea3888cdec51981ebb1eb1d980852ef2ce7cc268e3bb2058c3951&sender=cachet-ops.testnet",
-    "token_id": "22",
-    "sats": 1700
-  },
-  {
-    "fragment": "v=2&contract=cachet.testnet&token=23&key=757caaa7d640516b5806ec7156a3dbaf1fcbb0a65b1c6b02c4954dba0c824ea5&sender=cachet-ops.testnet",
-    "token_id": "23",
-    "sats": 1700
+    "fragment": "v=2&contract=heir.cachet-ops.testnet&token=1&key=d06cf76da5c9bed4209a63f985ce66fd83c0256b622b8a613bff0cf36687ea40&sender=cachet-ops.testnet",
+    "token_id": "1",
+    "sats": 5200
   }
 ]
