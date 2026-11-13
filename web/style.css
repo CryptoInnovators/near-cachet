@@ -524,3 +524,12 @@ html.in-telegram body[data-heir-owned="1"] .stations { order: 0; }
 html.in-telegram body[data-heir-owned="1"] .gift-panel { order: 1; }
 html.in-telegram body[data-heir-owned="1"] .gift h1 { font-size: 24px; }
 html.in-telegram body[data-heir-owned="1"] .station[data-state="current"] { border-radius: 18px; }
+
+.steal-receipt .receipt { margin: 10px 0 6px; display: grid; gap: 6px; }
+.steal-receipt .receipt > div { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.steal-receipt .receipt dt { font-size: 12px; opacity: .75; min-width: 11em; }
+.steal-receipt .receipt dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.steal-receipt .receipt-tried s { text-decoration-thickness: 2px; text-decoration-color: #b3261e; }
+.steal-receipt .receipt-bound dd { color: #1f6b3a; }
+.steal-receipt .receipt-why { margin: 6px 0 0; }
+.steal-receipt .receipt-why a { text-decoration: underline; font-weight: 600; }

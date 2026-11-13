@@ -676,9 +676,13 @@ async function stations(s) {
       h("p", { class: "say" }, "You hold the link, so try to steal it. The sweep goes to a thief address and the contract decides."),
       h("button", { class: "btn btn-paper", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Sending the theft..." : outspend ? "Steal this link" : "Checking Bitcoin…"),
       !s2 || s2.pending ? null : s2.error ? h("p", { class: "consequence-box", id: "steal-result", dataset: { state: "error" } }, `The attempt did not reach the contract: ${s2.error}`)
-        : h("p", { class: "consequence-box", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
-          s2.refused ? [h("strong", { class: "refused-stamp" }, "Refused"), ` No Bitcoin moved. ${String(s2.reason || "").replace(/^./, (c) => c.toUpperCase())}. `] : "The contract accepted a sweep to the thief address. ",
-          s2.hash ? link(txUrl(s2.hash), "View the refusal on NEAR", "hexlink") : null));
+        : h("div", { class: "consequence-box steal-receipt", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
+          s2.refused ? h("strong", { class: "refused-stamp" }, "Refused") : null,
+          h("dl", { class: "receipt" },
+            h("div", { class: "receipt-tried" }, h("dt", null, "Tried to send it to"), h("dd", null, h("s", null, short(THIEF_ADDRESS, 10, 8)))),
+            h("div", { class: "receipt-bound" }, h("dt", null, "The note is bound to"), h("dd", null, `${short(heir, 10, 8)} \u2713`))),
+          h("p", { class: "receipt-why" }, s2.refused ? `No Bitcoin moved. ${String(s2.reason || "").replace(/^./, (c) => c.toUpperCase())}. ` : "The contract accepted a sweep to the thief address. ",
+            s2.hash ? link(txUrl(s2.hash), "View the refusal on NEAR", "hexlink") : null)));
     if (heir && funds) fundsSlot.append(funds);
     out.push(station("Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), heir ? null : funds, stealBox, form));
     if (net.name === "testnet" && !heir) cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
