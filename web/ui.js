@@ -78,6 +78,7 @@ function countUp(element, to, { delay = 0, duration = 600 } = {}) {
     if (t < 1) requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
+  setTimeout(() => write(to), delay + duration + 50); // rAF pauses in background tabs; the true figure still lands
 }
 
 // Marks .rise elements as .in when they scroll into view, staggered by --d (index in the batch unless the element sets its own).
