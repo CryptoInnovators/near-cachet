@@ -72,10 +72,10 @@ case ${1:-} in
     for _ in $(seq 1 24); do [[ $(note "$t" | jq -r '.claim.key') == "$pub" ]] && break; sleep 5; done
     [[ $(note "$t" | jq -r '.claim.key') == "$pub" ]] || { echo "claim key post-condition failed for $t" >&2; exit 1; }
     fragment=$(node -e 'process.stdout.write(require("./web/claim-lib.js").buildFragment({contract:process.argv[1],token:process.argv[2],key:process.argv[3],sender:process.argv[4]}))' "$CONTRACT" "$t" "$seed" "$OWNER")
-    ensure_key "$seed"
-
+    # the link is recorded first: its seed exists nowhere else, and `keys` finishes the access key if this call dies after create_claim
     [[ -f $LINKS ]] || echo '[]' > "$LINKS"
     jq --arg f "$fragment" --arg t "$t" --argjson s "$(jq -r '.utxo.sats' <<<"$n")" '. + [{fragment:$f,token_id:$t,sats:$s}]' "$LINKS" > "$LINKS.tmp" && mv "$LINKS.tmp" "$LINKS"
+    ensure_key "$seed"
     echo "linked $t"
     ;;
   keys) # a claim-only key for every link whose note still has an open claim

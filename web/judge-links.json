@@ -1,15 +1,5 @@
 [
   {
-    "fragment": "v=2&contract=cachet.testnet&token=10&key=6be86fb0b8c1a58f671c9a01b5cfcf875c3a219f6797b9932a5cf61a5cb8a684&sender=cachet-ops.testnet",
-    "token_id": "10",
-    "sats": 1700
-  },
-  {
-    "fragment": "v=2&contract=cachet.testnet&token=11&key=84a44a26e82578a22fc48c58f4d1adb72591a5af2c17bcd8cd9401e5f149983a&sender=cachet-ops.testnet",
-    "token_id": "11",
-    "sats": 5500
-  },
-  {
     "fragment": "v=2&contract=cachet.testnet&token=12&key=cee4b01044153818e7f4802ba20d9cd236354ffd07e68f0915c0a926a8828622&sender=cachet-ops.testnet",
     "token_id": "12",
     "sats": 1700
@@ -22,6 +12,11 @@
   {
     "fragment": "v=2&contract=cachet.testnet&token=14&key=f68e8a57b48e2a9eca520f5e9e72e40e9d1fd4983673ba73097a7580848d28ee&sender=cachet-ops.testnet",
     "token_id": "14",
+    "sats": 1700
+  },
+  {
+    "fragment": "v=2&contract=cachet.testnet&token=15&key=45c10553cfb9177bc385213328e5041a8a300f38718d58b3b3b84a7e91aaeca7&sender=cachet-ops.testnet",
+    "token_id": "15",
     "sats": 1700
   }
 ]

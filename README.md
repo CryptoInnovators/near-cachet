@@ -11,9 +11,10 @@ Live: https://near-cachet.earn-shield-alerts.workers.dev/ (Bitcoin testnet, no w
 1. Open the URL. The first screen is a Bitcoin red envelope: a sealed note with its sats read from the chain and a row of shares left.
 2. Press **Claim my share**. Within about ten seconds the panel reads "Your share is yours." with the NEAR claim transaction on nearblocks (for example https://testnet.nearblocks.io/txns/649SzLd5xjM72pyerXRb6G19mTKBUoEdXCxw3r9HESSg), the card holder reads "You", and shares left drops by one. The key file is saved to your downloads and your clipboard.
 3. Open **Show how it is checked**. The funding block, the confirmations above it, the signer key match and the contract's empty key list are re-read live from NEAR and Bitcoin.
-4. Press **Move it to a Bitcoin address** to break the seal: the signer signs the sweep, you broadcast it, and Bitcoin spends the output the note owned.
+4. Press **Pass it on**. The note changes hands in one NEAR transaction and the panel shows a link to send in any chat, with the Bitcoin output named as unmoved. Whoever opens the link sees the seal and the unspent output checked, presses **Take it**, and owns the note in about twenty seconds (hand-off https://testnet.nearblocks.io/txns/AhAQTkQL4bKnYSdvMyw4hR8A3zRnzXJ2cdZU9SGhahf2, take https://testnet.nearblocks.io/txns/2ySpUrZWD6UsndC9A4NJLCoY7UTbCoNeGXk4gm8uYPom). The spent link cannot move it again: the contract refuses the replay (https://testnet.nearblocks.io/txns/DvCJkQQmn2prnTDkYKR2Vg9syrbhHrmXvXoLpEZzu13N).
+5. Press **Move it to a Bitcoin address** to break the seal: the signer signs the sweep, you broadcast it, and Bitcoin spends the output the note owned.
 
-`node scripts/e2e-ui.mjs --base https://near-cachet.earn-shield-alerts.workers.dev --claim` runs steps 1 and 2 through a real browser, cold, and asserts the new owner on chain.
+`node scripts/e2e-ui.mjs --base https://near-cachet.earn-shield-alerts.workers.dev --pass` runs steps 1, 2 and 4 through a real browser, cold, asserts each new owner on chain, and replays the spent link.
 
 ## The problem
 
@@ -54,16 +55,14 @@ The address derivation is checked against the `bitcoin` crate and the contract b
 
 ## Telegram Hongbao
 
-Deploy the Worker to serve the Cachet web app and share previews, then configure a Telegram bot with a Mini App named `hongbao` pointing to the Worker URL. Set `TELEGRAM_APP_SHORTNAME` to that exact short name.
+The bot @cachet_envelope_bot runs as a webhook on the Worker (`POST /api/telegram`, refused without Telegram's secret-token header), so it answers in any chat without a server of its own. A giver registers sealed notes with `/link <note id> <claim URL>`; the Worker checks that the link's key is the note's live claim key. `/envelope <total-sats> <shares>` replies with one **Open the red envelope** button per share, each opening the Mini App on its note. The recipient taps it and claims with no wallet and no install. `/status <note id>` reads the note from the chain.
 
 ```sh
 npx wrangler deploy --config worker/wrangler.toml
-TELEGRAM_BOT_TOKEN=<BotFather token> TELEGRAM_APP_SHORTNAME=hongbao CACHET_WEB_URL=<Worker URL> node bot/index.mjs
+node scripts/telegram-webhook.mjs
 ```
 
-1. In the Cachet web app, connect a NEAR wallet, create a note, fund its Bitcoin address, wait for confirmation, and attest the funding output until the note is Sealed.
-2. Create a claim link for that note in the web app. In a private chat with the bot, register it with `/link <note id> <claim URL>`, then share the sealed note using `/envelope <total-sats> <shares>`.
-3. The recipient opens the inline button in Telegram's Mini App, connects a NEAR wallet, and taps **Claim this gift**. The Mini App submits the claim and confirms the recipient owns the note.
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_APP_SHORTNAME` and `TELEGRAM_WEBHOOK_SECRET` are Worker secrets; giver links live in the `CACHET_STATE` KV namespace.
 
 ## State machine
 

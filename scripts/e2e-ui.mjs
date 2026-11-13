@@ -170,6 +170,8 @@ async function runPass(target) {
       check("pass: the Bitcoin output is unchanged and the note is still Sealed", midNote.state === "Sealed" && midNote.utxo.txid === nftBefore.utxo.txid && midNote.utxo.vout === nftBefore.utxo.vout, JSON.stringify(midNote.utxo));
       console.log(`pass: hand-off tx ${passed.tx}\npass: link ${passed.link.replace(/key=[0-9a-f]+/, "key=<seed>")}`);
       await shot("passed", 1440);
+      await S("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+      await shot("passed", 390);
       // a second, clean browser state opens the link
       const t1 = Date.now();
       await evalJs("localStorage.clear()");
@@ -180,7 +182,8 @@ async function runPass(target) {
       await wait(`!document.querySelector("#take-go").disabled`, "take it enabled");
       const rec = await evalJs(`({ h1: document.querySelector("h1")?.textContent, rows: document.querySelector(".panel-rows").innerText.replace(/\\s+/g, " ") })`);
       check("pass: the link opener sees 'A Bitcoin note was passed to you.' with seal and unspent checks", rec.h1 === "A Bitcoin note was passed to you." && /Sealed/.test(rec.rows) && /unspent/.test(rec.rows), `${rec.h1} | ${rec.rows}`);
-      await shot("received", 1440);
+      await shot("received", 390);
+      check("pass: no horizontal overflow on the received page at 390", (await overflow()) <= 0, String(await overflow()));
       await click("#take-go");
       const stop = Date.now() + 120000;
       while (Date.now() < stop && (await evalJs("document.querySelector('.panel-title')?.textContent")) !== "The note is yours.") await sleep(400);
@@ -191,7 +194,7 @@ async function runPass(target) {
       const finNote = await view(CONTRACT, "note", { token_id: target });
       check("pass: after both hand-offs the Bitcoin output is unchanged and Sealed", finNote.state === "Sealed" && finNote.utxo.txid === nftBefore.utxo.txid && finNote.utxo.vout === nftBefore.utxo.vout);
       console.log(`pass: ${((Date.now() - t1) / 1000).toFixed(1)}s from opening the link to the confirmed owner. take tx ${done2.href}`);
-      await shot("took", 1440);
+      await shot("took", 390);
       // replay: the pass account no longer owns the note, so its signed transfer must be refused by the contract
       const replay = await evalJs(`(async () => { try { const r = await cachetLinkdrop.signAndSend({ signerId: ${JSON.stringify(passAccount)}, seedHex: ${JSON.stringify(passKey)}, contract: ${JSON.stringify(CONTRACT)}, args: { receiver_id: "cachet-ops.testnet", token_id: ${JSON.stringify(target)} }, net: cachetChain.network(), method: "nft_transfer", tgas: 30, restricted: false, deposit: 1n, waitForAccountMs: 20000 }); return { failure: cachetOutcome.failureText(r), hash: r?.transaction?.hash }; } catch (e) { return { thrown: String(e.message) }; } })()`);
       check("pass replay: the spent link's transfer is refused by the contract", !!(replay.failure || replay.thrown), JSON.stringify(replay));
