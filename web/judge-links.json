@@ -33,5 +33,10 @@
     "fragment": "v=2&contract=cachet.testnet&token=22&key=ca43c081d8eea3888cdec51981ebb1eb1d980852ef2ce7cc268e3bb2058c3951&sender=cachet-ops.testnet",
     "token_id": "22",
     "sats": 1700
+  },
+  {
+    "fragment": "v=2&contract=cachet.testnet&token=23&key=757caaa7d640516b5806ec7156a3dbaf1fcbb0a65b1c6b02c4954dba0c824ea5&sender=cachet-ops.testnet",
+    "token_id": "23",
+    "sats": 1700
   }
 ]
