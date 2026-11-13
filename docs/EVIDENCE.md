@@ -175,5 +175,4 @@ Driven by `scripts/gate-pre.sh` through a real Telegram account on the live Mini
 | Open as the named heir | Chain Signatures signs the sweep, note reads Unsealed 9.5 s after the press | latest tx on note 11 (page footer, `heir.cachet-ops.testnet`) |
 | Earlier claims | 8.8 s and 8.4 s | https://testnet.nearblocks.io/txns/ACAHUGfbgGUCt7uffhkFkZSUoAQDgWAE1yRU8JqC9wjX, https://testnet.nearblocks.io/txns/Hic3T6kJNiJ15GiacQvoHGpDT6VkCWZB5VEUgNKtQcm9 |
 | Pool refill funding | notes 11, 12, 13 funded 1,700 sats each | https://blockstream.info/testnet/tx/5c29413410b7b4481b83a3878a456ac84f150b9599f1aed891851730fa41521f |
-
 | Mini App full run, GREEN 27 of 27 | Claim 8.5 s page load to owner, theft refused 9.6 s, heir sweep signed 8.7 s, Bitcoin sweep pays only the bound heir | claim https://testnet.nearblocks.io/txns/HN832HM8vENgvKdoXHRbiRcQM24fmkN9rpWFncqsaaf1, refusal https://testnet.nearblocks.io/txns/D8tH5MCFjL5orud3ueq8ffjjqWaSN5UVAgXP9gGgDbAk, sweep https://blockstream.info/testnet/tx/800b01461791c7b1961da88d16344cafe2c7afb343472ad5dfb56396762cd402 |
