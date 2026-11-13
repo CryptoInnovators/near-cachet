@@ -761,7 +761,7 @@ function renderWallet(s, account) {
   const held = new Map();
   for (const r of shares?.reads || []) if (account && r.note?.owner_id === account && r.note.utxo) held.set(r.token, r.note.utxo.sats);
   if (account && s.note?.owner_id === account && s.note.utxo) held.set(s.note.token_id, s.note.utxo.sats);
-  if (s.outspend?.spent === true && s.note?.heir) held.delete(s.note.token_id);
+  if (isSwept(s) && s.note?.heir) held.delete(s.note.token_id);
   const total = [...held.values()].reduce((sum, n) => sum + n, 0);
   const u = t.user();
   el.hidden = false;

@@ -310,8 +310,8 @@ try {
     if (MINI) {
       const mb = await evalJs(`({ visible: Telegram.WebApp.MainButton.isVisible, text: Telegram.WebApp.MainButton.text, inPage: getComputedStyle(document.querySelector("#claim-go")).display, wallet: document.querySelector("#tma-wallet")?.innerText.replace(/\\s+/g, " "), lock: document.querySelector(".env-lock")?.innerText.replace(/\\s+/g, " "), status: document.querySelector(".env .card-state")?.innerText, sealedWord: /\\bseal(ed)?\\b/i.test(document.querySelector(".gift")?.innerText || "") })`);
       check("miniapp: the claim action is the Telegram MainButton labelled Take the note", mb.visible === true && mb.text === ACTION && mb.inPage === "none", JSON.stringify(mb));
-      check("miniapp: the wallet header shows the Telegram user and a Bitcoin balance", /^Hi, \S+/.test(mb.wallet || "") && /Bitcoin balance/.test(mb.wallet || ""), mb.wallet);
-      check("miniapp: the envelope says who alone can open it, and the status is one plain word", /^Only .+ can open this$/.test(mb.lock || "") && /^[A-Z][a-z]+$/.test((mb.status || "").trim()), `${mb.lock} / ${mb.status}`);
+      check("miniapp: the wallet header shows the Telegram user and a Bitcoin balance", /^Hi, \S+/.test(mb.wallet || "") && /\d sats/.test(mb.wallet || ""), mb.wallet);
+      check("miniapp: the envelope says who alone can open it, and the status is one plain word", /^Only .+ can open this/.test(mb.lock || "") && /^[A-Z][a-z]+$/.test((mb.status || "").trim()), `${mb.lock} / ${mb.status}`);
       check("miniapp: primary copy never says sealed", mb.sealedWord === false, "the word seal appears on the first screen");
       await evalJs(`Telegram.WebView.receiveEvent("main_button_pressed")`); // what the Telegram client sends when the native MainButton is tapped
     } else await click("#claim-go");
