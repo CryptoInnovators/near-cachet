@@ -163,3 +163,15 @@ Run: `bash scripts/gate-pre.sh`. The Telethon WORK session creates the `cachet-g
 | Pool refill funding | notes 2, 3, 4 funded 1,700 sats each | https://blockstream.info/testnet/tx/02b7ea2c69bd33c2658b194ebf7ff8c5a7af57a986f96fdd24f3dbd0e5524d43 |
 
 Fix that run found: a sponsored claim account held 0.05 NEAR and an unseal prepays 300 Tgas (0.30 NEAR); the sponsor now grants 0.4 NEAR.
+
+## Heir note in the Telegram Mini App: claim, refused theft, heir open (2026-11-13, live)
+
+Driven by `scripts/gate-pre.sh` through a real Telegram account on the live Mini App, contract `heir.cachet-ops.testnet`.
+
+| Step | Result | Evidence |
+|---|---|---|
+| Claim with the native MainButton | note 11 owned by the new claim account, 10.6 s from page load | https://testnet.nearblocks.io/txns/6vnN9jPLvr5pLqNZN4zWPqVFEZyGTeHWdW7xHz4S2ZiB |
+| Steal this link | NEAR refuses: the note sweeps only to its heir, 11.5 s | https://testnet.nearblocks.io/txns/BcbyfrbytfV3Lx2Q37hKucSqpipRsbKv47hVZS2W7Cyp |
+| Open as the named heir | Chain Signatures signs the sweep, note reads Unsealed 9.5 s after the press | latest tx on note 11 (page footer, `heir.cachet-ops.testnet`) |
+| Earlier claims | 8.8 s and 8.4 s | https://testnet.nearblocks.io/txns/ACAHUGfbgGUCt7uffhkFkZSUoAQDgWAE1yRU8JqC9wjX, https://testnet.nearblocks.io/txns/Hic3T6kJNiJ15GiacQvoHGpDT6VkCWZB5VEUgNKtQcm9 |
+| Pool refill funding | notes 11, 12, 13 funded 1,700 sats each | https://blockstream.info/testnet/tx/5c29413410b7b4481b83a3878a456ac84f150b9599f1aed891851730fa41521f |
