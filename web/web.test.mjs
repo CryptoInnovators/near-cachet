@@ -70,7 +70,7 @@ test("vendored NEAR Connect bytes match the pinned checksum", () => {
 });
 
 test("network defaults to testnet and mainnet has no recycle destination", async () => {
-  assert.equal(chain.network("").contract, "cachet.testnet");
+  assert.equal(chain.network("").contract, "heir.cachet-ops.testnet");
   const mainnet = chain.network("?network=mainnet");
   assert.equal(mainnet.contract, "cachet.near");
   assert.equal(await chain.defaultDestination(mainnet), null);

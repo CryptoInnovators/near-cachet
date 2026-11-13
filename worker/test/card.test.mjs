@@ -12,7 +12,7 @@ test("card and metadata render a live sealed testnet judge note", async () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       signal: AbortSignal.timeout(15000),
-      body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-test", method: "query", params: { request_type: "call_function", finality: "final", account_id: "cachet.testnet", method_name: "note", args_base64: args } }),
+      body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-test", method: "query", params: { request_type: "call_function", finality: "final", account_id: "heir.cachet-ops.testnet", method_name: "note", args_base64: args } }),
     });
     assert.equal(response.status, 200, `NEAR RPC returned HTTP 200 for live note ${id}`);
     const payload = await response.json();
