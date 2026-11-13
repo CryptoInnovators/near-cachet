@@ -25,7 +25,7 @@ const RPCS = ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org
 const TX_API = "https://tx.test.fastnear.com";
 
 const HEADLINE = "A Bitcoin note that pays one person only.";
-const ACTION = "Claim my share";
+const ACTION = "Take the note";
 const MIN_OPEN = Number(args["min-open"] ?? 3); // the pool must never run dry during judging
 const DO_UNSEAL = args.unseal === true; // claim, fund the claim account for gas, break the seal through the page (implies --claim)
 const DO_PASS = args.pass === true; // after the claim: Pass it on, take it from the link in a clean browser, then replay the spent link (must fail)
@@ -220,7 +220,7 @@ try {
   const tx = await latestTx(CONTRACT);
   check("chain: first open share is Sealed and funded", first?.note?.utxo?.sats > 0, first?.token);
   const fmt = new Intl.NumberFormat("en-US");
-  const left = `${open.length} of ${reads.length} shares left`;
+  const left = `${open.length} of ${reads.length} envelopes left`;
 
   for (const [width, label] of args.keep === true || typeof args.miniapp === "string" ? [] : [[1440, "desktop"], [390, "mobile"]]) {
     await motion(false);
@@ -236,7 +236,7 @@ try {
     if (width < 600) check("mobile: the claim button is a full width touch target", g.width >= 330, String(g.width));
     check(`${label}: no 64-hex string on the first screen`, !/[0-9a-f]{64}/i.test(g.giftText), (g.giftText.match(/[0-9a-f]{64}/i) || [""])[0].slice(0, 20));
     check(`${label}: nothing crosses the card's right edge`, g.out.length === 0, g.out.join(","));
-    check(`${label}: shares left equals the chain`, g.sub.includes(left), `${g.sub} vs ${left}`);
+    check(`${label}: envelopes left equals the chain`, g.sub.includes(left), `${g.sub} vs ${left}`);
     const token = g.title.match(/#(\d+)/)?.[1];
     const shown = await view(CONTRACT, "note", { token_id: token });
     check(`${label}: card state and amount equal the chain for note ${token}`, g.state === shown.state && (await waitFor(`document.querySelector(".gift-card .figure-n")?.textContent === ${JSON.stringify(fmt.format(shown.utxo.sats))}`, "amount")), `${g.state} ${g.sats}`);
@@ -309,7 +309,7 @@ try {
     console.log("pre-click", JSON.stringify(await evalJs("({ y: scrollY, w: innerWidth, h: innerHeight, r: JSON.stringify(document.querySelector('#claim-go').getBoundingClientRect()), hash: location.hash.slice(0, 40) })")));
     if (MINI) {
       const mb = await evalJs(`({ visible: Telegram.WebApp.MainButton.isVisible, text: Telegram.WebApp.MainButton.text, inPage: getComputedStyle(document.querySelector("#claim-go")).display, wallet: document.querySelector("#tma-wallet")?.innerText.replace(/\\s+/g, " "), lock: document.querySelector(".env-lock")?.innerText.replace(/\\s+/g, " "), status: document.querySelector(".env .card-state")?.innerText, sealedWord: /\\bseal(ed)?\\b/i.test(document.querySelector(".gift")?.innerText || "") })`);
-      check("miniapp: the claim action is the Telegram MainButton labelled Claim my share", mb.visible === true && mb.text === ACTION && mb.inPage === "none", JSON.stringify(mb));
+      check("miniapp: the claim action is the Telegram MainButton labelled Take the note", mb.visible === true && mb.text === ACTION && mb.inPage === "none", JSON.stringify(mb));
       check("miniapp: the wallet header shows the Telegram user and a Bitcoin balance", /^Hi, \S+/.test(mb.wallet || "") && /Bitcoin balance/.test(mb.wallet || ""), mb.wallet);
       check("miniapp: the envelope says who alone can open it, and the status is one plain word", /^Only .+ can open this$/.test(mb.lock || "") && /^[A-Z][a-z]+$/.test((mb.status || "").trim()), `${mb.lock} / ${mb.status}`);
       check("miniapp: primary copy never says sealed", mb.sealedWord === false, "the word seal appears on the first screen");
@@ -319,15 +319,15 @@ try {
     console.log("post-click", JSON.stringify(await evalJs("({ btn: document.querySelector('#claim-go')?.textContent, say: document.querySelector('.panel-say')?.textContent, st: document.querySelector('#claim-status').textContent })")));
     const labels = new Set();
     const end = Date.now() + 120000;
-    while (Date.now() < end && !(await evalJs("document.querySelector('.panel-title')?.textContent === 'Your share is yours.'"))) {
+    while (Date.now() < end && !(await evalJs("document.querySelector('.panel-title')?.textContent === 'You hold the note.'"))) {
       labels.add(await evalJs("document.querySelector('#claim-go')?.textContent || document.querySelector('.panel-say')?.textContent || ''"));
       if (await evalJs("document.querySelector('.panel-title')?.textContent === 'The claim did not go through.'")) break;
       await sleep(300);
     }
     const seconds = ((Date.now() - t0) / 1000).toFixed(1);
     const title = await text(".panel-title");
-    if (title !== "Your share is yours.") console.log("claim page state", JSON.stringify(await evalJs("document.querySelector('.panel')?.innerText || document.body.innerText.slice(0, 600)")), "errors", JSON.stringify([...new Set(errors)].slice(0, 6)));
-    check("claim: the panel ends on 'Your share is yours.'", title === "Your share is yours.", `${title} ${await text(".panel-say")}`);
+    if (title !== "You hold the note.") console.log("claim page state", JSON.stringify(await evalJs("document.querySelector('.panel')?.innerText || document.body.innerText.slice(0, 600)")), "errors", JSON.stringify([...new Set(errors)].slice(0, 6)));
+    check("claim: the panel ends on 'You hold the note.'", title === "You hold the note.", `${title} ${await text(".panel-say")}`);
     check("claim: the URL is unchanged by the press", (await evalJs("location.href")) === before, `${before} -> ${await evalJs("location.href")}`);
     const account = await evalJs("JSON.parse(localStorage.getItem('cachet:claim-account:testnet')).accountId");
     const nft = await view(CONTRACT, "nft_token", { token_id: target });
@@ -336,7 +336,7 @@ try {
     const done = await evalJs(`({ rows: document.querySelector(".panel-rows")?.innerText.replace(/\\s+/g, " "), href: document.querySelector(".panel-rows a")?.href, holder: document.querySelector(".gift-card .holder")?.textContent, shares: document.querySelector(".shares-left")?.textContent, next: (document.querySelector("#heir-go") || document.querySelector("#move-go"))?.textContent })`);
     check("claim: the panel shows owner, claim transaction and key file", /Owner you, claim account/.test(done.rows || "") && (MINI ? /Saved as your Telegram cloud backup/ : /Saved as cachet-[0-9a-f]{8}\.key/).test(done.rows || "") && !!done.href, done.rows);
     check("claim: the card holder reads You", done.holder === "You", done.holder);
-    check("claim: shares left dropped by one", done.shares === `${open.length - 1} of ${reads.length} shares left`, done.shares);
+    check("claim: envelopes left dropped by one", done.shares === `${open.length - 1} of ${reads.length} envelopes left`, done.shares);
     check("claim: the next action is offered", /^(Open as the named heir|Checking Bitcoin…)$/.test(done.next || "") || done.next === "Move it to a Bitcoin address", done.next);
     console.log(`claim: ${seconds}s from page load to the confirmed owner. progress labels seen: ${[...labels].join(" | ")}. claim tx ${done.href}`);
     await shot("claimed", 1440);
