@@ -333,7 +333,7 @@ async function broadcast(note, signed, base) {
     }
     if (tx && (tx.vin?.[0]?.txid !== note.utxo.txid || tx.vin?.[0]?.vout !== note.utxo.vout)) return status("The broadcast transaction does not spend this note's funding output.", true);
     session.tx.broadcast = txid;
-    status("The sweep is in the Bitcoin mempool and spends the locked output.");
+    status(note.heir ? "" : "The sweep is in the Bitcoin mempool and spends the locked output.");
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
 }
@@ -379,7 +379,7 @@ function amountBlock(note) {
 
 // One square per share: wax is open, outlined is claimed, ink is the visitor's own.
 function shareRow(mineToken) {
-  if (!shares?.total) return null;
+  if (!shares?.total || shares.reads.some((r) => r.note?.heir)) return null;
   const marks = shares.reads.map((r) => {
     const open = r.note?.state === "Sealed" && r.note.claim;
     const mine = mineToken && r.token === mineToken;
@@ -416,7 +416,29 @@ function idlePanel(note) {
     actionBar(go, frag.sender && !preview ? h("button", { class: "textlink panel-alt", type: "button", onclick: () => claim(true) }, "Use my NEAR wallet instead") : null),
     frag.sender && !preview ? h("p", { class: "panel-note" }, (inTelegram ? "Your key is backed up in your Telegram cloud when you claim." : "Your key is saved as a file when you claim. Keep it to keep the share.")) : null);
   if (!frag.sender) go.textContent = "Claim with my NEAR wallet";
+  if (preview) showRefusalRecord(note);
   if (inTelegram && go.id === "claim-go") nativeMain({ text: CLAIM_ACTION, onClick: () => claim(false) });
+}
+
+// The web preview shows a refusal the contract really gave: the failure reason is read from the NEAR transaction now.
+let refusalShown = false;
+async function showRefusalRecord(note) {
+  const slot = $("refusal-record");
+  if (!slot || refusalShown) return;
+  refusalShown = true;
+  try {
+    const rec = await (await fetch("refusal-record.json")).json();
+    const tx = await cachetChain.rpc("EXPERIMENTAL_tx_status", [rec.tx, rec.signer], net);
+    const reason = cachetOutcome.failureText(tx);
+    if (!reason) return;
+    slot.replaceChildren(h("div", { class: "consequence-box steal-receipt", dataset: { state: "refused" } },
+      h("strong", { class: "refused-stamp" }, "Refused"),
+      h("p", { class: "say" }, "A thief tried this link. The contract answered on NEAR."),
+      h("dl", { class: "receipt" },
+        h("div", { class: "receipt-tried" }, h("dt", null, "Tried to send it to"), h("dd", null, h("s", null, short(rec.thief, 10, 8)))),
+        h("div", { class: "receipt-bound" }, h("dt", null, "The note is bound to"), h("dd", null, `${short(rec.heir, 10, 8)} \u2713`))),
+      h("p", { class: "receipt-why" }, `No Bitcoin moved. ${String(reason).replace(/^Smart contract panicked: /, "").replace(/^./, (c) => c.toUpperCase())}. `, link(txUrl(rec.tx), "View the refusal on NEAR", "hexlink"))));
+  } catch { refusalShown = false; }
 }
 
 function errorPanel(note, message, retry = () => claim(false), still = "The note is still waiting for you.") {
@@ -823,7 +845,7 @@ async function draw() {
     heading("Your Bitcoin share.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
     if (slow && !session.claimed) slowPanel(); else await ownedPanel(s, account);
   } else if (open && s.note?.heir) {
-    heading(`A Bitcoin note for ${who()}.`, `Bound when it was created to ${short(s.note.heir, 12, 8)}. A thief who gets the link can only sweep it there.`);
+    heading(`Bitcoin that only reaches ${who()}.`, `Bound when it was created to ${short(s.note.heir, 12, 8)}. A thief who gets the link can only sweep it there.`);
     if (slow) slowPanel();
     else if (lastError) errorPanel(s.note, lastError);
     else idlePanel(s.note);
