@@ -773,7 +773,7 @@ async function draw() {
     if (lastError) errorPanel(s.note, lastError, takeIt, "The note stays where it is.");
     else await receiverPanel(s);
   } else if (mine && s.note?.heir) {
-    heading("Whoever holds this link, the Bitcoin goes to one address.", `Bound when the note was created: ${short(s.note.heir, 12, 8)}. Test note on Bitcoin testnet, sent by ${sender}.`);
+    heading("Whoever holds this link, the Bitcoin goes to one address.", `This NFT owns the Bitcoin and control moves with it, but the sweep can only pay ${short(s.note.heir, 12, 8)}, fixed when the note was created. Sent by ${sender} on Bitcoin testnet.`);
     if (slow && !session.claimed) slowPanel(); else await ownedPanel(s, account);
   } else if (mine) {
     heading("Your Bitcoin share.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
