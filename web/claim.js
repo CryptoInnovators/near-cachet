@@ -477,8 +477,8 @@ async function ownedPanel(s, account) {
   const hash = await claimTxOf(account);
   const key = walletless ? await cachetLinkdrop.secretKeyString(saved.seedHex) : null;
   const next = [];
-  if (s.note?.state === "Sealed" && !s.note.claim) next.push(h("button", { class: "btn btn-primary", id: "pass-go", type: "button", onclick: () => passOn(s.note) }, "Pass it on"));
-  if (s.note?.state === "Sealed") {
+  if (s.note?.state === "Sealed" && !s.note.claim && !s.note.heir) next.push(h("button", { class: "btn btn-primary", id: "pass-go", type: "button", onclick: () => passOn(s.note) }, "Pass it on"));
+  if (s.note?.state === "Sealed" && !s.note.heir) {
     next.push(h("button", { class: "btn btn-paper", id: "move-go", type: "button", disabled: stationsOpen, onclick: () => { stationsOpen = true; $("stations").hidden = false; $("move-go").disabled = true; $("stations").scrollIntoView({ block: "nearest", behavior: cachetUi.reducedMotion() ? "auto" : "smooth" }); } }, "Move it to a Bitcoin address"));
   }
   setBody(
@@ -649,10 +649,12 @@ async function stations(s) {
     const feeIn = h("input", { id: "claim-fee", autocomplete: "off", inputmode: "numeric" });
     const consequence = h("p", { class: "consequence-box", id: "claim-consequence", "aria-live": "polite" });
     const go = h("button", { class: "btn btn-primary", type: "submit", id: "heir-go", disabled: outspend?.spent !== false }, !outspend ? "Checking Bitcoin…" : heir ? "Open as the named heir" : "Unlock the Bitcoin");
+    const destField = h("div", { class: "field" }, h("label", { for: "claim-destination" }, heir ? "Bound heir address, fixed when this note was created" : "Bitcoin destination"), dest);
+    const feeField = h("div", { class: "field" }, h("label", { for: "claim-fee" }, "Fee rate, sat/vB"), feeIn);
+    const fundsSlot = h("div", { class: "funds-slot" });
     const form = h("form", { class: "tool-form", novalidate: true },
-      h("div", { class: "field" }, h("label", { for: "claim-destination" }, heir ? "Bound heir address, fixed when this note was created" : "Bitcoin destination"), dest),
-      h("div", { class: "field" }, h("label", { for: "claim-fee" }, "Fee rate, sat/vB"), feeIn),
-      consequence, go);
+      ...(heir ? [h("details", { class: "more" }, h("summary", null, "Sweep details: address, fee, network fee"), destField, feeField, consequence, fundsSlot)] : [destField, feeField, consequence]),
+      go);
     const explain = () => {
       const len = destinationScriptLen(dest.value.trim());
       const rate = Number(feeIn.value.trim());
@@ -675,9 +677,10 @@ async function stations(s) {
       h("button", { class: "btn btn-paper", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Sending the theft..." : outspend ? "Steal this link" : "Checking Bitcoin…"),
       !s2 || s2.pending ? null : s2.error ? h("p", { class: "consequence-box", id: "steal-result", dataset: { state: "error" } }, `The attempt did not reach the contract: ${s2.error}`)
         : h("p", { class: "consequence-box", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
-          s2.refused ? [h("strong", { class: "refused-stamp" }, "Refused"), ` No Bitcoin moved. ${s2.reason}. `] : "The contract accepted a sweep to the thief address. ",
-          s2.hash ? link(txUrl(s2.hash), short(s2.hash, 6, 6), "hexlink") : null));
-    out.push(station("Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), funds, stealBox, form));
+          s2.refused ? [h("strong", { class: "refused-stamp" }, "Refused"), ` No Bitcoin moved. ${String(s2.reason || "").replace(/^./, (c) => c.toUpperCase())}. `] : "The contract accepted a sweep to the thief address. ",
+          s2.hash ? link(txUrl(s2.hash), "View the refusal on NEAR", "hexlink") : null));
+    if (heir && funds) fundsSlot.append(funds);
+    out.push(station("Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), heir ? null : funds, stealBox, form));
     if (net.name === "testnet" && !heir) cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
     feeIn.value = "5"; // a sane testnet rate is in the field at once, so a press before the explorer answers still signs
     feeDefault(base).then((r) => { if (feeIn.value === "5") { feeIn.value = String(r); explain(); } }).catch(() => {});
