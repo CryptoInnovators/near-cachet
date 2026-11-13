@@ -26,7 +26,7 @@ const TX_API = "https://tx.test.fastnear.com";
 
 const HEADLINE = "A Bitcoin note that pays one person only.";
 const ACTION = "Claim my share";
-const MIN_OPEN = 3; // the pool must never run dry during judging
+const MIN_OPEN = Number(args["min-open"] ?? 3); // the pool must never run dry during judging
 const DO_UNSEAL = args.unseal === true; // claim, fund the claim account for gas, break the seal through the page (implies --claim)
 const DO_PASS = args.pass === true; // after the claim: Pass it on, take it from the link in a clean browser, then replay the spent link (must fail)
 const DO_HEIR = args.heir === true; // claim, press Steal this link (the contract must refuse), press Open as the named heir, broadcast, read the sweep on Bitcoin testnet
