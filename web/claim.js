@@ -494,10 +494,16 @@ const outputText = (u) => `${short(u.txid, 8, 6)}:${u.vout}`;
 
 // The sponsor pays the network fee of an account that holds a note and no NEAR (worker route /api/sponsor).
 async function sponsor(account) {
-  const response = await fetch("/api/sponsor", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ account, init_data: tg?.initData || "" }) });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || `The fee sponsor answered HTTP ${response.status}.`);
-  return body;
+  let failure;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+    const response = await fetch("/api/sponsor", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ account, init_data: tg?.initData || "" }) });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) return body;
+    failure = new Error(body.error || `The fee sponsor answered HTTP ${response.status}.`);
+    if (![429, 502, 503, 504].includes(response.status)) throw failure;
+  }
+  throw failure;
 }
 
 async function passOn(note) {

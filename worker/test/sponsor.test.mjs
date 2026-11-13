@@ -63,3 +63,13 @@ test("refused without a note, with funds already, with a bad id, or without a co
   assert.equal((await handleSponsor(post({ account: ACCOUNT }), {}, none.fetchImpl)).status, 503);
   assert.equal((await handleSponsor(new Request("https://x/api/sponsor"), { SPONSOR_SEED: SEED }, none.fetchImpl)).status, 405);
 });
+
+test("a round where every provider is rate limited is retried and the fee still goes out", async () => {
+  const inner = fakeRpc({ owned: 1, balance: 0 });
+  let limited = 3;
+  const fetchImpl = async (url, init) => (limited-- > 0 ? new Response("{}", { status: 429 }) : inner.fetchImpl(url, init));
+  const res = await handleSponsor(post({ account: ACCOUNT }), { SPONSOR_SEED: SEED }, fetchImpl);
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).funded, true);
+  assert.equal(inner.sent.length, 1);
+});

@@ -38,16 +38,22 @@ export function transferBytes({ signerId, publicKey, nonce, receiverId, blockHas
   return concat(str(signerId), Uint8Array.of(0), pk, u64(nonce), str(receiverId), hash, u32(1), Uint8Array.of(3), u128(deposit));
 }
 
-async function rpc(fetchImpl, method, params) {
+const ROUNDS = 3;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Tries every provider, and when all of them are rate limited at once waits and goes around again: the Cloudflare egress IP is shared, so a burst can empty every provider's allowance for a second or two.
+async function rpc(fetchImpl, method, params, pause = sleep) {
   let failure;
-  for (const url of RPCS) {
-    try {
-      const response = await fetchImpl(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-sponsor", method, params }), signal: AbortSignal.timeout(12000) });
-      const payload = await response.json().catch(() => null);
-      if (!payload || payload.error?.code === -429 || [408, 429, 502, 503, 504].includes(response.status) || /timeout|rate limit/i.test(payload.error?.message || "")) { failure = new Error(`${new URL(url).host} is unavailable (HTTP ${response.status}).`); continue; }
-      if (payload.error) { const e = new Error(payload.error.data?.toString?.() || payload.error.message || "RPC error"); e.rpc = payload.error; throw e; }
-      return payload.result;
-    } catch (error) { if (error.rpc) throw error; failure = error; }
+  for (let round = 0; round < ROUNDS; round += 1) {
+    if (round > 0) await pause(700 * round);
+    for (const url of RPCS) {
+      try {
+        const response = await fetchImpl(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-sponsor", method, params }), signal: AbortSignal.timeout(12000) });
+        const payload = await response.json().catch(() => null);
+        if (!payload || payload.error?.code === -429 || [408, 429, 502, 503, 504].includes(response.status) || /timeout|rate limit/i.test(payload.error?.message || "")) { failure = new Error(`${new URL(url).host} is unavailable (HTTP ${response.status}).`); continue; }
+        if (payload.error) { const e = new Error(payload.error.data?.toString?.() || payload.error.message || "RPC error"); e.rpc = payload.error; throw e; }
+        return payload.result;
+      } catch (error) { if (error.rpc) throw error; failure = error; }
+    }
   }
   throw failure || new Error("No NEAR RPC answered.");
 }
