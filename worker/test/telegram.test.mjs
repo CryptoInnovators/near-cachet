@@ -21,7 +21,7 @@ function chain(notes, sent) {
   };
 }
 const note = async (id, sats) => ({ token_id: id, owner_id: "cachet-ops.testnet", state: "Sealed", utxo: { txid: "ff", vout: 0, sats }, claim: { key: await claim.publicKeyHexFromSeed(SEED), expires_at_block: 5000 } });
-const link = (id) => `v=2&contract=cachet.testnet&token=${id}&key=${SEED}&sender=cachet-ops.testnet`;
+const link = (id) => `v=2&contract=heir.cachet-ops.testnet&token=${id}&key=${SEED}&sender=cachet-ops.testnet`;
 
 test("a request without the webhook secret is refused", async () => {
   const sent = []; chain({}, sent);

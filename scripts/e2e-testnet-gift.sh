@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONTRACT=${CONTRACT:-cachet.testnet}
+CONTRACT=${CONTRACT:-heir.cachet-ops.testnet}
 TOKEN=${TOKEN:-1}
 OWNER=${OWNER:-cachet-ops.testnet}
 HOLDER=${HOLDER:-cachet-holder-1104.testnet}

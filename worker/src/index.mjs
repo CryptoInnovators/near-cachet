@@ -3,7 +3,7 @@ import { handleSponsor } from "./sponsor.mjs";
 import { handleTelegram } from "./telegram.mjs";
 
 const RPCS = ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"];
-const CONTRACT = "cachet.testnet";
+const CONTRACT = "heir.cachet-ops.testnet";
 const isId = (id) => /^\d+$/.test(id);
 
 async function getNote(id) {

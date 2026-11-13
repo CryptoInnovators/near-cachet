@@ -1,6 +1,6 @@
 import { URL } from 'node:url';
 
-export const DEFAULT_CONTRACT = 'cachet.testnet';
+export const DEFAULT_CONTRACT = 'heir.cachet-ops.testnet';
 export const DEFAULT_WEB_URL = 'https://near-cachet.earn-shield-alerts.workers.dev';
 export const RPC_URL = 'https://archival-rpc.testnet.fastnear.com';
 

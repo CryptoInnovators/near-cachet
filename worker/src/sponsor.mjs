@@ -5,7 +5,7 @@ const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const PKCS8_PREFIX = "302e020100300506032b657004220420";
 const RPCS = ["https://archival-rpc.testnet.fastnear.com", "https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"];
 export const SPONSOR_ID = "cachet-sponsor.testnet";
-export const CONTRACT = "cachet.testnet";
+export const CONTRACT = "heir.cachet-ops.testnet";
 export const GRANT = 50_000_000_000_000_000_000_000n; // 0.05 NEAR
 export const LOW_WATER = 20_000_000_000_000_000_000_000n; // under 0.02 NEAR counts as empty
 

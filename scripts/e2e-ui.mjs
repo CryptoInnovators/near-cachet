@@ -20,7 +20,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) =>
 }, []));
 const WEB = path.resolve(args.web || path.join(root, "web"));
 const SHOTS = args.shots ? path.resolve(args.shots) : null;
-const CONTRACT = args.contract || "cachet.testnet";
+const CONTRACT = args.contract || "heir.cachet-ops.testnet";
 const RPCS = ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org"];
 const TX_API = "https://tx.test.fastnear.com";
 

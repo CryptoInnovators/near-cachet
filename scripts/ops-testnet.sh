@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-CONTRACT=${CONTRACT:-cachet.testnet}
+CONTRACT=${CONTRACT:-heir.cachet-ops.testnet}
 OWNER=${OWNER:-cachet-ops.testnet}
 NEARRPC=${NEARRPC:-https://test.rpc.fastnear.com}
 NETCFG=${NETCFG:-testnet}

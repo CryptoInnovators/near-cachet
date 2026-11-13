@@ -12,7 +12,9 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const FEE_FLOOR = 50000000000000000000000n; // 0.05 NEAR, enough for an unseal call from a claim account
 const FEE_LOW = 10000000000000000000000n; // 0.01 NEAR, enough for a hand-off call
 
-const session = { tx: {}, keySaved: null, keyFile: null, claimed: false };
+const session = { tx: {}, keySaved: null, keyFile: null, claimed: false, steal: null };
+// The thief's address in the "Steal this link" attempt: any valid witness address that is not the bound heir.
+const THIEF_ADDRESS = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
 let frag = null;
 let pool = []; // [{ fragment, frag }] for this contract, from judge-links.json
 let shares = null; // { total, left, reads: [{ token, note }] } read from chain
@@ -251,6 +253,7 @@ async function unseal(note, config, dest, fee) {
   if (guard) return status(guard, true);
   busy = true;
   try {
+    await ensureFee();
     status("Waiting for the signer to release the Bitcoin sweep.");
     const result = await callAs("unseal", { token_id: frag.token, btc_dest: address, fee_rate: rate }, 300);
     const failed = cachetOutcome.failureText(result);
@@ -260,6 +263,30 @@ async function unseal(note, config, dest, fee) {
     if (current?.state !== "Unsealed") return status(`The signer has not answered. Recover opens at NEAR block ${Number(current?.pending_since || note.pending_since) + 400}.`, true);
     status("The seal is broken. The signed sweep is ready to broadcast.");
   } catch (error) { status(error.message, true); }
+  finally { busy = false; await render(); }
+}
+
+// A claim account with no NEAR asks the fee sponsor once; the sponsor only pays accounts that hold a note.
+async function ensureFee() {
+  const account = you();
+  if (!account || cachetWallet.accountId) return;
+  if (await accountFunds(account) < FEE_LOW) { status("Asking the sponsor for the network fee."); await sponsor(account); }
+}
+
+// The visitor holds the link, so they are the thief: they send the sweep to an address that is not the heir
+// and the contract decides. A refusal is the product working; an acceptance is shown as such.
+async function steal(note, feeIn) {
+  if (busy) return;
+  busy = true;
+  session.steal = { pending: true };
+  await render();
+  try {
+    await ensureFee();
+    const rate = Number(feeIn.value.trim()) || 5;
+    const result = await callAs("unseal", { token_id: frag.token, btc_dest: THIEF_ADDRESS, fee_rate: rate }, 300);
+    const failed = cachetOutcome.failureText(result);
+    session.steal = { hash: txHash(result), refused: Boolean(failed), reason: failed ? String(failed).replace(/^Smart contract panicked: /, "") : null };
+  } catch (error) { session.steal = { error: error.message }; }
   finally { busy = false; await render(); }
 }
 
@@ -348,6 +375,7 @@ function actionBar(...nodes) { return h("div", { class: "panel-act" }, ...nodes)
 function idlePanel(note) {
   const go = h("button", { class: "btn btn-primary", id: "claim-go", type: "button", onclick: () => claim(false) }, "Claim my share");
   setBody(amountBlock(note), shareRow(null),
+    note?.heir ? h("dl", { class: "panel-rows" }, h("div", null, h("dt", null, "Pays only"), h("dd", null, short(note.heir, 12, 8)))) : null,
     h("p", { class: "panel-say" }, frag.sender ? "Your share goes into a new claim account in this browser. No NEAR wallet needed." : "Connect a NEAR account and sign. The contract moves your share to it, and the link stops working."),
     actionBar(go, frag.sender ? h("button", { class: "textlink panel-alt", type: "button", onclick: () => claim(true) }, "Use my NEAR wallet instead") : null),
     frag.sender ? h("p", { class: "panel-note" }, "Your key is saved as a file when you claim. Keep it to keep the share.") : null);
@@ -578,12 +606,13 @@ async function stations(s) {
 
   const sealed = note && !note.claim && note.state === "Sealed";
   if (sealed && mine) {
-    const dest = h("input", { id: "claim-destination", autocomplete: "off", autocapitalize: "none", spellcheck: "false", placeholder: `${config.hrp}1...` });
+    const heir = note.heir || null;
+    const dest = h("input", { id: "claim-destination", autocomplete: "off", autocapitalize: "none", spellcheck: "false", placeholder: `${config.hrp}1...`, ...(heir ? { value: heir, readonly: true } : {}) });
     const feeIn = h("input", { id: "claim-fee", autocomplete: "off", inputmode: "numeric" });
     const consequence = h("p", { class: "consequence-box", id: "claim-consequence", "aria-live": "polite" });
-    const go = h("button", { class: "btn btn-primary", type: "submit", disabled: outspend?.spent !== false }, "Break the seal");
+    const go = h("button", { class: "btn btn-primary", type: "submit", id: "heir-go", disabled: outspend?.spent !== false }, heir ? "Open as the named heir" : "Break the seal");
     const form = h("form", { class: "tool-form", novalidate: true },
-      h("div", { class: "field" }, h("label", { for: "claim-destination" }, "Bitcoin destination"), dest),
+      h("div", { class: "field" }, h("label", { for: "claim-destination" }, heir ? "Bound heir address, fixed when this note was created" : "Bitcoin destination"), dest),
       h("div", { class: "field" }, h("label", { for: "claim-fee" }, "Fee rate, sat/vB"), feeIn),
       consequence, go);
     const explain = () => {
@@ -602,8 +631,16 @@ async function stations(s) {
       funds.textContent = n >= FEE_FLOOR ? "This claim account pays the network fee for the unseal call." : "";
       if (n < FEE_FLOOR) funds.replaceChildren(`This claim account pays its own network fee. Send about 0.05 NEAR to ${account} `, copyButton(account, "Copy account"), ", then break the seal. A NEAR wallet that imports your saved key can do the same.");
     }).catch(() => { funds.textContent = ""; });
-    out.push(station("Unseal", "current", h("p", { class: "say" }, "Choose the Bitcoin address that receives the share and the fee."), funds, form));
-    if (net.name === "testnet") cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
+    const s2 = session.steal;
+    const stealBox = !heir ? null : h("div", { class: "steal", id: "steal-box", "aria-live": "polite" },
+      h("p", { class: "say" }, "You hold the link, so you can try to steal it. Press the button and send the sweep to a thief address."),
+      h("button", { class: "btn btn-paper", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Sending the theft..." : "Steal this link"),
+      !s2 || s2.pending ? null : s2.error ? h("p", { class: "consequence-box", id: "steal-result", dataset: { state: "error" } }, `The attempt did not reach the contract: ${s2.error}`)
+        : h("p", { class: "consequence-box", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
+          s2.refused ? `Refused by the contract: ${s2.reason}. ` : "The contract accepted a sweep to the thief address. ",
+          s2.hash ? link(txUrl(s2.hash), short(s2.hash, 6, 6), "hexlink") : null));
+    out.push(station("Unseal", "current", h("p", { class: "say" }, heir ? `This note pays only ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), funds, stealBox, form));
+    if (net.name === "testnet" && !heir) cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
     feeDefault(base).then((r) => { feeIn.value = String(r); explain(); }).catch(() => { feeIn.value = "5"; explain(); });
     explain();
   } else if (note && ["Unsealing", "Resigning"].includes(note.state)) out.push(station("Unseal", "current", h("p", { class: "say" }, "The signer is producing the sweep signature.")));
@@ -660,9 +697,17 @@ async function draw() {
     heading("A Bitcoin note was passed to you.", `From ${short(frag.sender, 8, 6)}. Check the seal, then take it.`);
     if (lastError) errorPanel(s.note, lastError, takeIt, "The note stays where it is.");
     else await receiverPanel(s);
+  } else if (mine && s.note?.heir) {
+    heading("Whoever holds this link, the Bitcoin goes to one address.", `Bound when the note was created: ${short(s.note.heir, 12, 8)}. Test note on Bitcoin testnet, sent by ${sender}.`);
+    if (slow && !session.claimed) slowPanel(); else await ownedPanel(s, account);
   } else if (mine) {
     heading("Your Bitcoin share.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
     if (slow && !session.claimed) slowPanel(); else await ownedPanel(s, account);
+  } else if (open && s.note?.heir) {
+    heading("A Bitcoin note that pays one person only.", `Bound when it was created to ${short(s.note.heir, 12, 8)}. A thief who gets the link can only sweep it there. ${sharesLine()}.`);
+    if (slow) slowPanel();
+    else if (lastError) errorPanel(s.note, lastError);
+    else idlePanel(s.note);
   } else if (open) {
     heading("A Bitcoin red envelope is waiting.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
     if (slow) slowPanel();
@@ -672,7 +717,9 @@ async function draw() {
     heading("A Bitcoin red envelope.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
     await openedPanel(s.note, owner, null);
   }
+  if (s.note?.heir && mine) stationsOpen = true;
   $("stations").replaceChildren(...(mine && !example ? (await stations(s)) : []));
+  if (s.note?.heir && mine) stationsOpen = true;
   if (mine && !example) $("stations").hidden = !(stationsOpen || (s.note && s.note.state !== "Sealed"));
   else $("stations").hidden = true;
   cachetUi.provenance($("foot-facts"), { net, contract: frag.contract, config: s.config, block: s.height });

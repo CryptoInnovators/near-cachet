@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-CONTRACT=${CONTRACT:-cachet.testnet}
+CONTRACT=${CONTRACT:-heir.cachet-ops.testnet}
 OWNER=${OWNER:-cachet-ops.testnet}
 NEARRPC=${NEARRPC:-https://near-testnet.drpc.org}
 LINKS=${LINKS:-web/judge-links.json}
@@ -10,7 +10,7 @@ ALLOWANCE='0.15 NEAR'
 MIN_ALLOWANCE='150000000000000000000000'
 WAIT_SECONDS=${WAIT_SECONDS:-300}
 
-[[ $CONTRACT == cachet.testnet && $NEARRPC == *testnet* ]] || { echo "Refusing non-testnet envelope setup" >&2; exit 1; }
+[[ $CONTRACT == heir.cachet-ops.testnet && $NEARRPC == *testnet* ]] || { echo "Refusing non-testnet envelope setup" >&2; exit 1; }
 command -v jq >/dev/null && command -v near >/dev/null || { echo "Install jq and near CLI first" >&2; exit 2; }
 
 rpc() {

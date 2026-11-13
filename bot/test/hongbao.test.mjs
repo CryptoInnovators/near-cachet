@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { liveEnvelopeNotes, parseCommand } from '../lib.mjs';
 
 const key = 'a'.repeat(64);
-const claimUrl = (token, claimKey = key) => `v=1&contract=cachet.testnet&token=${token}&key=${claimKey}`;
+const claimUrl = (token, claimKey = key) => `v=1&contract=heir.cachet-ops.testnet&token=${token}&key=${claimKey}`;
 const entry = (token, sats, options = {}) => ({
   claimUrl: claimUrl(options.linkToken || token, options.linkKey || key),
   sats,
