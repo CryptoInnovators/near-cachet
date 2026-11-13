@@ -75,18 +75,27 @@ function mempoolBase(hrp) { return hrp === "bc" ? "https://mempool.space" : hrp 
 // mempool.space first, then the blockstream.info esplora twin for every path both serve.
 const esploraTwin = (base) => (base.endsWith("/testnet") ? "https://blockstream.info/testnet" : base === "https://mempool.space" ? "https://blockstream.info" : null);
 
+// A host that hung or errored is skipped for a minute, so one slow explorer costs one wait and not one per read.
+const explorerDownUntil = new Map();
+const EXPLORER_TIMEOUT_MS = 6000;
+const EXPLORER_PAUSE_MS = 60000;
+
 async function explorerGet(base, path, accept) {
-  const urls = [`${base}/api${path}`];
+  let urls = [`${base}/api${path}`];
   const twin = esploraTwin(base);
   if (twin && !path.startsWith("/v1/") && path !== "/blocks") urls.push(`${twin}/api${path}`);
+  const healthy = urls.filter((url) => (explorerDownUntil.get(new URL(url).host) || 0) <= Date.now());
+  if (healthy.length && healthy.length < urls.length) urls = [...healthy, ...urls.filter((url) => !healthy.includes(url))];
   let failure;
   for (const url of urls) {
+    const host = new URL(url).host;
     try {
-      const response = await fetchWithTimeout(url, { headers: { accept } });
-      if (response.ok) return response;
-      if (response.status === 404 || response.status === 400) { const body = await response.text(); throw Object.assign(new Error(`${new URL(url).host} returned HTTP ${response.status}: ${body.slice(0, 240)}`), { final: true }); }
-      failure = new Error(`${new URL(url).host} returned HTTP ${response.status}.`);
-    } catch (error) { if (error.final) throw error; failure = error; }
+      const response = await fetchWithTimeout(url, { headers: { accept } }, EXPLORER_TIMEOUT_MS);
+      if (response.ok) { explorerDownUntil.delete(host); return response; }
+      if (response.status === 404 || response.status === 400) { const body = await response.text(); throw Object.assign(new Error(`${host} returned HTTP ${response.status}: ${body.slice(0, 240)}`), { final: true }); }
+      explorerDownUntil.set(host, Date.now() + EXPLORER_PAUSE_MS);
+      failure = new Error(`${host} returned HTTP ${response.status}.`);
+    } catch (error) { if (error.final) throw error; explorerDownUntil.set(host, Date.now() + EXPLORER_PAUSE_MS); failure = error; }
   }
   throw failure;
 }

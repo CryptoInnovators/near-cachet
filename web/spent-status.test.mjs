@@ -31,3 +31,23 @@ for (const [name, fixture] of Object.entries(fixtures)) {
     }
   });
 }
+
+test("a hung explorer is skipped after its first timeout, so later reads go straight to the twin", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push(String(url));
+    if (String(url).startsWith("https://mempool.space")) return new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }))));
+    return { ok: true, json: async () => ({ spent: false }) };
+  };
+  try {
+    const first = await outspendStatus("https://mempool.space/testnet", "c3d4", 0);
+    assert.equal(first.spent, false);
+    calls.length = 0;
+    const second = await outspendStatus("https://mempool.space/testnet", "c3d4", 1);
+    assert.equal(second.spent, false);
+    assert.deepEqual(calls, ["https://blockstream.info/testnet/api/tx/c3d4/outspend/1"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

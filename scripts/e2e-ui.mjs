@@ -355,6 +355,7 @@ try {
       const afterSteal = await noteNow();
       check("heir: after the refused theft the note is still Sealed and owned by the claim account", afterSteal?.state === "Sealed" && (await view(CONTRACT, "nft_token", { token_id: target }))?.owner_id === account, String(afterSteal?.state));
       await shot("steal-refused", 1440);
+      await waitFor("document.querySelector('#heir-go') && !document.querySelector('#heir-go').disabled", "Open as the named heir enabled", 60000);
       const tHeir = Date.now();
       await click("#heir-go");
       const until = Date.now() + 240000;
