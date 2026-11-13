@@ -19,6 +19,7 @@ let heirName = null;
 const who = () => heirName || "the named heir";
 async function loadHeirName(address) {
   if (!address || heirName !== null) return;
+  if (/^(localhost|127\.)/.test(location.hostname)) { heirName = ""; return; } // the static dev server has no worker routes
   try { heirName = (await (await fetch(`/api/heir-name?addr=${encodeURIComponent(address)}`)).json()).name || ""; } catch { heirName = ""; }
 }
 const session = { tx: {}, keySaved: null, keyFile: null, claimed: false, steal: null };
