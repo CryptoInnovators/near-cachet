@@ -100,7 +100,7 @@ async function waitFor(expr, what, timeout = 90000) {
   const end = Date.now() + timeout;
   for (;;) {
     try { if (await evalJs(`!!(${expr})`)) return true; } catch {}
-    if (Date.now() > end) { check(`waited for ${what}`, false, "timeout"); return false; }
+    if (Date.now() > end) { check(`waited for ${what}`, false, `timeout; page shows: ${await evalJs("document.body.innerText.replace(/\\s+/g, ' ').slice(0, 300)").catch(() => "")}`); return false; }
     await sleep(500);
   }
 }
@@ -281,9 +281,11 @@ try {
     await evalJs("localStorage.clear()");
     const t0 = Date.now();
     const pin = args.token ? links.find((e) => new URLSearchParams(e.fragment).get("token") === String(args.token)) : null;
-    await S("Page.navigate", { url: `${BASE}/index.html?network=testnet${pin ? `#${pin.fragment}` : ""}` });
+    const MINI = typeof args.miniapp === "string" ? readFileSync(args.miniapp, "utf8").trim() : null; // a Telegram web-app launch URL (RequestAppWebView), opened as Telegram opens the Mini App
+    await S("Page.navigate", { url: MINI || `${BASE}/index.html?network=testnet${pin ? `#${pin.fragment}` : ""}` });
     if (pin) { await sleep(500); await S("Page.reload"); } // a hash-only navigation does not reload the page
     await waitFor(`document.querySelector("#claim-go") && document.querySelector(".gift-card .figure-n")`, "cold first screen");
+    if (MINI) check("miniapp: Telegram.WebApp.initData is present in the page", await evalJs("!!globalThis.Telegram?.WebApp?.initData"), "no initData");
     const target = (await text(".gift-card .card-title")).match(/#(\d+)/)[1];
     await waitFor(`document.body.dataset.ready === "1"`, "first draw finished");
     await sleep(1000);

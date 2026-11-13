@@ -25,9 +25,11 @@ let cloudSaved = null; // account id last confirmed in Telegram CloudStorage
 
 const tg = globalThis.Telegram?.WebApp?.initData && globalThis.Telegram.WebApp.isVersionAtLeast?.("6.9") ? globalThis.Telegram.WebApp : null;
 const cloudKey = (suffix) => `cachet_${net.name}_${suffix}`;
+const CLOUD_WAIT_MS = 6000; // a Telegram host that never answers must not hold the envelope on its loading screen
+const cloudWait = (promise) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("Telegram did not answer in time.")), CLOUD_WAIT_MS))]);
 const cloud = {
-  get: (key) => new Promise((resolve, reject) => tg.CloudStorage.getItem(key, (error, value) => error ? reject(new Error(String(error))) : resolve(value || null))),
-  set: (key, value) => new Promise((resolve, reject) => tg.CloudStorage.setItem(key, value, (error, ok) => error || !ok ? reject(new Error(String(error || "CloudStorage refused the key."))) : resolve())),
+  get: (key) => cloudWait(new Promise((resolve, reject) => tg.CloudStorage.getItem(key, (error, value) => error ? reject(new Error(String(error))) : resolve(value || null)))),
+  set: (key, value) => cloudWait(new Promise((resolve, reject) => tg.CloudStorage.setItem(key, value, (error, ok) => error || !ok ? reject(new Error(String(error || "CloudStorage refused the key."))) : resolve()))),
 };
 const accountKey = () => `cachet:claim-account:${net.name}`;
 const savedAccount = () => {
