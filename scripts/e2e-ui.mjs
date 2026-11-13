@@ -24,7 +24,7 @@ const CONTRACT = args.contract || "heir.cachet-ops.testnet";
 const RPCS = ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org"];
 const TX_API = "https://tx.test.fastnear.com";
 
-const HEADLINE = "A Bitcoin red envelope is waiting.";
+const HEADLINE = "A Bitcoin note that pays one person only.";
 const ACTION = "Claim my share";
 const MIN_OPEN = 3; // the pool must never run dry during judging
 const DO_UNSEAL = args.unseal === true; // claim, fund the claim account for gas, break the seal through the page (implies --claim)
@@ -309,6 +309,9 @@ try {
     console.log("pre-click", JSON.stringify(await evalJs("({ y: scrollY, w: innerWidth, h: innerHeight, r: JSON.stringify(document.querySelector('#claim-go').getBoundingClientRect()), hash: location.hash.slice(0, 40) })")));
     await click("#claim-go");
     await sleep(1500);
+    for (let i = 0; i < 8; i++) { console.log("t+" + i, JSON.stringify(await evalJs("({ btn: document.querySelector('#claim-go')?.textContent, dis: document.querySelector('#claim-go')?.disabled, top: document.elementFromPoint(1100, 554)?.id || document.elementFromPoint(1100, 554)?.tagName, prog: document.querySelector('.progress, #claim-progress')?.innerText?.slice(0, 80) })")), JSON.stringify([...new Set(errors)].slice(-3)).slice(0, 300)); await sleep(1000); }
+    await evalJs("document.querySelector('#claim-go').click()"); await sleep(1500);
+    console.log("js-click", JSON.stringify(await evalJs("({ btn: document.querySelector('#claim-go')?.textContent, say: document.querySelector('.panel-say')?.textContent })")));
     console.log("post-click", JSON.stringify(await evalJs("({ btn: document.querySelector('#claim-go')?.textContent, say: document.querySelector('.panel-say')?.textContent, st: document.querySelector('#claim-status').textContent })")));
     const labels = new Set();
     const end = Date.now() + 120000;
@@ -319,6 +322,7 @@ try {
     }
     const seconds = ((Date.now() - t0) / 1000).toFixed(1);
     const title = await text(".panel-title");
+    if (title !== "Your share is yours.") console.log("claim page state", JSON.stringify(await evalJs("document.querySelector('.panel')?.innerText || document.body.innerText.slice(0, 600)")), "errors", JSON.stringify([...new Set(errors)].slice(0, 6)));
     check("claim: the panel ends on 'Your share is yours.'", title === "Your share is yours.", `${title} ${await text(".panel-say")}`);
     check("claim: the URL is unchanged by the press", (await evalJs("location.href")) === before, `${before} -> ${await evalJs("location.href")}`);
     const account = await evalJs("JSON.parse(localStorage.getItem('cachet:claim-account:testnet')).accountId");

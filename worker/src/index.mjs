@@ -1,10 +1,25 @@
 import { cardSvg, envelopeHtml } from "./card.mjs";
 import { handleSponsor } from "./sponsor.mjs";
 import { handleTelegram } from "./telegram.mjs";
+import { handleTmaSend, validateInitData } from "./initdata.mjs";
 
 const RPCS = ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"];
 const CONTRACT = "heir.cachet-ops.testnet";
 const isId = (id) => /^\d+$/.test(id);
+const SEND_RPCS = ["https://archival-rpc.testnet.fastnear.com", "https://test.rpc.fastnear.com", "https://near-testnet.drpc.org"];
+async function sendRpc(method, params) {
+  let failure;
+  for (const url of SEND_RPCS) {
+    try {
+      const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-tma", method, params }), signal: AbortSignal.timeout(20000) });
+      const payload = await response.json();
+      if (payload?.error) { failure = new Error(payload.error.data || payload.error.message || "NEAR RPC error"); if (/429|timeout|rate limit/i.test(`${payload.error.code} ${payload.error.message}`)) continue; throw failure; }
+      if (payload?.result) return payload.result;
+      failure = new Error(`NEAR RPC HTTP ${response.status}`);
+    } catch (error) { failure = error; }
+  }
+  throw failure || new Error("No NEAR RPC answered.");
+}
 
 async function getNote(id) {
   const args = btoa(JSON.stringify({ token_id: id }));
@@ -61,7 +76,16 @@ export default {
         return new Response(cardSvg(await getNote(match[1])), { headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=30" } });
       } catch (error) { return errorResponse(error.message); }
     }
-    if (url.pathname === "/api/sponsor") return handleSponsor(request, env);
+    if (url.pathname === "/api/sponsor") {
+      if (request.method !== "POST") return handleSponsor(request, env);
+      const text = await request.text();
+      let initData = null;
+      try { initData = JSON.parse(text)?.init_data; } catch { /* handleSponsor answers the bad body */ }
+      const checked = await validateInitData(initData, env.TELEGRAM_BOT_TOKEN);
+      if (!checked.ok) return new Response(JSON.stringify({ error: checked.reason, code: "telegram_initdata_refused" }), { status: 401, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+      return handleSponsor(new Request(request.url, { method: "POST", headers: request.headers, body: text }), env);
+    }
+    if (url.pathname === "/api/tma/send") return handleTmaSend(request, env, { contract: CONTRACT, rpc: sendRpc });
     if (url.pathname === "/api/telegram") return handleTelegram(request, env);
     if (url.pathname === "/claim") return env.ASSETS.fetch(new Request(new URL("/claim.html", url.origin), request));
     return env.ASSETS.fetch(request);

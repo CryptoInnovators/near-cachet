@@ -27,6 +27,13 @@ async function fetchWithTimeout(url, options = {}, timeout = REQUEST_TIMEOUT_MS)
 
 // Tries each provider in turn, starting with the one that answered last. A 429 or a network error moves on to the next provider.
 async function rpc(method, params, net = network()) {
+  // Inside the Telegram Mini App every write goes through the worker, which validates the signed initData first.
+  if (method === "send_tx" && globalThis.Telegram?.WebApp?.initData && net.name === "testnet") {
+    const response = await fetch("/api/tma/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ init_data: globalThis.Telegram.WebApp.initData, signed_tx_base64: params.signed_tx_base64, wait_until: params.wait_until }) });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || `Relay refused with HTTP ${response.status}`);
+    return body.result;
+  }
   const list = net.rpcs || [net.rpc];
   const first = list.indexOf(lastGood[net.name]);
   const order = first > 0 ? [list[first], ...list.filter((_, i) => i !== first)] : list;

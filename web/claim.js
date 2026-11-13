@@ -373,10 +373,13 @@ function progress(text, active, first, second) {
 function actionBar(...nodes) { return h("div", { class: "panel-act" }, ...nodes); }
 
 function idlePanel(note) {
-  const go = h("button", { class: "btn btn-primary", id: "claim-go", type: "button", onclick: () => claim(false) }, "Claim my share");
+  const inTelegram = Boolean(tg);
+  const go = !inTelegram && frag.sender
+    ? h("a", { class: "btn btn-primary", id: "open-telegram", href: `https://t.me/cachet_envelope_bot/envelope?startapp=${btoa(location.hash.slice(1)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}` }, "Open in Telegram")
+    : h("button", { class: "btn btn-primary", id: "claim-go", type: "button", onclick: () => claim(false) }, "Claim my share");
   setBody(amountBlock(note), shareRow(null),
     note?.heir ? h("dl", { class: "panel-rows" }, h("div", null, h("dt", null, "Pays only"), h("dd", null, short(note.heir, 12, 8)))) : null,
-    h("p", { class: "panel-say" }, frag.sender ? "Your share goes into a new claim account in this browser. No NEAR wallet needed." : "Connect a NEAR account and sign. The contract moves your share to it, and the link stops working."),
+    h("p", { class: "panel-say" }, frag.sender ? (inTelegram ? "Your share goes into a new claim account saved in your Telegram. No NEAR wallet needed." : "This envelope is claimed inside Telegram. No NEAR wallet needed.") : "Connect a NEAR account and sign. The contract moves your share to it, and the link stops working."),
     actionBar(go, frag.sender ? h("button", { class: "textlink panel-alt", type: "button", onclick: () => claim(true) }, "Use my NEAR wallet instead") : null),
     frag.sender ? h("p", { class: "panel-note" }, "Your key is saved as a file when you claim. Keep it to keep the share.") : null);
   if (!frag.sender) go.textContent = "Claim with my NEAR wallet";
@@ -476,7 +479,7 @@ const outputText = (u) => `${short(u.txid, 8, 6)}:${u.vout}`;
 
 // The sponsor pays the network fee of an account that holds a note and no NEAR (worker route /api/sponsor).
 async function sponsor(account) {
-  const response = await fetch("/api/sponsor", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ account }) });
+  const response = await fetch("/api/sponsor", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ account, init_data: tg?.initData || "" }) });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || `The fee sponsor answered HTTP ${response.status}.`);
   return body;
@@ -814,7 +817,7 @@ async function init() {
   }
   frag = cachetClaim.parseFragment(location.hash);
   if (!frag) {
-    const fragment = cachetClaim.parseMiniAppStartParam(new URLSearchParams(location.search).get("tgWebAppStartParam"));
+    const fragment = cachetClaim.parseMiniAppStartParam(new URLSearchParams(location.search).get("tgWebAppStartParam") || tg?.initDataUnsafe?.start_param);
     if (fragment) {
       history.replaceState(null, "", `${location.pathname}${location.search}#${fragment}`);
       frag = cachetClaim.parseFragment(location.hash);
