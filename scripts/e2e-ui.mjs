@@ -351,7 +351,7 @@ try {
       await click("#steal-go");
       await waitFor("document.querySelector('#steal-result')?.dataset.state", "steal result", 120000);
       const stolen = await evalJs("({ state: document.querySelector('#steal-result').dataset.state, text: document.querySelector('#steal-result').innerText, href: document.querySelector('#steal-result a')?.href })");
-      check("heir: Steal this link is refused by the contract with its reason", stolen.state === "refused" && /sweeps only to its heir/.test(stolen.text) && /Tried to send it to\s+tb1qw508d6qe/.test(stolen.text) && /bound to\s+tb1qjq6u/.test(stolen.text) && !!stolen.href, `${stolen.state} ${stolen.text} ${stolen.href}`);
+      check("heir: Steal this link is refused by the contract with its reason", stolen.state === "refused" && /sweeps only to its heir/.test(stolen.text) && /Tried to send it to\s+tb1qw508d6/.test(stolen.text) && /bound to\s+tb1qjq6uvy/.test(stolen.text) && !!stolen.href, `${stolen.state} ${stolen.text} ${stolen.href}`);
       console.log(`heir: refusal in ${((Date.now() - tSteal) / 1000).toFixed(1)}s, tx ${stolen.href}`);
       const afterSteal = await noteNow();
       check("heir: after the refused theft the note is still Sealed and owned by the claim account", afterSteal?.state === "Sealed" && (await view(CONTRACT, "nft_token", { token_id: target }))?.owner_id === account, String(afterSteal?.state));
