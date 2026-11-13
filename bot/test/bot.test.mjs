@@ -4,7 +4,7 @@ import { buttonFor, envelopeText, nearBlockHeight, nearView, parseClaimUrl, pars
 
 test('parses the supported commands and rejects invalid amounts', () => {
   assert.deepEqual(parseCommand('/hongbao 50000 4'), { command: 'envelope', sats: 50000, shares: 4 });
-  assert.deepEqual(parseCommand('/envelope'), { command: 'envelope' });
+  assert.deepEqual(parseCommand('/envelope'), { command: 'invalid' });
   assert.deepEqual(parseCommand('/envelope 0'), { command: 'invalid' });
   assert.deepEqual(parseCommand('/status@cachetbot 2'), { command: 'status', tokenId: '2' });
 });
@@ -13,6 +13,16 @@ test('builds private Mini App and group deep-link buttons', () => {
   const input = { claimUrl: 'https://example.test/claim', botUsername: 'cachetbot', appShortname: 'claim', chatType: 'private' };
   assert.deepEqual(buttonFor(input), { text: 'Open the red envelope', web_app: { url: input.claimUrl } });
   assert.match(buttonFor({ ...input, chatType: 'group' }).url, /^https:\/\/t\.me\/cachetbot\/claim\?startapp=/);
+});
+
+test('group start param is Telegram-safe and decodes to the claim fragment', async () => {
+  const fragment = 'v=2&contract=cachet.testnet&token=3&key=' + 'ab'.repeat(32) + '&sender=cachet-ops.testnet';
+  const { url } = buttonFor({ claimUrl: `https://example.test/claim#${fragment}`, botUsername: 'cachetbot', appShortname: 'claim', chatType: 'group' });
+  const startapp = new URL(url).searchParams.get('startapp');
+  assert.match(startapp, /^[A-Za-z0-9_-]{1,512}$/);
+  const { createRequire } = await import('node:module');
+  const claimLib = createRequire(import.meta.url)('../../web/claim-lib.js');
+  assert.equal(claimLib.parseMiniAppStartParam(startapp), fragment);
 });
 
 test('preserves existing claim fragments and formats live note status', () => {

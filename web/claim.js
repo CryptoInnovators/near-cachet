@@ -13,6 +13,42 @@ const mempool = () => cachetChain.mempoolBase(net.name === "mainnet" ? "bc" : "t
 const session = { tx: {} }; // transaction hashes this tab sent, keyed by station
 let frag = null;
 let busy = false;
+let keySaved = false;
+let cloudSaved = null; // account id last confirmed in Telegram CloudStorage
+
+// Inside Telegram the claim account key is backed up to the user's Telegram CloudStorage, one key per account,
+// so a save never overwrites an older account and a new device restores the latest one.
+const tg = globalThis.Telegram?.WebApp?.initData && globalThis.Telegram.WebApp.isVersionAtLeast?.("6.9") ? globalThis.Telegram.WebApp : null;
+const cloudKey = (suffix) => `cachet_${net.name}_${suffix}`;
+const cloud = {
+  get: (key) => new Promise((resolve, reject) => tg.CloudStorage.getItem(key, (error, value) => error ? reject(new Error(String(error))) : resolve(value || null))),
+  set: (key, value) => new Promise((resolve, reject) => tg.CloudStorage.setItem(key, value, (error, ok) => error || !ok ? reject(new Error(String(error || "CloudStorage refused the key."))) : resolve())),
+};
+const accountKey = () => `cachet:claim-account:${net.name}`;
+
+async function restoreFromCloud() {
+  if (!tg || localStorage.getItem(accountKey())) return;
+  const current = await cloud.get(cloudKey("current"));
+  if (!/^[a-f0-9]{64}$/.test(current || "")) return;
+  const saved = JSON.parse(await cloud.get(cloudKey(current)) || "null");
+  if (saved?.accountId === current && /^[a-f0-9]{64}$/.test(saved.seedHex || "") && await cachetClaim.publicKeyHexFromSeed(saved.seedHex) === current) {
+    localStorage.setItem(accountKey(), JSON.stringify(saved));
+    cloudSaved = current;
+  }
+}
+
+async function backupToCloud(saved) {
+  if (cloudSaved === saved.accountId) return true;
+  const own = cloudKey(saved.accountId);
+  const existing = JSON.parse(await cloud.get(own) || "null");
+  if (existing && existing.seedHex !== saved.seedHex) throw new Error("Telegram cloud holds a different key for this account.");
+  if (!existing) await cloud.set(own, JSON.stringify({ accountId: saved.accountId, seedHex: saved.seedHex }));
+  const check = JSON.parse(await cloud.get(own) || "null");
+  if (check?.seedHex !== saved.seedHex) throw new Error("Telegram cloud did not return the saved key.");
+  await cloud.set(cloudKey("current"), saved.accountId);
+  cloudSaved = saved.accountId;
+  return true;
+}
 
 function status(text, error = false) {
   const target = $("claim-status");
@@ -81,6 +117,12 @@ async function connect() {
 
 async function claim() {
   if (busy) return;
+  if (frag.sender && !cachetWallet.accountId && !keySaved) {
+    const box = $("claim-key-backup");
+    box?.scrollIntoView({ block: "center", behavior: cachetUi.reducedMotion() ? "auto" : "smooth" });
+    box?.focus({ preventScroll: true });
+    return status("Save the claim key, tick the box above, then open the gift.", true);
+  }
   busy = true;
   try {
     let account = cachetWallet.accountId;
@@ -95,7 +137,7 @@ async function claim() {
       const signature = await cachetClaim.signClaim(frag.key, frag.contract, frag.token, account);
       status("Waiting for the sender-funded claim transaction.");
       result = await cachetLinkdrop.submitWalletlessClaim({
-        acknowledged: $("claim-key-backup")?.checked === true,
+        acknowledged: keySaved,
         send: () => cachetLinkdrop.signAndSend({
           signerId: frag.sender, seedHex: frag.key, contract: frag.contract,
           args: { token_id: frag.token, new_owner: account, signature }, net,
@@ -224,11 +266,21 @@ function exportClaimKey(saved, key) {
 async function walletlessKeyControls() {
   const saved = await cachetLinkdrop.createImplicitAccount(localStorage, net.name);
   const key = await cachetLinkdrop.secretKeyString(saved.seedHex);
+  if (tg) {
+    try {
+      if (await backupToCloud(saved)) {
+        keySaved = true;
+        return [h("div", { class: "field claim-key-backup" },
+          h("span", null, "Your claim key is saved in your Telegram cloud. Open Cachet from Telegram on any device to reach this claim account."),
+          cachetUi.copyButton(key, "Copy key"))];
+      }
+    } catch (error) { status(`Telegram cloud backup failed: ${error.message} Save the key below instead.`, true); }
+  }
   return [
     h("div", { class: "field claim-key-backup" },
       h("span", null, "Claim account key. Save it somewhere safe before opening the gift."),
       h("code", null, key), cachetUi.copyButton(key, "Copy key"),
-      h("label", { for: "claim-key-backup" }, h("input", { id: "claim-key-backup", type: "checkbox" }), " I saved this key and can access the claim account.")),
+      h("label", { for: "claim-key-backup", class: "check" }, h("input", { id: "claim-key-backup", type: "checkbox", checked: keySaved, onchange: (event) => { keySaved = event.target.checked; } }), " I saved this key and can access the claim account.")),
     exportClaimKey(saved, key),
   ];
 }
@@ -249,8 +301,9 @@ async function stations(s, matches) {
   // 1 Claim
   if (!note) out.push(station("Claim", "done", h("p", { class: "say" }, `Note ${frag.token} is finalized. Its Bitcoin left to the address the owner chose.`)));
   else if (note.claim) {
+    const walletless = frag.sender && !cachetWallet.accountId;
     const claimBtn = h("button", { class: "btn btn-primary", id: "claim-go", type: "button", disabled: !matches, onclick: claim }, frag.sender ? "Open this gift" : "Claim this gift");
-    const details = frag.sender && !cachetWallet.accountId ? await walletlessKeyControls() : [];
+    const details = walletless ? await walletlessKeyControls() : [];
     out.push(station("Claim", "current",
       h("p", { class: "say" }, matches ? (frag.sender ? `No NEAR wallet needed. The sender's claim-only link key pays the transaction fee and assigns note ${frag.token} to your claim account.` : `Connect a NEAR account and sign. The contract moves note ${frag.token} to it, and the link stops working.`) : "This link no longer matches the claim key on the note."),
       ...details,
@@ -355,6 +408,12 @@ async function openGift() {
 
 async function init() {
   cachetUi.reveal(document);
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    document.documentElement.classList.add("in-telegram");
+    try { await restoreFromCloud(); } catch (error) { status(`Telegram cloud read failed: ${error.message}`, true); }
+  }
   $("claim-connect").addEventListener("click", async () => { if (await connect()) await render(); });
   frag = cachetClaim.parseFragment(location.hash);
   if (!frag) {

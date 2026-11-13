@@ -89,7 +89,7 @@ function render(slot, note, ctx) {
   ]);
   if (play) card.dataset.play = "1";
   slot.replaceChildren(card);
-  if (note.utxo) countUp(figure, note.utxo.sats, { delay: play ? 560 : 0 });
+  if (note.utxo && play) countUp(figure, note.utxo.sats, { delay: 560 });
   return card;
 }
 

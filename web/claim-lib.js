@@ -65,9 +65,20 @@ function parseFragment(hash) {
   return { contract, token, key: key.toLowerCase(), ...(version === "2" ? { sender } : {}) };
 }
 
+// Telegram start_param allows only [A-Za-z0-9_-]{1,512}, so a claim fragment travels base64url-encoded.
+function encodeStartParam(fragment) {
+  return btoa(String(fragment).replace(/^#/, "")).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 function parseMiniAppStartParam(value) {
   if (!value) return null;
   let candidate = String(value);
+  if (/^[A-Za-z0-9_-]+$/.test(candidate)) {
+    try {
+      const decoded = parseFragment(atob(candidate.replace(/-/g, "+").replace(/_/g, "/")));
+      if (decoded) return buildFragment(decoded);
+    } catch {}
+  }
   try {
     const url = new URL(candidate, "https://cachet.invalid/");
     candidate = url.hash || (url.searchParams.has("v") ? url.search.slice(1) : candidate);
@@ -88,7 +99,7 @@ async function pickJudgeFragment(net, readNote, entries) {
   return null;
 }
 
-const lib = { pickJudgeFragment, PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment, parseMiniAppStartParam };
+const lib = { pickJudgeFragment, PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment, parseMiniAppStartParam, encodeStartParam };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetClaim = lib;
 

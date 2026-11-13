@@ -59,6 +59,7 @@ export default {
         return new Response(cardSvg(await getNote(match[1])), { headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=30" } });
       } catch (error) { return errorResponse(error.message); }
     }
+    if (url.pathname === "/" && url.searchParams.has("tgWebAppStartParam")) return env.ASSETS.fetch(new Request(new URL("/claim.html", url.origin), request));
     if (url.pathname === "/claim") return env.ASSETS.fetch(new Request(new URL("/claim.html", url.origin), request));
     return env.ASSETS.fetch(request);
   },

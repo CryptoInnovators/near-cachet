@@ -276,7 +276,8 @@ button, input, select { font: inherit; color: inherit; }
 .station .say { text-wrap: pretty; max-width: 46ch; overflow-wrap: anywhere; }
 .station .tool-form { max-width: 520px; }
 .station .claim-key-backup code { overflow-wrap: anywhere; }
-.station .claim-key-backup input { width: auto; min-height: auto; accent-color: var(--wax); }
+.station .claim-key-backup .check { display: flex; gap: 12px; align-items: center; min-height: 44px; cursor: pointer; color: var(--ink); }
+.station .claim-key-backup input[type="checkbox"] { appearance: auto; width: 22px; height: 22px; min-height: 0; padding: 0; margin: 0; flex: none; accent-color: var(--wax); cursor: pointer; }
 .station .btn { justify-self: start; }
 .station .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .station-tx { font-size: var(--s-small); font-weight: 600; overflow-wrap: anywhere; }

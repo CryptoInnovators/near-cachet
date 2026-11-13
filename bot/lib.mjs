@@ -34,7 +34,9 @@ export function parseClaimUrl(claimUrl, webUrl = DEFAULT_WEB_URL) {
 }
 
 export function buttonFor({ claimUrl, botUsername, appShortname, chatType }) {
-  const url = chatType === 'private' ? null : `https://t.me/${encodeURIComponent(botUsername)}/${encodeURIComponent(appShortname)}?startapp=${encodeURIComponent(claimUrl)}`;
+  const startapp = Buffer.from(new URL(claimUrl).hash.slice(1)).toString('base64url');
+  if (startapp.length > 512) throw new Error('The claim link is too long for a Telegram start parameter.');
+  const url = chatType === 'private' ? null : `https://t.me/${encodeURIComponent(botUsername)}/${encodeURIComponent(appShortname)}?startapp=${startapp}`;
   return { text: 'Open the red envelope', ...(url ? { url } : { web_app: { url: claimUrl } }) };
 }
 
