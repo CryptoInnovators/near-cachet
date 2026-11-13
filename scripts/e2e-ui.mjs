@@ -223,6 +223,8 @@ try {
   for (const [width, label] of args.keep === true ? [] : [[1440, "desktop"], [390, "mobile"]]) {
     await motion(false);
     await open_(`${BASE}/index.html?network=testnet`, width);
+    await evalJs("localStorage.clear()"); // a first visit has no claim account from an earlier run in this shared profile
+    await S("Page.reload");
     await waitFor(`document.querySelector("#claim-go") && document.querySelector(".gift-card .figure-n")`, `${label} first screen`);
     check(`${label}: h1 is the envelope headline`, (await text("h1")) === HEADLINE, await text("h1"));
     await waitFor(`document.querySelector("#gift-strip")?.innerText.includes("latest tx")`, "strip");
