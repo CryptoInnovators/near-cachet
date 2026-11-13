@@ -19,5 +19,9 @@ G1!
 G3
 K101815-1
 K101815-2
+J1!
+un scripts/record-edge-sale.sh on testnet3, NEAR testnet and Sepolia to fill docs/edge-sale.json with a real sale and a refused sale (requires SEPOLIA_PRIVATE_KEY in .env, placed by the owner).
+J2
 X111025-1!
 X111025-2!
+R111415-1!

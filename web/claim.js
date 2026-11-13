@@ -631,7 +631,7 @@ async function stations(s) {
   const account = you();
   const owner = s.nft?.owner_id || null;
   const mine = Boolean(account && owner === account);
-  const swept = outspend?.spent === true;
+  const swept = outspend?.spent === true || Boolean(session.tx.broadcast);
   const out = [];
 
   const sealed = note && !note.claim && note.state === "Sealed";
