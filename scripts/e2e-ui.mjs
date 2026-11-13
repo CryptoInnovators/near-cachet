@@ -5,7 +5,7 @@
 // headline, a first screen whose claim button is not in the first viewport and first in tab order, a pool with fewer
 // than 3 open shares, a 64-hex string on the first screen, an element crossing the card edge, or a share count that
 // differs from the chain. With --claim it also claims one share cold and checks nft_token and the URL.
-// usage: node scripts/e2e-ui.mjs [--web DIR] [--shots DIR] [--contract cachet.testnet]
+// usage: node scripts/e2e-ui.mjs [--web DIR | --base URL] [--shots DIR] [--contract cachet.testnet]
 import { readFileSync, mkdirSync, writeFileSync, unlinkSync, mkdtempSync, cpSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
@@ -58,11 +58,12 @@ async function latestTx(account) {
 }
 
 // ---- local static server on a free port ----
-const port = await new Promise((res) => { const s = createServer().listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); });
-const server = spawn("python3", [path.join(root, "scripts/serve-web.py"), String(port), WEB], { stdio: "ignore" });
-for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://127.0.0.1:${port}/`)).ok) break; } catch {} await sleep(100); }
+const LIVE = typeof args.base === "string" ? args.base.replace(/\/$/, "") : null; // --base URL drives a deployed site instead of the local copy
+const port = LIVE ? 0 : await new Promise((res) => { const s = createServer().listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); });
+const server = LIVE ? { kill() {} } : spawn("python3", [path.join(root, "scripts/serve-web.py"), String(port), WEB], { stdio: "ignore" });
+for (let i = 0; !LIVE && i < 50; i++) { try { if ((await fetch(`http://127.0.0.1:${port}/`)).ok) break; } catch {} await sleep(100); }
 // "localhost" and not 127.0.0.1: the profile keeps a browser zoom for 127.0.0.1 that shrinks emulated desktop viewports
-const BASE = `http://localhost:${port}`;
+const BASE = LIVE || `http://localhost:${port}`;
 
 // ---- CDP into the deepsurge profile ----
 const ports = JSON.parse(readFileSync(`${homedir()}/.local/share/bhn/ports.json`, "utf8"));
