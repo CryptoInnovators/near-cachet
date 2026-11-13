@@ -58,3 +58,10 @@ export async function handleTmaSend(request, env, { contract, rpc }) {
   try { return json({ result: await rpc("send_tx", { signed_tx_base64: body.signed_tx_base64, wait_until: body.wait_until || "EXECUTED_OPTIMISTIC" }), telegram_user: checked.user?.id ?? null }); }
   catch (error) { return json({ error: error.message }, 502); }
 }
+
+// A provider answer worth retrying on the next provider: a rate limit, a timeout, or the bare "Server error" nodes return under load.
+export function isTransientRpcError(error) {
+  if (!error) return false;
+  if (/429|timeout|rate limit/i.test(`${error.code} ${error.message}`)) return true;
+  return error.message === "Server error" && !error.data;
+}

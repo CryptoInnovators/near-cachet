@@ -54,3 +54,12 @@ test("/api/tma/send relays a valid call and never reaches NEAR for an invalid on
 test("transactionHeader reads signer and receiver", () => {
   assert.deepEqual(transactionHeader(tx("heir.cachet-ops.testnet")), { signerId: "signer.testnet", receiverId: "heir.cachet-ops.testnet" });
 });
+
+test("isTransientRpcError retries rate limits, timeouts and a bare Server error but not a contract refusal", async () => {
+  const { isTransientRpcError } = await import("../src/initdata.mjs");
+  assert.equal(isTransientRpcError({ code: -429, message: "rate limit" }), true);
+  assert.equal(isTransientRpcError({ code: -32000, message: "Server error" }), true);
+  assert.equal(isTransientRpcError({ code: -32000, message: "Server error", data: "Exceeded the prepaid gas" }), false);
+  assert.equal(isTransientRpcError({ code: -32000, message: "Server error", data: { TxExecutionError: 1 } }), false);
+  assert.equal(isTransientRpcError(null), false);
+});

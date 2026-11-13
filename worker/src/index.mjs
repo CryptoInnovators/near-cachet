@@ -1,7 +1,7 @@
 import { cardSvg, envelopeHtml } from "./card.mjs";
 import { handleSponsor } from "./sponsor.mjs";
 import { handleTelegram } from "./telegram.mjs";
-import { handleTmaSend, validateInitData } from "./initdata.mjs";
+import { handleTmaSend, isTransientRpcError, validateInitData } from "./initdata.mjs";
 
 const RPCS = ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"];
 const CONTRACT = "heir.cachet-ops.testnet";
@@ -13,7 +13,7 @@ async function sendRpc(method, params) {
     try {
       const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-tma", method, params }), signal: AbortSignal.timeout(20000) });
       const payload = await response.json();
-      if (payload?.error) { failure = new Error(payload.error.data || payload.error.message || "NEAR RPC error"); if (/429|timeout|rate limit/i.test(`${payload.error.code} ${payload.error.message}`)) continue; throw failure; }
+      if (payload?.error) { failure = new Error((typeof payload.error.data === "string" && payload.error.data) || [payload.error.message, payload.error.cause?.name, payload.error.cause?.info?.error_message].filter(Boolean).join(": ") || "NEAR RPC error"); if (isTransientRpcError(payload.error)) continue; throw failure; }
       if (payload?.result) return payload.result;
       failure = new Error(`NEAR RPC HTTP ${response.status}`);
     } catch (error) { failure = error; }
