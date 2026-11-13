@@ -99,8 +99,11 @@ async function signAndSend({ signerId, seedHex, contract, args, net, method = "c
   const readKey = () => cachetChain.rpc("query", { request_type: "view_access_key", finality: "final", account_id: signerId, public_key: publicKey }, net);
   let entry;
   for (const until = Date.now() + waitForAccountMs; ; ) {
-    try { entry = await readKey(); break; }
-    catch (error) {
+    try {
+      entry = await readKey();
+      if (entry?.nonce === undefined) throw new Error(entry?.error || "unknown access key");
+      break;
+    } catch (error) {
       if (!restricted && /does not exist|unknown/i.test(error.message)) { if (Date.now() < until) { await new Promise((resolve) => setTimeout(resolve, 1000)); continue; } throw new Error("This claim account holds no NEAR yet, so it cannot pay a network fee."); }
       throw error;
     }

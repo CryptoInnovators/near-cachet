@@ -153,3 +153,25 @@ test("pickJudgeFragment skips spent and foreign notes and returns the first seal
   assert.equal(await claim.pickJudgeFragment(net, read, [frag("1"), frag("2"), frag("9", "other.testnet"), frag("3"), frag("4")]), frag("3").fragment);
   assert.equal(await claim.pickJudgeFragment(net, read, [frag("1"), frag("2")]), null);
 });
+
+test("signAndSend waits for a just-funded account whose key the RPC reports as an error result", async () => {
+  globalThis.cachetClaim = claim;
+  const linkdrop = require("./linkdrop-claim.js");
+  const seed = "11".repeat(32);
+  const pub = await claim.publicKeyHexFromSeed(seed);
+  const calls = [];
+  const net = { name: "testnet", rpc: "https://rpc.invalid" };
+  const real = chain.rpc;
+  chain.rpc = async (method, params) => {
+    calls.push(method === "query" ? params.request_type : method);
+    if (method === "query") return calls.filter((m) => m === "view_access_key").length < 3 ? { error: "access key does not exist while viewing", block_height: 1 } : { nonce: 7, permission: "FullAccess" };
+    if (method === "block") return { header: { hash: linkdrop.b58encode(new Uint8Array(32).fill(5)) } };
+    if (method === "send_tx") return { transaction: { hash: "txhash" }, status: { SuccessValue: "" } };
+    throw new Error(method);
+  };
+  try {
+    const result = await linkdrop.signAndSend({ signerId: pub, seedHex: seed, contract: "cachet.testnet", args: { receiver_id: "a", token_id: "1" }, net, method: "nft_transfer", tgas: 30, restricted: false, deposit: 1n, waitForAccountMs: 8000 });
+    assert.equal(result.transaction.hash, "txhash");
+    assert.equal(calls.filter((m) => m === "view_access_key").length, 3);
+  } finally { chain.rpc = real; }
+});

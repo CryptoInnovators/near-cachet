@@ -28,7 +28,8 @@ const HEADLINE = "A Bitcoin red envelope is waiting.";
 const ACTION = "Claim my share";
 const MIN_OPEN = 3; // the pool must never run dry during judging
 const DO_UNSEAL = args.unseal === true; // claim, fund the claim account for gas, break the seal through the page (implies --claim)
-const DO_CLAIM = args.claim === true || DO_UNSEAL; // spends one share of the pool: one cold walletless claim through the real page
+const DO_PASS = args.pass === true; // after the claim: Pass it on, take it from the link in a clean browser, then replay the spent link (must fail)
+const DO_CLAIM = (args.claim === true || DO_UNSEAL || DO_PASS) && args.keep !== true; // spends one share of the pool: one cold walletless claim through the real page
 
 const failures = [];
 const passes = [];
@@ -152,6 +153,52 @@ const click = async (selector) => {
   for (const type of ["mousePressed", "mouseReleased"]) await S("Input.dispatchMouseEvent", { type, x: r[0], y: r[1], button: "left", clickCount: 1 });
 };
 
+async function runPass(target) {
+      const wait = (cond, label, ms = 90000) => waitFor(cond, label, ms);
+      const nftBefore = await view(CONTRACT, "note", { token_id: target });
+      await click("#pass-go");
+      await wait(`document.querySelector("#pass-link")`, "pass link shown").catch(async (e) => { console.log("pass page state:", JSON.stringify(await evalJs(`({ t: document.querySelector(".panel-title")?.textContent, say: document.querySelector(".panel-say")?.textContent, st: document.querySelector("#claim-status")?.textContent, btn: document.querySelector("#pass-go")?.textContent })`))); throw e; });
+      const passed = await evalJs(`({ title: document.querySelector(".panel-title")?.textContent, link: document.querySelector("#pass-link").textContent, rows: document.querySelector(".panel-rows").innerText.replace(/\\s+/g, " "), tg: document.querySelector("#pass-share")?.href, tx: [...document.querySelectorAll(".panel-rows a")].map((a) => a.href)[0] })`);
+      check("pass: the panel says 'Send this link.' and the seal did not move", passed.title === "Send this link." && /did not move/.test(passed.rows), passed.rows);
+      const passFrag = new URLSearchParams(passed.link.split("#")[1]);
+      const passKey = passFrag.get("key");
+      const passAccount = await evalJs(`cachetClaim.publicKeyHexFromSeed(${JSON.stringify(passKey)})`);
+      const mid = await view(CONTRACT, "nft_token", { token_id: target });
+      check("pass: nft_token owner on chain is the pass account named by the link key", mid?.owner_id === passAccount, `${mid?.owner_id} vs ${passAccount}`);
+      const midNote = await view(CONTRACT, "note", { token_id: target });
+      check("pass: the Bitcoin output is unchanged and the note is still Sealed", midNote.state === "Sealed" && midNote.utxo.txid === nftBefore.utxo.txid && midNote.utxo.vout === nftBefore.utxo.vout, JSON.stringify(midNote.utxo));
+      console.log(`pass: hand-off tx ${passed.tx}\npass: link ${passed.link.replace(/key=[0-9a-f]+/, "key=<seed>")}`);
+      await shot("passed", 1440);
+      // a second, clean browser state opens the link
+      const t1 = Date.now();
+      await evalJs("localStorage.clear()");
+      await S("Page.navigate", { url: passed.link });
+      await sleep(500);
+      await S("Page.reload");
+      await wait(`document.querySelector("#take-go")`, "take it button");
+      await wait(`!document.querySelector("#take-go").disabled`, "take it enabled");
+      const rec = await evalJs(`({ h1: document.querySelector("h1")?.textContent, rows: document.querySelector(".panel-rows").innerText.replace(/\\s+/g, " ") })`);
+      check("pass: the link opener sees 'A Bitcoin note was passed to you.' with seal and unspent checks", rec.h1 === "A Bitcoin note was passed to you." && /Sealed/.test(rec.rows) && /unspent/.test(rec.rows), `${rec.h1} | ${rec.rows}`);
+      await shot("received", 1440);
+      await click("#take-go");
+      const stop = Date.now() + 120000;
+      while (Date.now() < stop && (await evalJs("document.querySelector('.panel-title')?.textContent")) !== "The note is yours.") await sleep(400);
+      const done2 = await evalJs(`({ title: document.querySelector(".panel-title")?.textContent, say: document.querySelector(".panel-say")?.textContent, href: document.querySelector(".panel-rows a")?.href, acct: JSON.parse(localStorage.getItem("cachet:claim-account:testnet") || "null")?.accountId })`);
+      check("pass: the opener's panel ends on 'The note is yours.'", done2.title === "The note is yours.", `${done2.title} ${done2.say}`);
+      const fin = await view(CONTRACT, "nft_token", { token_id: target });
+      check("pass: nft_token owner on chain is the opener's new account", fin?.owner_id === done2.acct && fin?.owner_id !== passAccount, `${fin?.owner_id} vs ${done2.acct}`);
+      const finNote = await view(CONTRACT, "note", { token_id: target });
+      check("pass: after both hand-offs the Bitcoin output is unchanged and Sealed", finNote.state === "Sealed" && finNote.utxo.txid === nftBefore.utxo.txid && finNote.utxo.vout === nftBefore.utxo.vout);
+      console.log(`pass: ${((Date.now() - t1) / 1000).toFixed(1)}s from opening the link to the confirmed owner. take tx ${done2.href}`);
+      await shot("took", 1440);
+      // replay: the pass account no longer owns the note, so its signed transfer must be refused by the contract
+      const replay = await evalJs(`(async () => { try { const r = await cachetLinkdrop.signAndSend({ signerId: ${JSON.stringify(passAccount)}, seedHex: ${JSON.stringify(passKey)}, contract: ${JSON.stringify(CONTRACT)}, args: { receiver_id: "cachet-ops.testnet", token_id: ${JSON.stringify(target)} }, net: cachetChain.network(), method: "nft_transfer", tgas: 30, restricted: false, deposit: 1n, waitForAccountMs: 20000 }); return { failure: cachetOutcome.failureText(r), hash: r?.transaction?.hash }; } catch (e) { return { thrown: String(e.message) }; } })()`);
+      check("pass replay: the spent link's transfer is refused by the contract", !!(replay.failure || replay.thrown), JSON.stringify(replay));
+      const stillMine = await view(CONTRACT, "nft_token", { token_id: target });
+      check("pass replay: the owner on chain is still the opener", stillMine?.owner_id === done2.acct, stillMine?.owner_id);
+      console.log(`pass replay: refused. ${replay.failure || replay.thrown} tx https://testnet.nearblocks.io/txns/${replay.hash || "(not broadcast)"}`);
+}
+
 try {
   const links = JSON.parse(readFileSync(path.join(WEB, "judge-links.json"), "utf8"));
   const reads = [];
@@ -169,7 +216,7 @@ try {
   const fmt = new Intl.NumberFormat("en-US");
   const left = `${open.length} of ${reads.length} shares left`;
 
-  for (const [width, label] of [[1440, "desktop"], [390, "mobile"]]) {
+  for (const [width, label] of args.keep === true ? [] : [[1440, "desktop"], [390, "mobile"]]) {
     await motion(false);
     await open_(`${BASE}/index.html?network=testnet`, width);
     await waitFor(`document.querySelector("#claim-go") && document.querySelector(".gift-card .figure-n")`, `${label} first screen`);
@@ -195,7 +242,7 @@ try {
     await shot("index", width);
   }
   const ready = await evalJs("!!document.querySelector('.send') && !!document.querySelector('#record')");
-  check("below the fold: send, how it works and the proof view remain", ready);
+  if (args.keep !== true) check("below the fold: send, how it works and the proof view remain", ready);
 
   // ---- empty pool: a copy of the site whose pool lists only claimed shares ----
   const claimed = reads.filter((r) => !(r.note?.state === "Sealed" && r.note.claim));
@@ -218,6 +265,12 @@ try {
     rmSync(tmp, { recursive: true, force: true });
   }
 
+  // ---- --keep: continue from the claim account already saved in this browser (Pass it on only) ----
+  if (DO_PASS && args.keep === true) {
+    await open_(`${BASE}/index.html?network=testnet`, 1440);
+    await waitFor(`document.querySelector("#pass-go")`, "pass button on an owned note");
+    await runPass((await text(".gift-card .card-title")).match(/#(\d+)/)[1]);
+  } else
   // ---- one cold walletless claim through the real page ----
   if (DO_CLAIM) {
     await open_(`${BASE}/index.html?network=testnet`, 1440);
@@ -256,6 +309,7 @@ try {
     check("claim: the next action is offered", done.next === "Move it to a Bitcoin address", done.next);
     console.log(`claim: ${seconds}s from page load to the confirmed owner. progress labels seen: ${[...labels].join(" | ")}. claim tx ${done.href}`);
     await shot("claimed", 1440);
+    if (DO_PASS) await runPass(target);
     if (DO_UNSEAL) {
       const funded = spawnSync("near", ["tokens", "cachet-ops.testnet", "send-near", account, "0.1 NEAR", "network-config", process.env.NETCFG || "testnet-archfn", "sign-with-legacy-keychain", "send"], { encoding: "utf8" });
       check("unseal: the claim account is funded with 0.1 NEAR for gas", funded.status === 0, (funded.stderr || funded.stdout).split("\n").filter((l) => /Error|rate/.test(l)).join(" "));
@@ -275,7 +329,7 @@ try {
   }
 
   // The public NEAR RPC providers answer 429, or a 429 without CORS headers, under shared load; chain.js fails over to the next provider.
-  const real = errors.filter((e) => !/(429|blocked by CORS policy|ERR_FAILED).*(rpc|drpc)|(rpc|drpc).*(429|CORS|ERR_FAILED)|Failed to load resource: net::ERR_FAILED https:\/\/test\.rpc/.test(e));
+  const real = errors.filter((e) => !/(408|429|blocked by CORS policy|ERR_FAILED).*(rpc|drpc)|(rpc|drpc).*(408|429|CORS|ERR_FAILED)|Failed to load resource: net::ERR_FAILED https:\/\/test\.rpc/.test(e));
   check("zero console errors on every page (RPC provider failover noise excluded)", real.length === 0, [...new Set(real)].join(" | ").slice(0, 600));
 } catch (error) {
   check("script ran to the end", false, String(error.message).split("\n")[0]);
