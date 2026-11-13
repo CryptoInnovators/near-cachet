@@ -87,3 +87,5 @@ M37 ran locally with `./scripts/mutate.sh M37`; it failed with the guard removed
 M35 | proof branches have equal depth | red=101 green=0 | thread 'light_client::tests::proof_args_v2_refuses_mismatched_branches' panicked at src/light_client.rs:90:54:
 M36 | light-client hashes use internal byte order | red=101 green=0 | thread 'light_client::tests::proof_args_v2_matches_live_vector' panicked at src/light_client.rs:84:9:
 ```
+| M43 | unseal is refused to any address but the heir | red=101 green=0 | panicked at tests/heir.rs |
+| M44 | the heir cannot be rebound | red=101 green=0 | panicked at tests/heir.rs |

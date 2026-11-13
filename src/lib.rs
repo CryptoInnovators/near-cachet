@@ -209,6 +209,8 @@ pub struct NoteView {
     pub claim: Option<ClaimView>,
     pub in_transfer: bool,
     pub pending_since: u64,
+    /// Bitcoin address the sweep is fixed to, if one was bound before funding.
+    pub heir: Option<String>,
 }
 
 #[near(serializers = [json])]
@@ -434,6 +436,19 @@ impl Cachet {
         sealed
     }
 
+    // ---- heir ----
+
+    /// Owner only, while the note holds no bitcoin. Fixes the only address `unseal` can ever
+    /// sweep to. Set once: no holder, current or later, can change or clear it.
+    pub fn bind_heir(&mut self, token_id: TokenId, btc_dest: String) -> bool {
+        let note = self.owned_idle(&token_id);
+        require!(note.state == State::Minted, "the heir is fixed before the note is funded");
+        require!(self.heir_of(&token_id).is_none(), "the heir is already fixed");
+        btc::address_to_script(&self.hrp, &btc_dest).unwrap_or_else(|e| panic_msg(e));
+        env::storage_write(&Self::extra_storage_key(&token_id, b"heir"), btc_dest.as_bytes());
+        true
+    }
+
     // ---- unseal ----
 
     /// Owner only. Signs a sweep of the attested output and confirmed additions to `btc_dest`.
@@ -448,6 +463,10 @@ impl Cachet {
         )
         .unwrap_or_else(|e| panic_msg(e));
         let dest = btc::address_to_script(&self.hrp, &btc_dest).unwrap_or_else(|e| panic_msg(e));
+        if let Some(heir) = self.heir_of(&token_id) {
+            let bound = btc::address_to_script(&self.hrp, &heir).unwrap_or_else(|e| panic_msg(e));
+            require!(dest == bound, "this note sweeps only to its heir");
+        }
         let extras = additional_outputs.unwrap_or_default();
         require!(extras.len() <= MAX_ADDITIONAL_OUTPUTS, "too many additional outputs");
         let mut proofs = Vec::with_capacity(extras.len());
@@ -738,6 +757,11 @@ impl Cachet {
         [b"cachet:recovery:".as_slice(), kind, b":", token_id.as_bytes()].concat()
     }
 
+    fn heir_of(&self, token_id: &TokenId) -> Option<String> {
+        env::storage_read(&Self::extra_storage_key(token_id, b"heir"))
+            .map(|b| String::from_utf8(b).unwrap_or_else(|_| panic_msg("corrupt heir")))
+    }
+
     fn additional_utxos(&self, token_id: &TokenId) -> Vec<Utxo> {
         env::storage_read(&Self::extra_storage_key(token_id, b"utxos"))
             .map(|b| near_sdk::borsh::from_slice(&b).unwrap_or_else(|_| panic_msg("corrupt recovery outputs")))
@@ -848,6 +872,7 @@ impl Cachet {
                 locked: note.claim_locked(),
             }),
             in_transfer: note.in_transfer,
+            heir: self.heir_of(&token_id.to_string()),
             pending_since: note.pending_since,
         }
     }
