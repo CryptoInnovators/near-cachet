@@ -387,3 +387,104 @@ button[hidden] { display: none; }
 @keyframes tick-rise { from { transform: scale(.78); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes crack-a { from { transform: none; } to { transform: translate(-7px, -1px) rotate(-3deg); } }
 @keyframes crack-b { from { transform: none; } to { transform: translate(7px, 1px) rotate(3deg); } }
+
+/* Telegram Mini App. Colours come from Telegram themeParams (set as --tg-* by tma.js); the red envelope stays red in both schemes. */
+.ico { display: inline-flex; width: 18px; height: 18px; flex: none; }
+.ico svg { width: 100%; height: 100%; display: block; }
+.ico-coin { width: 44px; height: 44px; }
+.tg-avatar { --size: 40px; width: var(--size); height: var(--size); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; overflow: hidden; color: #fff; font: 700 calc(var(--size) * .38)/1 var(--f-text); letter-spacing: .02em; vertical-align: middle; }
+.tg-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tma-wallet[hidden] { display: none; }
+
+html.in-telegram {
+  --ground: var(--tg-bg, #fff); --ground-2: var(--tg-bg-2, #f1f1f4);
+  --paper: var(--tg-section, var(--tg-bg-2, #f4f4f6)); --paper-2: var(--tg-separator, #e4e4e8);
+  --ink: var(--tg-text, #111214); --ground-dim: var(--tg-hint, #707579);
+  --wax: #c8272f; --wax-lo: #9b1620; --warn: #b26a00; --bad: var(--tg-bad, #d63a2f);
+  --env-a: #dc3a42; --env-b: #a0141d;
+  --f-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, system-ui, sans-serif;
+  --f-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  --m: 14px; color-scheme: light dark;
+}
+html.in-telegram[data-scheme="dark"] { --env-a: #c42f37; --env-b: #7e0f17; }
+html.in-telegram body { background: var(--ground); color: var(--ink); overflow-x: hidden; }
+html.in-telegram .bar, html.in-telegram .foot, html.in-telegram .skip { display: none; }
+html.in-telegram .frame { max-width: 520px; padding-block: 0; }
+html.in-telegram .btn { border-radius: 12px; min-height: 50px; }
+html.in-telegram .btn-primary { background: var(--tg-button, var(--wax)); color: var(--tg-button-text, #fff); }
+html.in-telegram .btn-primary:hover { background: var(--tg-button, var(--wax)); filter: brightness(.94); color: var(--tg-button-text, #fff); }
+html.has-main #claim-go { display: none; }
+html.in-telegram :focus-visible { outline-color: var(--tg-link, var(--wax)); }
+
+html.in-telegram .tma-wallet { display: grid; gap: 14px; padding: 16px 14px; margin-top: 12px; background: var(--paper); border-radius: 18px; }
+.wallet-who { display: flex; align-items: center; gap: 12px; }
+.wallet-hi { font: 600 17px/1.2 var(--f-text); }
+.wallet-sub { font-size: 13px; color: var(--ground-dim); }
+.wallet-label { font-size: 13px; color: var(--ground-dim); }
+.wallet-amount { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.wallet-amount .ico-coin { width: 34px; height: 34px; }
+.wallet-figure { font: 700 28px/1 var(--f-text); letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.wallet-btc { font-size: 14px; color: var(--ground-dim); font-variant-numeric: tabular-nums; }
+.tma-wallet[data-empty="1"] .wallet-figure { color: var(--ground-dim); }
+
+html.in-telegram .gift { display: flex; flex-direction: column; gap: 14px; padding-block: 14px 28px; }
+html.in-telegram .gift-copy { order: 0; gap: 4px; }
+html.in-telegram .gift h1 { font: 700 20px/1.2 var(--f-text); letter-spacing: -.01em; }
+html.in-telegram .gift .lead { font-size: 14px; font-weight: 400; color: var(--ground-dim); }
+html.in-telegram .gift-card { order: 1; }
+html.in-telegram .gift-side { order: 2; }
+html.in-telegram .gift-strip { font-size: 12px; text-align: center; }
+html.in-telegram .gift-panel { min-height: 0; background: var(--paper); border-radius: 18px; padding: 16px 14px 0; }
+html.in-telegram .panel-amount { display: none; }
+html.in-telegram .panel-act { background: transparent; padding: 4px 0 14px; }
+html.in-telegram .panel-act:not(:has(.btn:not(#claim-go))) { padding-top: 0; }
+html.in-telegram .panel-title { font: 700 22px/1.15 var(--f-text); }
+html.in-telegram .panel-rows, html.in-telegram .panel-rows > div { background: transparent; }
+html.in-telegram .panel-lock { font-size: 15px; }
+.panel-lock strong { font-variant-numeric: tabular-nums; }
+
+/* the red envelope */
+html.in-telegram .card.env { display: flex; flex-direction: column; gap: 14px; padding: 22px 16px 16px; border-radius: 22px; color: #fff; background: linear-gradient(165deg, var(--env-a), var(--env-b)); box-shadow: 0 10px 30px -14px rgba(160, 20, 29, .55); }
+.env-flap { position: absolute; inset: 0 0 auto 0; height: 78px; background: rgba(0, 0, 0, .13); clip-path: polygon(0 0, 100% 0, 50% 100%); pointer-events: none; }
+html.in-telegram .env .card-head { position: relative; align-items: center; }
+html.in-telegram .env .card-title { font: 600 15px/1.2 var(--f-text); opacity: .92; }
+html.in-telegram .env .card-state { font: 600 13px/1 var(--f-text); padding: 6px 10px 6px 7px; border-radius: 999px; background: rgba(255, 255, 255, .2); gap: 6px; color: #fff; }
+html.in-telegram .env .card-state::before { content: none; }
+html.in-telegram .env .card-state .ico { width: 16px; height: 16px; }
+html.in-telegram .env .card-state .ico svg circle { fill: #fff; }
+html.in-telegram .env .card-state .ico svg path { stroke: var(--env-b); }
+html.in-telegram .env-amount { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 30px; }
+html.in-telegram .env .figure { font: 700 clamp(40px, 13vw, 54px)/1 var(--f-text); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+html.in-telegram .env .figure-u { font-size: 18px; font-weight: 600; opacity: .85; letter-spacing: 0; }
+html.in-telegram .env .figure-wait { font-size: 22px; text-align: center; margin-top: 30px; }
+html.in-telegram .env .figure-sub { text-align: center; font-size: 14px; opacity: .8; margin-top: -6px; font-variant-numeric: tabular-nums; }
+html.in-telegram .env .consequence { text-align: center; font-size: 14px; }
+.env-lock { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 14px; background: rgba(0, 0, 0, .22); font-size: 14px; line-height: 1.35; position: relative; }
+.env-lock .ico { width: 18px; height: 18px; opacity: .95; }
+.env-lock span:last-child { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.env-name { font-variant-numeric: tabular-nums; font-weight: 700; }
+html.in-telegram .env .env-holder { display: none; }
+html.in-telegram .env .proof { background: rgba(0, 0, 0, .16); border-radius: 14px; padding: 10px 12px; color: #fff; }
+html.in-telegram .env .proof summary { font-size: 13px; font-weight: 600; opacity: .9; cursor: pointer; }
+html.in-telegram .env .proof a, html.in-telegram .env .proof .rows, html.in-telegram .env .proof .card-note { color: #fff; }
+html.in-telegram .env .proof .row dt { color: rgba(255, 255, 255, .72); }
+html.in-telegram .env .microprint { display: none; }
+html.in-telegram .env[data-play="1"] { animation: env-in .5s var(--ease) both; }
+@keyframes env-in { from { transform: translateY(10px) scale(.985); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { html.in-telegram .env[data-play="1"] { animation: none; } }
+html.in-telegram .gift .lead { display: none; }
+html.in-telegram .panel-act { position: static; }
+html.in-telegram .panel-alt { color: var(--tg-link, var(--ink)); text-decoration: none; font-weight: 600; min-height: 40px; }
+html.in-telegram .panel-alt:hover { color: var(--tg-link, var(--ink)); }
+html.in-telegram .env .proof summary { color: #fff; }
+html.in-telegram .env .proof[open] summary { margin-bottom: 8px; }
+html.in-telegram .env .proof { padding: 0 12px; }
+html.in-telegram .env .proof summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; }
+html.in-telegram .env .proof > :not(summary) { padding-bottom: 10px; }
+.env-lock { align-items: flex-start; }
+.env-lock .ico { margin-top: 1px; }
+html.in-telegram .share-mark { border-radius: 6px; }
+html.in-telegram .env .figure-sub { color: #fff; }
+html.in-telegram .env .proof { min-height: 0; margin: 0; display: block; }
+html.in-telegram .env .proof summary { list-style: none; }
+html.in-telegram .env .proof summary::-webkit-details-marker { display: none; }

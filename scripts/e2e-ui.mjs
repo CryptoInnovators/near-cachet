@@ -307,7 +307,14 @@ try {
     await sleep(1000);
     const before = await evalJs("location.href");
     console.log("pre-click", JSON.stringify(await evalJs("({ y: scrollY, w: innerWidth, h: innerHeight, r: JSON.stringify(document.querySelector('#claim-go').getBoundingClientRect()), hash: location.hash.slice(0, 40) })")));
-    await click("#claim-go");
+    if (MINI) {
+      const mb = await evalJs(`({ visible: Telegram.WebApp.MainButton.isVisible, text: Telegram.WebApp.MainButton.text, inPage: getComputedStyle(document.querySelector("#claim-go")).display, wallet: document.querySelector("#tma-wallet")?.innerText.replace(/\\s+/g, " "), lock: document.querySelector(".env-lock")?.innerText.replace(/\\s+/g, " "), status: document.querySelector(".env .card-state")?.innerText, sealedWord: /\\bseal(ed)?\\b/i.test(document.querySelector(".gift")?.innerText || "") })`);
+      check("miniapp: the claim action is the Telegram MainButton labelled Claim my share", mb.visible === true && mb.text === ACTION && mb.inPage === "none", JSON.stringify(mb));
+      check("miniapp: the wallet header shows the Telegram user and a Bitcoin balance", /^Hi, \S+/.test(mb.wallet || "") && /Bitcoin balance/.test(mb.wallet || ""), mb.wallet);
+      check("miniapp: the envelope says who alone can open it, and the status is one plain word", /^Only .+ can open this$/.test(mb.lock || "") && /^[A-Z][a-z]+$/.test((mb.status || "").trim()), `${mb.lock} / ${mb.status}`);
+      check("miniapp: primary copy never says sealed", mb.sealedWord === false, "the word seal appears on the first screen");
+      await evalJs(`Telegram.WebView.receiveEvent("main_button_pressed")`); // what the Telegram client sends when the native MainButton is tapped
+    } else await click("#claim-go");
     await sleep(1500);
     console.log("post-click", JSON.stringify(await evalJs("({ btn: document.querySelector('#claim-go')?.textContent, say: document.querySelector('.panel-say')?.textContent, st: document.querySelector('#claim-status').textContent })")));
     const labels = new Set();

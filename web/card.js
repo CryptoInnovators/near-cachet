@@ -69,8 +69,58 @@ function placeholder(slot, title, line, tone) {
   ]));
 }
 
+const tma = () => (globalThis.cachetTma?.inTelegram() ? globalThis.cachetTma : null);
+
+// Contract state to the one plain word the card shows. A Sealed note whose claim link is spent is a claimed share.
+function stateWord(note, ctx) {
+  const t = globalThis.cachetTma;
+  if (note.state === "Sealed" && ctx.you && note.owner_id === ctx.you) return { word: "Yours", icon: "check" };
+  if (note.state === "Sealed" && !note.claim) return { word: "Claimed", icon: "done" };
+  return t ? t.status(note.state) : { word: note.state, icon: "check" };
+}
+
+function proofBlock(note, ctx) {
+  return h("details", { class: "proof" },
+    h("summary", null, "Show how it is checked"),
+    note.utxo ? h("p", { class: "card-note" }, `The seal has one tick per hex digit of the Bitcoin block hash. ${leadingZeros(note.utxo.block_hash)} leading zeros are the gap at the top.`) : null,
+    facts(note, ctx),
+    note.utxo ? h("p", { class: "microprint", "aria-hidden": "true" }, microprint(note.utxo.txid)) : null,
+    h("p", null, link(ctx.proofHref || "index.html#record", "Open the full proof view")));
+}
+
+// The Mini App card: a red envelope holding sats with the BTC icon, who alone can open it, and one status word.
+function envelope(slot, note, ctx) {
+  const t = tma();
+  const key = `env:${ctx.net.name}:${ctx.contract}:${note.token_id}:${note.state}:${note.owner_id}:${note.claim ? 1 : 0}`;
+  const play = slot.dataset.sealKey !== key && !reducedMotion();
+  slot.dataset.sealKey = key;
+  const count = Boolean(note.utxo) && !counted && !reducedMotion();
+  const figure = h("span", { class: "figure-n" }, note.utxo ? (count ? "0" : int(note.utxo.sats)) : "0");
+  const st = stateWord(note, ctx);
+  const card = h("article", { class: "card env", dataset: { state: note.state } },
+    h("div", { class: "env-flap", "aria-hidden": "true" }),
+    h("div", { class: "card-head" },
+      h("h2", { class: "card-title" }, "Red envelope ", h("span", { class: "tok" }, `#${note.token_id}`)),
+      h("p", { class: "card-state", dataset: { state: st.word } }, t.icon(st.icon), st.word)),
+    note.utxo
+      ? h("div", { class: "env-amount" }, t.icon("btc", "ico-coin"), h("p", { class: "figure" }, figure, h("span", { class: "figure-u" }, " sats")))
+      : h("p", { class: "figure figure-wait" }, "Not funded yet"),
+    note.utxo ? h("p", { class: "figure-sub" }, btc(note.utxo.sats)) : null,
+    consequence(note, ctx.you) ? h("p", { class: "consequence" }, consequence(note, ctx.you)) : null,
+    note.heir
+      ? h("p", { class: "env-lock" }, t.icon("lock"), h("span", null, "Only ", t.avatar({ seed: note.heir, size: 22 }), h("strong", { class: "env-name" }, short(note.heir, 8, 5)), " can open this"))
+      : null,
+    h("dl", { class: "rows rows-plain env-holder" }, row("Holder", h("span", { class: "holder" }, holder(note.owner_id, ctx.you)))),
+    proofBlock(note, ctx));
+  if (play) card.dataset.play = "1";
+  slot.replaceChildren(card);
+  if (count) { counted = true; countUp(figure, note.utxo.sats, { delay: 360 }); }
+  return card;
+}
+
 // ctx: { net, hrp, contract, you?, funding?: { address, activity }, proofHref? }. Plays the seal press once per distinct note state.
 function render(slot, note, ctx) {
+  if (tma()) return envelope(slot, note, ctx);
   const key = `${ctx.net.name}:${ctx.contract}:${note.token_id}:${note.state}:${note.utxo?.block_hash || ""}`;
   const play = slot.dataset.sealKey !== key && !reducedMotion();
   slot.dataset.sealKey = key;
@@ -79,16 +129,11 @@ function render(slot, note, ctx) {
   art.querySelectorAll(".seal-tick").forEach((tick) => tick.style.setProperty("--i", tick.dataset.i));
   const count = Boolean(note.utxo) && !counted && !reducedMotion();
   const figure = h("span", { class: "figure-n" }, note.utxo ? (count ? "0" : int(note.utxo.sats)) : "0");
-  const proof = h("details", { class: "proof" },
-    h("summary", null, "Show how it is checked"),
-    note.utxo ? h("p", { class: "card-note" }, `The seal has one tick per hex digit of the Bitcoin block hash. ${leadingZeros(note.utxo.block_hash)} leading zeros are the gap at the top.`) : null,
-    facts(note, ctx),
-    note.utxo ? h("p", { class: "microprint", "aria-hidden": "true" }, microprint(note.utxo.txid)) : null,
-    h("p", null, link(ctx.proofHref || "index.html#record", "Open the full proof view")));
+  const proof = proofBlock(note, ctx);
   const card = shell(note.state, [
     h("div", { class: "card-head" },
       h("h2", { class: "card-title" }, "Cachet note ", h("span", { class: "tok" }, `#${note.token_id}`)),
-      h("p", { class: "card-state", dataset: { state: note.state } }, note.state)),
+      h("p", { class: "card-state", dataset: { state: note.state } }, stateWord(note, ctx).word)),
     art,
     h("div", { class: "amount" },
       note.utxo

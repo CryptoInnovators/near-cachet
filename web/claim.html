@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <meta name="description" content="A Bitcoin red envelope sent in a chat. Claim your share in one press, with or without a NEAR wallet. The sealed note and its amount are read live from the chain.">
+  <meta name="description" content="A Bitcoin red envelope sent in a chat. Claim your share in one press, with or without a NEAR wallet. The note and its amount are read live from the chain.">
   <title>Cachet red envelope, claim your share</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%238b1a22'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%236a1118'/%3E%3C/svg%3E">
   <link rel="preload" href="fonts/gloock-400.woff2" as="font" type="font/woff2" crossorigin>
@@ -29,6 +29,7 @@
 
   <main id="main">
     <div class="frame">
+      <section class="tma-wallet" id="tma-wallet" aria-label="Your Bitcoin balance" hidden></section>
       <section class="gift" id="gift" aria-labelledby="gift-title">
         <div class="gift-copy">
           <h1 class="display" id="gift-title">A Bitcoin note that pays one person only.</h1>
@@ -62,6 +63,7 @@
   <script src="linkdrop-claim.js" defer></script>
   <script src="ui.js" defer></script>
   <script src="seal.js" defer></script>
+  <script src="tma.js" defer></script>
   <script src="card.js" defer></script>
   <script type="module" src="wallet.js"></script>
   <script src="claim.js" defer></script>

@@ -174,6 +174,7 @@ async function claim(useWallet = false) {
   slow = false;
   const go = $("claim-go");
   if (go) { go.disabled = true; go.textContent = useWallet ? "Waiting for your wallet…" : "Saving your key…"; }
+  nativeMain({ text: useWallet ? "Waiting for your wallet…" : "Saving your key…", busy: true });
   let account = null;
   let walletless = false;
   try {
@@ -214,7 +215,7 @@ async function claim(useWallet = false) {
       if (late) throw new Error(late);
     }
     const token = await poll(async () => (await view("nft_token", { token_id: frag.token })).value, (v) => v?.owner_id === account, 30000, 1000);
-    if (token?.owner_id === account) session.claimed = true; else slow = true;
+    if (token?.owner_id === account) { session.claimed = true; T()?.haptic("success"); } else slow = true;
     if (claimTx && signer) poll(() => cachetChain.rpc("EXPERIMENTAL_tx_status", [claimTx, signer], net), (v) => v?.final_execution_status === "FINAL", 120000, 3000).catch(() => {});
   } catch (error) {
     // A submit that timed out or was rate limited may still have landed: the chain decides.
@@ -261,7 +262,7 @@ async function unseal(note, config, dest, fee) {
     session.tx.unseal = txHash(result);
     const current = await poll(async () => (await view("note", { token_id: frag.token })).value, (v) => v?.state === "Unsealed", 180000, 3000);
     if (current?.state !== "Unsealed") return status(`The signer has not answered. Recover opens at NEAR block ${Number(current?.pending_since || note.pending_since) + 400}.`, true);
-    status("The seal is broken. The signed sweep is ready to broadcast.");
+    status("The note is unlocked. The signed sweep is ready to broadcast.");
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
 }
@@ -311,7 +312,7 @@ async function broadcast(note, signed, base) {
     const tx = await cachetChain.mempoolJson(base, `/tx/${encodeURIComponent(txid)}`);
     if (tx.vin?.[0]?.txid !== note.utxo.txid || tx.vin?.[0]?.vout !== note.utxo.vout) return status("The broadcast transaction does not spend this note's funding output.", true);
     session.tx.broadcast = txid;
-    status("The sweep is in the Bitcoin mempool and spends the sealed output.");
+    status("The sweep is in the Bitcoin mempool and spends the locked output.");
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
 }
@@ -340,6 +341,15 @@ async function finalize(note, config, base) {
 
 /* ---- the panel ---- */
 const txUrl = (hash) => `${net.nearExplorer}/txns/${hash}`;
+const T = () => (globalThis.cachetTma?.inTelegram() ? globalThis.cachetTma : null);
+// The Telegram MainButton carries the primary action; the in-page button is hidden while it is shown.
+function nativeMain(config) {
+  const t = T();
+  if (!t) return false;
+  const ok = t.main(config);
+  document.documentElement.classList.toggle("has-main", Boolean(config) && ok);
+  return ok;
+}
 const setBody = (...nodes) => $("panel-body").replaceChildren(...nodes.flat().filter(Boolean));
 
 function amountBlock(note) {
@@ -367,6 +377,7 @@ function stepsRow(active, first, second = "Claim sent") {
 
 let progressNote = null;
 function progress(text, active, first, second) {
+  nativeMain({ text: ["Saving your key…", "Claiming…", "Confirming…"][active] || "Working…", busy: true });
   setBody(amountBlock(progressNote), shareRow(null), h("p", { class: "panel-say" }, text), stepsRow(active, first, second));
 }
 
@@ -378,14 +389,18 @@ function idlePanel(note) {
     ? h("a", { class: "btn btn-primary", id: "open-telegram", href: `https://t.me/cachet_envelope_bot/envelope?startapp=${btoa(location.hash.slice(1)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}` }, "Open in Telegram")
     : h("button", { class: "btn btn-primary", id: "claim-go", type: "button", onclick: () => claim(false) }, "Claim my share");
   setBody(amountBlock(note), shareRow(null),
-    note?.heir ? h("dl", { class: "panel-rows" }, h("div", null, h("dt", null, "Pays only"), h("dd", null, short(note.heir, 12, 8)))) : null,
-    h("p", { class: "panel-say" }, frag.sender ? (inTelegram ? "Your share goes into a new claim account saved in your Telegram. No NEAR wallet needed." : "This envelope is claimed inside Telegram. No NEAR wallet needed.") : "Connect a NEAR account and sign. The contract moves your share to it, and the link stops working."),
+    note?.heir && !inTelegram ? h("p", { class: "panel-lock" }, "Only ", h("strong", null, short(note.heir, 12, 8)), " can open this") : null,
+    h("p", { class: "panel-say" }, frag.sender ? (inTelegram ? "Your share goes into a claim account saved in your Telegram. A stolen link can only pay the address above." : "This envelope is claimed inside Telegram. No NEAR wallet needed.") : "Connect a NEAR account and sign. The contract moves your share to it, and the link stops working."),
     actionBar(go, frag.sender ? h("button", { class: "textlink panel-alt", type: "button", onclick: () => claim(true) }, "Use my NEAR wallet instead") : null),
-    frag.sender ? h("p", { class: "panel-note" }, "Your key is saved as a file when you claim. Keep it to keep the share.") : null);
+    frag.sender ? h("p", { class: "panel-note" }, (inTelegram ? "Your key is backed up in your Telegram cloud when you claim." : "Your key is saved as a file when you claim. Keep it to keep the share.")) : null);
   if (!frag.sender) go.textContent = "Claim with my NEAR wallet";
+  if (inTelegram && go.id === "claim-go") nativeMain({ text: "Claim my share", onClick: () => claim(false) });
 }
 
-function errorPanel(note, message, retry = () => claim(false), still = "Your share is still sealed.") {
+function errorPanel(note, message, retry = () => claim(false), still = "Your share is still waiting for you.") {
+  T()?.haptic("error");
+  nativeMain({ text: "Try again", onClick: retry });
+  T()?.back(() => { lastError = null; slow = false; render(); });
   setBody(h("div", { class: "panel-state", role: "alert" },
     h("h2", { class: "panel-title" }, "The claim did not go through."),
     h("p", { class: "panel-say" }, message),
@@ -521,12 +536,12 @@ async function passOn(note) {
 
 function passedPanel(s, rec) {
   const u = rec.utxo;
-  const url = `https://t.me/share/url?url=${encodeURIComponent(rec.link)}&text=${encodeURIComponent(`A Bitcoin note for you, ${int(u.sats)} sats. Check the seal, then take it.`)}`;
+  const url = `https://t.me/share/url?url=${encodeURIComponent(rec.link)}&text=${encodeURIComponent(`A Bitcoin note for you, ${int(u.sats)} sats. Check the lock, then take it.`)}`;
   setBody(
-    h("div", { class: "panel-state" }, h("h2", { class: "panel-title" }, "Send this link."), h("p", { class: "panel-say" }, "Whoever opens it checks the seal and takes the note. It works once.")),
+    h("div", { class: "panel-state" }, h("h2", { class: "panel-title" }, "Send this link."), h("p", { class: "panel-say" }, "Whoever opens it checks the lock and takes the note. It works once.")),
     ...amountBlock(s.note).slice(0, 2),
     h("dl", { class: "panel-rows" },
-      h("div", null, h("dt", null, "Seal"), h("dd", null, rec.unchanged ? `Sealed, and the Bitcoin output ${outputText(u)} did not move.` : "The note changed during the hand-off. Read it before you send the link.")),
+      h("div", null, h("dt", null, "Lock"), h("dd", null, rec.unchanged ? `Locked, and the Bitcoin output ${outputText(u)} did not move.` : "The note changed during the hand-off. Read it before you send the link.")),
       h("div", null, h("dt", null, "Hand-off transaction"), h("dd", null, link(txUrl(rec.tx), short(rec.tx, 4, 6), "hexlink"))),
       h("div", null, h("dt", null, "Link"), h("dd", null, h("span", { class: "pass-link", id: "pass-link", dataset: { link: rec.link }, title: "The full link is copied by Copy link" }, `${rec.link.replace(/^https?:\/\//, "").slice(0, 38)}…`), copyButton(rec.link, "Copy link")))),
     actionBar(h("a", { class: "btn btn-primary", id: "pass-share", href: url, target: "_blank", rel: "noopener noreferrer" }, "Send on Telegram")),
@@ -542,7 +557,7 @@ async function receiverPanel(s) {
   }
   const sealed = s.note?.state === "Sealed" && !s.note.claim;
   const checks = [
-    ["Seal", sealed ? "Sealed. No one holds a key that can spend it." : `Not accepted: the note reads ${s.note?.state || "missing"}.`],
+    ["Lock", sealed ? "Locked. No one holds a key that can spend it." : `Not accepted: the note reads ${s.note?.state || "missing"}.`],
     ["Bitcoin output", u ? (spent === false ? `${outputText(u)} is unspent on Bitcoin.` : spent === true ? `${outputText(u)} is spent. Do not take this note.` : `${outputText(u)}, Bitcoin explorer not read.`) : "No funding yet."],
   ];
   const ok = sealed && u && spent !== true;
@@ -613,7 +628,7 @@ async function stations(s) {
     const dest = h("input", { id: "claim-destination", autocomplete: "off", autocapitalize: "none", spellcheck: "false", placeholder: `${config.hrp}1...`, ...(heir ? { value: heir, readonly: true } : {}) });
     const feeIn = h("input", { id: "claim-fee", autocomplete: "off", inputmode: "numeric" });
     const consequence = h("p", { class: "consequence-box", id: "claim-consequence", "aria-live": "polite" });
-    const go = h("button", { class: "btn btn-primary", type: "submit", id: "heir-go", disabled: outspend?.spent !== false }, heir ? "Open as the named heir" : "Break the seal");
+    const go = h("button", { class: "btn btn-primary", type: "submit", id: "heir-go", disabled: outspend?.spent !== false }, heir ? "Open as the named heir" : "Unlock the Bitcoin");
     const form = h("form", { class: "tool-form", novalidate: true },
       h("div", { class: "field" }, h("label", { for: "claim-destination" }, heir ? "Bound heir address, fixed when this note was created" : "Bitcoin destination"), dest),
       h("div", { class: "field" }, h("label", { for: "claim-fee" }, "Fee rate, sat/vB"), feeIn),
@@ -624,15 +639,15 @@ async function stations(s) {
       if (!len || !accountAddress(dest.value.trim().toLowerCase(), config.hrp) || !Number.isInteger(rate) || rate < 1) return consequence.replaceChildren("Name a Bitcoin address and a fee rate to see the sweep before you sign.");
       const fee = rate * cachetOutcome.sweepVsize(len);
       const guard = cachetOutcome.feeGuard(note.utxo.sats, rate, len);
-      consequence.replaceChildren(guard || `Breaking the seal signs a Bitcoin transaction that sends ${int(note.utxo.sats - fee)} sats to ${short(dest.value.trim(), 12, 8)}, fee ${int(fee)} sats at ${rate} sat/vB. The seal cannot be restored.`);
+      consequence.replaceChildren(guard || `Unlocking signs a Bitcoin transaction that sends ${int(note.utxo.sats - fee)} sats to ${short(dest.value.trim(), 12, 8)}, fee ${int(fee)} sats at ${rate} sat/vB. The seal cannot be restored.`);
     };
     dest.addEventListener("input", explain); feeIn.addEventListener("input", explain);
     form.addEventListener("submit", (event) => { event.preventDefault(); unseal(note, config, dest, feeIn); });
     const own = !cachetWallet.accountId && savedAccount()?.accountId === account;
     const funds = own ? h("p", { class: "consequence-box", id: "claim-funds" }, "Checking the claim account balance.") : null;
     if (own) accountFunds(account).then((n) => {
-      funds.textContent = n >= FEE_FLOOR ? "This claim account pays the network fee for the unseal call." : "";
-      if (n < FEE_FLOOR) funds.replaceChildren(`This claim account pays its own network fee. Send about 0.05 NEAR to ${account} `, copyButton(account, "Copy account"), ", then break the seal. A NEAR wallet that imports your saved key can do the same.");
+      funds.textContent = n >= FEE_FLOOR ? "This claim account pays the network fee for the unlock call." : "";
+      if (n < FEE_FLOOR) funds.replaceChildren(`This claim account pays its own network fee. Send about 0.05 NEAR to ${account} `, copyButton(account, "Copy account"), ", then unlock. A NEAR wallet that imports your saved key can do the same.");
     }).catch(() => { funds.textContent = ""; });
     const s2 = session.steal;
     const stealBox = !heir ? null : h("div", { class: "steal", id: "steal-box", "aria-live": "polite" },
@@ -642,24 +657,24 @@ async function stations(s) {
         : h("p", { class: "consequence-box", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
           s2.refused ? `Refused by the contract: ${s2.reason}. ` : "The contract accepted a sweep to the thief address. ",
           s2.hash ? link(txUrl(s2.hash), short(s2.hash, 6, 6), "hexlink") : null));
-    out.push(station("Unseal", "current", h("p", { class: "say" }, heir ? `This note pays only ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), funds, stealBox, form));
+    out.push(station("Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), funds, stealBox, form));
     if (net.name === "testnet" && !heir) cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
     feeDefault(base).then((r) => { feeIn.value = String(r); explain(); }).catch(() => { feeIn.value = "5"; explain(); });
     explain();
-  } else if (note && ["Unsealing", "Resigning"].includes(note.state)) out.push(station("Unseal", "current", h("p", { class: "say" }, "The signer is producing the sweep signature.")));
-  else if (!note || note.state !== "Sealed") out.push(station("Unseal", "done", h("p", { class: "say" }, "The seal is broken and the sweep is signed."), txLink(session.tx.unseal, "Unseal transaction")));
-  else out.push(station("Unseal", "waiting", h("p", { class: "say" }, "Claim the share first, then pick a Bitcoin destination.")));
+  } else if (note && ["Unsealing", "Resigning"].includes(note.state)) out.push(station("Unlock", "current", h("p", { class: "say" }, "The signer is producing the sweep signature.")));
+  else if (!note || note.state !== "Sealed") out.push(station("Unlock", "done", h("p", { class: "say" }, "The seal is broken and the sweep is signed."), txLink(session.tx.unseal, "Unseal transaction")));
+  else out.push(station("Unlock", "waiting", h("p", { class: "say" }, "Claim the share first, then pick a Bitcoin destination.")));
 
   const signed = note?.state === "Unsealed" ? (note.sweep?.signed_tx || (await view("signed_sweep_tx", { token_id: frag.token })).value) : null;
   if (signed && !swept && mine) {
-    out.push(station("Broadcast", "current", h("p", { class: "say" }, "The signed sweep spends the sealed output to your destination. Broadcast it to Bitcoin."),
+    out.push(station("Broadcast", "current", h("p", { class: "say" }, "The signed sweep spends the locked output to your destination. Broadcast it to Bitcoin."),
       h("div", { class: "actions" },
         h("button", { class: "btn btn-primary", type: "button", onclick: () => broadcast(note, signed, base) }, "Broadcast the sweep"),
         h("button", { class: "btn btn-paper", type: "button", onclick: async () => { await navigator.clipboard.writeText(signed); status("Signed sweep copied."); } }, "Copy signed sweep"))));
   } else if (swept || !note) {
     const txid = spend?.txid || session.tx.broadcast;
     out.push(station("Broadcast", "done", h("p", { class: "say" }, "The output is spent on Bitcoin."), txid ? h("p", { class: "station-tx" }, "Sweep ", link(`${base}/tx/${txid}`, short(txid, 10, 6), "hexlink")) : null));
-  } else out.push(station("Broadcast", "waiting", h("p", { class: "say" }, "The signed sweep goes to Bitcoin once the seal is broken.")));
+  } else out.push(station("Broadcast", "waiting", h("p", { class: "say" }, "The signed sweep goes to Bitcoin once the note is unlocked.")));
 
   if (note && swept && mine) out.push(station("Finalize", "current", h("p", { class: "say" }, `Once the sweep has ${config.confirmations} confirmations, the light client checks its proof and the note is burned.`),
     h("button", { class: "btn btn-primary", type: "button", onclick: () => finalize(note, config, base) }, "Finalize")));
@@ -677,7 +692,30 @@ function heading(title, sub) {
   $("gift-sub").textContent = sub;
 }
 
+// The Mini App's wallet header: the signed-in Telegram user and the Bitcoin held by notes this claim account owns.
+function renderWallet(s, account) {
+  const t = T();
+  const el = $("tma-wallet");
+  if (!t || !el) return;
+  const held = new Map();
+  for (const r of shares?.reads || []) if (account && r.note?.owner_id === account && r.note.utxo) held.set(r.token, r.note.utxo.sats);
+  if (account && s.note?.owner_id === account && s.note.utxo) held.set(s.note.token_id, s.note.utxo.sats);
+  const total = [...held.values()].reduce((sum, n) => sum + n, 0);
+  const u = t.user();
+  el.hidden = false;
+  el.dataset.empty = total === 0 ? "1" : "0";
+  el.replaceChildren(
+    h("div", { class: "wallet-who" },
+      t.avatar({ name: u?.name || "You", photo: u?.photo, size: 44 }),
+      h("div", null, h("p", { class: "wallet-hi" }, u?.first ? `Hi, ${u.first}` : "Your wallet"), h("p", { class: "wallet-sub" }, u?.username ? `@${u.username}` : "Telegram wallet"))),
+    h("div", { class: "wallet-bal" },
+      h("p", { class: "wallet-label" }, "Bitcoin balance"),
+      h("p", { class: "wallet-amount" }, t.icon("btc", "ico-coin"), h("span", { class: "wallet-figure" }, `${int(total)} sats`), h("span", { class: "wallet-btc" }, btc(total)))));
+}
+
 async function draw() {
+  nativeMain(null);
+  T()?.back(null);
   const [s] = await Promise.all([readFast(), readShares()]);
   const account = you();
   const owner = s.nft?.owner_id || null;
@@ -688,6 +726,7 @@ async function draw() {
   if (!s.note) cachetCard.none(slot, frag.token, frag.contract);
   else cachetCard.render(slot, s.note, { net, hrp: s.config.hrp, contract: frag.contract, you: account, proofHref: "index.html#record" });
   progressNote = s.note;
+  renderWallet(s, account);
   const passKey = frag.pass ? await cachetClaim.publicKeyHexFromSeed(frag.key) : null;
   const passed = readPassed();
   if (example) {
@@ -697,7 +736,7 @@ async function draw() {
     heading("You passed it on.", `Note #${frag.token} is held by the link. ${sharesLine()}.`);
     passedPanel(s, passed);
   } else if (frag.pass && passKey && owner === passKey && !mine) {
-    heading("A Bitcoin note was passed to you.", `From ${short(frag.sender, 8, 6)}. Check the seal, then take it.`);
+    heading("A Bitcoin note was passed to you.", `From ${short(frag.sender, 8, 6)}. Check the lock, then take it.`);
     if (lastError) errorPanel(s.note, lastError, takeIt, "The note stays where it is.");
     else await receiverPanel(s);
   } else if (mine && s.note?.heir) {
