@@ -19,8 +19,8 @@ view() {
     | jq -er '[.result.result[]] | implode | fromjson'
 }
 note() { view note "$(jq -cn --arg token "$TOKEN" '{token_id:$token}')"; }
-mempool_json() { curl -fsS --retry 6 --retry-all-errors --retry-delay 10 "$MEMPOOL$1"; } # esplora answers 429 under load
-mempool_text() { curl -fsS --retry 6 --retry-all-errors --retry-delay 10 "$MEMPOOL$1"; }
+mempool_json() { sleep 1; curl -fsS --retry 6 --retry-all-errors --retry-delay 10 "$MEMPOOL$1"; } # esplora answers 429 under load
+mempool_text() { sleep 1; curl -fsS --retry 6 --retry-all-errors --retry-delay 10 "$MEMPOOL$1"; }
 # Wait until the contract's light client main chain holds HEIGHT; the light client lags the explorer.
 wait_light_client() {
   local lc; lc=$(view config '{}' | jq -r '.btc_light_client')

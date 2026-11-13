@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <meta name="description" content="Fund one sealed Bitcoin note, then hand over its claim link. The recipient claims it with a NEAR account and your seed phrase never leaves your wallet.">
-  <title>Cachet, give a child Bitcoin they can claim when ready</title>
+  <meta name="description" content="Send Bitcoin as a red envelope in any chat. Friends tap the link and claim their share in one press, with or without a NEAR wallet.">
+  <title>Cachet red envelope, send Bitcoin in any chat</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%238b1a22'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%236a1118'/%3E%3C/svg%3E">
   <link rel="preload" href="fonts/gloock-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/schibsted-grotesk-var.woff2" as="font" type="font/woff2" crossorigin>
@@ -13,42 +13,45 @@
   <script>if (/[?&]tgWebAppStartParam=/.test(location.search)) location.replace("claim.html" + location.search + location.hash); document.documentElement.classList.add("js");</script>
 </head>
 <body>
-  <a class="skip" href="#main">Skip to the note</a>
+  <a class="skip" href="#main">Skip to the envelope</a>
 
   <div class="frame">
     <header class="bar">
       <a class="wordmark" href="index.html" aria-label="Cachet home">Cachet</a>
       <nav class="nav" aria-label="Sections">
-        <a href="claim.html" id="nav-claim">Claim a gift</a>
-        <a href="hongbao.html">Send in Telegram</a>
-        <a href="#how">How a gift moves</a>
-        <a href="#record">Proof view</a>
-        <a href="judge.html" id="nav-judge">Judge view</a>
-        <a href="#desk">Your notes<sup id="notes-count" hidden></sup></a>
+        <a href="index.html#gift">Claim a share</a>
+        <a class="nav-more" href="index.html#how">How it works</a>
+        <a class="nav-more" href="hongbao.html">Send an envelope</a>
       </nav>
-      <div class="net" id="net" role="group" aria-label="Network"><a id="net-testnet" href="?network=testnet">Testnet</a><a id="net-mainnet" href="?network=mainnet">Mainnet</a></div>
-      <button class="btn btn-quiet" id="wallet-connect" type="button">Connect wallet</button>
+      <details class="menu"><summary>Menu</summary><div class="menu-list"><a href="index.html#how">How it works</a><a href="hongbao.html">Send an envelope</a></div></details>
     </header>
   </div>
 
   <main id="main">
     <div class="frame">
-      <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-copy">
-          <h1 class="display rise" id="hero-title">Give a child Bitcoin they can claim when ready.</h1>
-          <p class="lead rise" id="hero-sub" style="--d:1">Fund one sealed Bitcoin note, then hand over its claim link. The recipient claims it with a NEAR account; your seed phrase never leaves your wallet.</p>
-          <div class="cta rise" style="--d:2">
-            <a class="btn btn-primary" id="claim-cta" href="claim.html">Claim a Bitcoin gift</a>
-            <a class="textlink" href="#how">How a gift moves</a>
-            <p class="cta-note" id="cta-note" role="status" aria-live="polite"></p>
-          </div>
+      <section class="gift" id="gift" aria-labelledby="gift-title">
+        <div class="gift-copy">
+          <h1 class="display" id="gift-title">A Bitcoin red envelope is waiting.</h1>
+          <p class="lead" id="gift-sub">Reading the envelope from the contract.</p>
         </div>
-        <dl class="strip rise" id="strip" style="--d:3" aria-label="Where this gift was read"></dl>
-        <div class="hero-card rise" style="--d:3">
-          <div id="card-slot" aria-live="polite"></div>
+        <div class="gift-card"><div id="gift-card" aria-live="polite"></div><p class="gift-strip" id="gift-strip"></p></div>
+        <div class="gift-side">
+          <div class="gift-panel" id="gift-panel"><div id="panel-body" aria-live="polite"></div><p class="gift-status" id="claim-status" role="status" aria-live="polite"></p></div>
+          <ol class="stations" id="stations" aria-label="Moving the Bitcoin out" hidden></ol>
         </div>
       </section>
     </div>
+
+    <section class="send section field-ground" id="send" aria-labelledby="send-title">
+      <div class="frame send-grid">
+        <div class="send-copy">
+          <h2 class="title" id="send-title">Send Bitcoin as a red envelope.</h2>
+          <p class="lead">Fund one sealed note per share. Friends tap the link in any chat and claim their share, with or without a NEAR wallet.</p>
+          <div class="cta"><a class="btn btn-paper" href="hongbao.html">Send an envelope</a><a class="textlink" href="#how">How it works</a></div>
+        </div>
+        <dl class="strip" id="strip" aria-label="Where this envelope was read"></dl>
+      </div>
+    </section>
 
     <section class="how section field-paper" id="how" aria-labelledby="how-title">
       <div class="frame">
@@ -71,6 +74,7 @@
           <h2 class="title" id="record-title">Proof view</h2>
           <p class="lead dim">Five checks on this note, run in your browser against the contract, the signer, the light client and Bitcoin, each with the call that produced it.</p>
         </div>
+        <div class="record-card"><div id="card-slot" aria-live="polite"></div></div>
         <div class="tiles" id="tiles" aria-live="polite"></div>
         <div class="lookup">
           <h3>Read another note</h3>
@@ -85,14 +89,19 @@
       </div>
     </section>
 
+    <section class="section field-paper" id="recent" aria-labelledby="recent-title" hidden>
+      <div class="frame"><h2 class="title" id="recent-title">Recently claimed.</h2><ol class="recent-list" id="recent-list"></ol></div>
+    </section>
+
     <section class="section field-ground" id="desk" aria-labelledby="desk-title">
       <div class="frame">
         <div class="desk">
           <div class="section-head">
-            <h2 class="title" id="desk-title">Your notes.</h2>
+            <h2 class="title" id="desk-title">Your envelopes.</h2>
             <p class="lead dim">Connect the owner account to mint a note, seal its funding proof and create the claim link. A NEAR account is all it takes.</p>
           </div>
           <div class="tools">
+            <button class="btn btn-quiet" id="wallet-connect" type="button">Connect wallet</button>
             <div id="owner-actions" aria-live="polite"></div>
             <p id="owner-status" class="status" role="status" aria-live="polite"></p>
           </div>
@@ -103,18 +112,26 @@
 
   <footer class="foot field-ink on-ink">
     <div class="frame"><p class="prov" id="foot-facts"></p></div>
+    <div class="frame foot-row">
+      <div class="net" id="net" role="group" aria-label="Network"><a id="net-testnet" href="?network=testnet">Testnet</a><a id="net-mainnet" href="?network=mainnet">Mainnet</a></div>
+      <a href="judge.html" id="nav-judge">Judge view</a>
+      <a href="hongbao.html">Send in Telegram</a>
+    </div>
   </footer>
 
   <noscript><p class="noscript">Cachet reads live chain data with JavaScript. Enable JavaScript to see the note.</p></noscript>
 
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="chain.js" defer></script>
   <script src="outcome.js" defer></script>
   <script src="btc-proof.js" defer></script>
   <script src="claim-lib.js" defer></script>
+  <script src="linkdrop-claim.js" defer></script>
   <script src="ui.js" defer></script>
   <script src="seal.js" defer></script>
   <script src="card.js" defer></script>
   <script type="module" src="wallet.js"></script>
+  <script src="claim.js" defer></script>
   <script src="app.js" defer></script>
   <script src="owner.js" defer></script>
 </body>

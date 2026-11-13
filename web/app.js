@@ -738,18 +738,7 @@ function mountPage() {
     $("contract-input").value = isAccountId(wantContract) ? wantContract : net.contract;
     $("token-input").value = isTokenId(wantToken) ? wantToken : defaults?.token || "1";
     $("read-form").addEventListener("submit", (event) => { event.preventDefault(); readAll(); });
-    $("claim-cta").href = `claim.html?network=${net.name}`;
     $("how-contract").textContent = net.contract;
-    $("claim-cta").addEventListener("click", async (event) => {
-      event.preventDefault();
-      const note = $("cta-note");
-      note.textContent = "Picking a funded note from the judge pool…";
-      try {
-        const fragment = await cachetClaim.pickJudgeFragment(net, (f) => callView(f.contract, "note", { token_id: f.token }).then((r) => r.value));
-        if (!fragment) { note.textContent = "No sealed judge note with an open claim link is available right now."; return; }
-        location.assign(`claim.html?network=${net.name}#${fragment}`);
-      } catch (error) { note.textContent = formatError(error); }
-    });
     cachetUi.reveal(document);
     readAll();
   }

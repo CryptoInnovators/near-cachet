@@ -49,7 +49,7 @@ case ${1:-} in
     t=${2:?token}
     addr=$(note "$t" | jq -r '.address')
     txid=$(curl -fsS -m 30 --retry 6 --retry-all-errors --retry-delay 10 "$ESPLORA/address/$addr/txs" | jq -er '[.[] | select(.status.confirmed)] | first | .txid')
-    MEMPOOL=$ESPLORA NETCFG=$NETCFG TOKEN=$t OWNER=$OWNER CONTRACT=$CONTRACT scripts/e2e-testnet-gift.sh attest "$txid"
+    MEMPOOL=$ESPLORA NETCFG=$NETCFG TOKEN=$t OWNER=$OWNER CONTRACT=$CONTRACT bash scripts/e2e-testnet-gift.sh attest "$txid"
     echo "sealed $t with $txid"
     ;;
   link)
@@ -62,9 +62,9 @@ case ${1:-} in
     call create_claim "$(jq -cn --arg t "$t" --arg k "$pub" --argjson e $((height + CLAIM_BLOCKS)) '{token_id:$t,claim_key:$k,expires_at_block:$e}')" '0 NEAR' >/dev/null
     for _ in $(seq 1 24); do [[ $(note "$t" | jq -r '.claim.key') == "$pub" ]] && break; sleep 5; done
     [[ $(note "$t" | jq -r '.claim.key') == "$pub" ]] || { echo "claim key post-condition failed for $t" >&2; exit 1; }
-    fragment=$(node -e 'process.stdout.write(require("./web/claim-lib.js").buildFragment({contract:process.argv[1],token:process.argv[2],key:process.argv[3]}))' "$CONTRACT" "$t" "$seed")
+    fragment=$(node -e 'process.stdout.write(require("./web/claim-lib.js").buildFragment({contract:process.argv[1],token:process.argv[2],key:process.argv[3],sender:process.argv[4]}))' "$CONTRACT" "$t" "$seed" "$OWNER")
     [[ -f $LINKS ]] || echo '[]' > "$LINKS"
-    jq --arg f "$fragment" '. + [{fragment:$f}]' "$LINKS" > "$LINKS.tmp" && mv "$LINKS.tmp" "$LINKS"
+    jq --arg f "$fragment" --arg t "$t" --argjson s "$(jq -r '.utxo.sats' <<<"$n")" '. + [{fragment:$f,token_id:$t,sats:$s}]' "$LINKS" > "$LINKS.tmp" && mv "$LINKS.tmp" "$LINKS"
     echo "linked $t"
     ;;
   *) echo "Usage: $0 {mint|status|seal TOKEN|link TOKEN}" >&2; exit 2 ;;

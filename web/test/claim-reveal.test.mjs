@@ -5,10 +5,14 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 
-test("claim.js reveals .rise elements", () => {
+test("the envelope screen never hides content behind .rise", () => {
+  for (const page of ["../claim.html", "../index.html"]) {
+    const html = readFileSync(new URL(page, import.meta.url), "utf8");
+    const gift = html.slice(html.indexOf('<section class="gift"'), html.indexOf("</section>", html.indexOf('<section class="gift"')));
+    assert.ok(gift.length > 200 && !/class="[^"]*\brise\b/.test(gift), page + " first screen must render without a reveal step");
+  }
   const src = readFileSync(new URL("../claim.js", import.meta.url), "utf8");
-  const count = (src.match(/cachetUi\.reveal\(document\)/g) || []).length;
-  assert.ok(count >= 2, `expected at least 2 reveal calls, got ${count}`);
+  assert.ok(!/class: "[^"]*\brise\b/.test(src), "claim.js must not create .rise elements");
 });
 
 test("ui reveal adds in class to all rise elements without IntersectionObserver", () => {

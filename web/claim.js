@@ -1,23 +1,27 @@
 "use strict";
 
 (() => {
-// The gift page. A claim link names one note. The card shows that note's live state and satoshi amount
-// from the chain, and four stations carry it through claim, unseal, broadcast and finalize.
+// The envelope screen, shared by index.html and claim.html. The pool of sealed notes is one red envelope:
+// one note per share. The card shows the visitor's share, the panel claims it in one press, and the
+// stations below carry the claimed share on to Bitcoin (unseal, broadcast, finalize).
 
 const $ = (id) => document.getElementById(id);
 const net = cachetChain.network();
-const { h, int, short, link, groupHex } = cachetUi;
+const { h, int, short, link, btc, copyButton } = cachetUi;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const mempool = () => cachetChain.mempoolBase(net.name === "mainnet" ? "bc" : "tb");
+const FEE_FLOOR = 50000000000000000000000n; // 0.05 NEAR, enough for an unseal call from a claim account
 
-const session = { tx: {} }; // transaction hashes this tab sent, keyed by station
+const session = { tx: {}, keySaved: null, keyFile: null, claimed: false };
 let frag = null;
+let pool = []; // [{ fragment, frag }] for this contract, from judge-links.json
+let shares = null; // { total, left, reads: [{ token, note }] } read from chain
 let busy = false;
-let keySaved = false;
+let lastError = null;
+let slow = false;
+let example = null; // { owner, tx } when every share is claimed and the last one is shown
+let stationsOpen = false;
 let cloudSaved = null; // account id last confirmed in Telegram CloudStorage
 
-// Inside Telegram the claim account key is backed up to the user's Telegram CloudStorage, one key per account,
-// so a save never overwrites an older account and a new device restores the latest one.
 const tg = globalThis.Telegram?.WebApp?.initData && globalThis.Telegram.WebApp.isVersionAtLeast?.("6.9") ? globalThis.Telegram.WebApp : null;
 const cloudKey = (suffix) => `cachet_${net.name}_${suffix}`;
 const cloud = {
@@ -25,6 +29,11 @@ const cloud = {
   set: (key, value) => new Promise((resolve, reject) => tg.CloudStorage.setItem(key, value, (error, ok) => error || !ok ? reject(new Error(String(error || "CloudStorage refused the key."))) : resolve())),
 };
 const accountKey = () => `cachet:claim-account:${net.name}`;
+const savedAccount = () => {
+  try { const a = JSON.parse(localStorage.getItem(accountKey()) || "null"); return a && /^[a-f0-9]{64}$/.test(a.accountId || "") && /^[a-f0-9]{64}$/.test(a.seedHex || "") ? a : null; }
+  catch { return null; }
+};
+const you = () => cachetWallet.accountId || savedAccount()?.accountId || null;
 
 async function restoreFromCloud() {
   if (!tg || localStorage.getItem(accountKey())) return;
@@ -69,17 +78,23 @@ async function poll(read, done, timeoutMs, stepMs) {
   return value;
 }
 
-const view = (method, args, account = frag.contract) => cachetChain.callView(account, method, args, net);
+// The public RPCs answer 429 under load; a read retries a few times before it fails.
+async function view(method, args, account = frag.contract) {
+  let failure;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try { return await cachetChain.callView(account, method, args, net); }
+    catch (error) { failure = error; await delay(600 * (attempt + 1)); }
+  }
+  throw failure;
+}
 
 async function readFast() {
   const [noteR, nftR, configR] = await Promise.all([view("note", { token_id: frag.token }), view("nft_token", { token_id: frag.token }), view("config", {})]);
   const note = noteR.value && typeof noteR.value === "object" ? noteR.value : null;
   const config = configR.value;
-  const base = cachetChain.mempoolBase(config.hrp);
-  return { note, nft: nftR.value, config, height: noteR.blockHeight, base, outspend: null, spend: null };
+  return { note, nft: nftR.value, config, height: noteR.blockHeight, base: cachetChain.mempoolBase(config.hrp), outspend: null, spend: null };
 }
 
-// Slower Bitcoin-side proof checks. Run after the card and claim button are already on screen.
 async function bitcoinChecks(s) {
   if (!s?.note?.utxo) return { outspend: null, spend: null };
   const outspend = await cachetChain.outspendStatus(s.base, s.note.utxo.txid, s.note.utxo.vout);
@@ -104,103 +119,140 @@ async function feeDefault(base) {
   return net.name === "testnet" ? Math.min(half, 5) : half;
 }
 
-/* ---- actions ---- */
-async function connect() {
+/* ---- the pool is the envelope ---- */
+async function loadPool() {
   try {
-    const account = await cachetWallet.connect(net.name);
-    $("claim-connect-status").textContent = short(account, 14, 8);
-    $("claim-connect").textContent = "Connected";
-    $("claim-connect").disabled = true;
-    return account;
-  } catch (error) { status(error.message, true); return null; }
+    const list = await (await fetch("judge-links.json", { cache: "no-store" })).json();
+    pool = list.map((entry) => ({ fragment: entry.fragment, frag: cachetClaim.parseFragment(entry.fragment) })).filter((e) => e.frag && e.frag.contract === net.contract);
+  } catch { pool = []; }
 }
 
-async function claim() {
-  if (busy) return;
-  if (frag.sender && !cachetWallet.accountId && !keySaved) {
-    const box = $("claim-key-backup");
-    box?.scrollIntoView({ block: "center", behavior: cachetUi.reducedMotion() ? "auto" : "smooth" });
-    box?.focus({ preventScroll: true });
-    return status("Save the claim key, tick the box above, then open the gift.", true);
+async function readShares() {
+  const reads = await Promise.all(pool.map(async (e) => ({ token: e.frag.token, fragment: e.fragment, note: (await view("note", { token_id: e.frag.token }, e.frag.contract)).value })));
+  shares = { ...cachetClaim.tallyShares(reads), reads };
+  return shares;
+}
+
+const sharesLine = () => shares ? `${shares.left} of ${shares.total} shares left` : "";
+
+/* ---- actions ---- */
+async function connect() {
+  try { return await cachetWallet.connect(net.name); }
+  catch (error) { lastError = error.message; return null; }
+}
+
+// Backs up the claim account key before the claim: a file plus the clipboard, or Telegram CloudStorage inside Telegram.
+async function saveKey(saved) {
+  if (session.keySaved === saved.accountId) return;
+  const key = await cachetLinkdrop.secretKeyString(saved.seedHex);
+  if (tg) {
+    await backupToCloud(saved);
+    session.keyFile = null;
+  } else {
+    const file = `cachet-${saved.accountId.slice(0, 8)}.key`;
+    const url = URL.createObjectURL(new Blob([key], { type: "text/plain" }));
+    const anchor = h("a", { href: url, download: file, hidden: true });
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    session.keyFile = file;
   }
+  try { await navigator.clipboard.writeText(key); } catch {}
+  session.keySaved = saved.accountId;
+}
+
+async function claim(useWallet = false) {
+  if (busy) return;
   busy = true;
+  lastError = null;
+  slow = false;
+  const go = $("claim-go");
+  if (go) { go.disabled = true; go.textContent = useWallet ? "Waiting for your wallet…" : "Saving your key…"; }
+  let account = null;
   try {
-    let account = cachetWallet.accountId;
+    const walletless = !useWallet && !cachetWallet.accountId && Boolean(frag.sender);
     let result;
-    if (frag.sender && !cachetWallet.accountId) {
+    let signer;
+    if (walletless) {
       if (net.name !== "testnet" || frag.contract !== net.contract) throw new Error("Walletless claim links are testnet only.");
       const saved = await cachetLinkdrop.createImplicitAccount(localStorage, net.name);
       account = saved.accountId;
+      await saveKey(saved);
+      progress("Sending the claim to NEAR. The sender pays the fee.", 1, "Key saved");
       const note = (await view("note", { token_id: frag.token })).value;
-      const keyHex = await cachetClaim.publicKeyHexFromSeed(frag.key);
-      cachetLinkdrop.assertUnclaimed(note, keyHex);
+      cachetLinkdrop.assertUnclaimed(note, await cachetClaim.publicKeyHexFromSeed(frag.key));
       const signature = await cachetClaim.signClaim(frag.key, frag.contract, frag.token, account);
-      status("Waiting for the sender-funded claim transaction.");
       result = await cachetLinkdrop.submitWalletlessClaim({
-        acknowledged: keySaved,
-        send: () => cachetLinkdrop.signAndSend({
-          signerId: frag.sender, seedHex: frag.key, contract: frag.contract,
-          args: { token_id: frag.token, new_owner: account, signature }, net,
-        }),
+        acknowledged: session.keySaved === account,
+        send: () => cachetLinkdrop.signAndSend({ signerId: frag.sender, seedHex: frag.key, contract: frag.contract, args: { token_id: frag.token, new_owner: account, signature }, net }),
       });
-      $("claim-connect-status").textContent = `Your claim account: ${account}`;
-      $("claim-connect").hidden = true;
+      signer = frag.sender;
     } else {
-      account = account || await connect();
+      account = cachetWallet.accountId || await connect();
       if (!account) return;
+      progress("Sending the claim to NEAR. Approve it in your wallet.", 1, "Wallet connected");
       const signature = await cachetClaim.signClaim(frag.key, frag.contract, frag.token, account);
-      status("Waiting for the claim transaction.");
       result = await cachetWallet.call(frag.contract, "claim", { token_id: frag.token, new_owner: account, signature }, { tgas: 100 });
+      signer = account;
     }
     const failed = cachetOutcome.failureText(result);
-    if (failed) return status(failed, true);
+    if (failed) throw new Error(failed);
     const claimTx = txHash(result);
     session.tx.claim = claimTx;
     if (claimTx) localStorage.setItem(`cachet:claim-tx:${frag.contract}:${frag.token}`, claimTx);
-    const signer = frag.sender && !cachetWallet.accountId ? frag.sender : account;
-    if (claimTx) {
-      const optimistic = await poll(async () => cachetChain.rpc("EXPERIMENTAL_tx_status", [claimTx, signer], net), (value) => {
-        const finality = value?.final_execution_status;
-        return finality === "EXECUTED_OPTIMISTIC" || finality === "FINAL" || Boolean(cachetOutcome.failureText(value));
-      }, 60000, 1000);
-      const optimisticFailure = cachetOutcome.failureText(optimistic);
-      if (optimisticFailure) return status(optimisticFailure, true);
+    progress("NEAR is confirming the claim.", 2, walletless ? "Key saved" : "Wallet connected");
+    if (!walletless && claimTx) {
+      const optimistic = await poll(() => cachetChain.rpc("EXPERIMENTAL_tx_status", [claimTx, signer], net), (v) => ["EXECUTED_OPTIMISTIC", "FINAL"].includes(v?.final_execution_status) || Boolean(cachetOutcome.failureText(v)), 60000, 1000);
+      const late = cachetOutcome.failureText(optimistic);
+      if (late) throw new Error(late);
     }
-    status(frag.sender ? "Gift opened." : `You own note ${frag.token}.`);
-    cachetUi.reveal(document);
-    const token = await poll(async () => (await view("nft_token", { token_id: frag.token })).value, (value) => value?.owner_id === account, 20000, 1000);
-    if (token?.owner_id !== account) return status("The claim transaction returned, but nft_token did not show your account within 20 seconds.", true);
-    status(frag.sender ? `Gift opened into ${account}. Its Bitcoin stays sealed until you unseal it.` : `You own note ${frag.token}.`);
-    if (claimTx && signer) {
-      poll(async () => cachetChain.rpc("EXPERIMENTAL_tx_status", [claimTx, signer], net), (value) => value?.final_execution_status === "FINAL", 120000, 3000).catch(() => {});
-    }
-  } catch (error) { status(error.message, true); }
+    const token = await poll(async () => (await view("nft_token", { token_id: frag.token })).value, (v) => v?.owner_id === account, 30000, 1000);
+    if (token?.owner_id === account) session.claimed = true; else slow = true;
+    if (claimTx && signer) poll(() => cachetChain.rpc("EXPERIMENTAL_tx_status", [claimTx, signer], net), (v) => v?.final_execution_status === "FINAL", 120000, 3000).catch(() => {});
+  } catch (error) { lastError = error.message; }
   finally { busy = false; await render(); }
-  cachetUi.reveal(document);
+}
+
+async function recheck() {
+  if (busy) return;
+  busy = true;
+  try {
+    const account = you();
+    const token = await poll(async () => (await view("nft_token", { token_id: frag.token })).value, (v) => v?.owner_id === account, 20000, 1000);
+    if (token?.owner_id === account) { session.claimed = true; slow = false; }
+  } catch (error) { lastError = error.message; }
+  finally { busy = false; await render(); }
+}
+
+// Runs a contract call as the visitor: through the connected wallet, or signed by the browser's own claim account.
+async function callAs(method, args, tgas) {
+  if (cachetWallet.accountId) return cachetWallet.call(frag.contract, method, args, { tgas });
+  const saved = savedAccount();
+  if (!saved) throw new Error("No claim account is saved in this browser.");
+  return cachetLinkdrop.signAndSend({ signerId: saved.accountId, seedHex: saved.seedHex, contract: frag.contract, args, net, method, tgas, restricted: false });
 }
 
 async function unseal(note, config, dest, fee) {
   if (busy) return;
-  const hrp = config.hrp;
   const address = dest.value.trim().toLowerCase();
   const len = destinationScriptLen(address);
-  if (!accountAddress(address, hrp) || !len) return status(`Enter a ${hrp} Bitcoin witness address.`, true);
+  if (!accountAddress(address, config.hrp) || !len) return status(`Enter a ${config.hrp} Bitcoin witness address.`, true);
   const rate = Number(fee.value.trim());
   const guard = cachetOutcome.feeGuard(note.utxo.sats, rate, len);
   if (guard) return status(guard, true);
   busy = true;
   try {
     status("Waiting for the signer to release the Bitcoin sweep.");
-    const result = await cachetWallet.call(frag.contract, "unseal", { token_id: frag.token, btc_dest: address, fee_rate: rate }, { tgas: 300 });
+    const result = await callAs("unseal", { token_id: frag.token, btc_dest: address, fee_rate: rate }, 300);
     const failed = cachetOutcome.failureText(result);
     if (failed) return status(failed, true);
     session.tx.unseal = txHash(result);
-    const current = await poll(async () => (await view("note", { token_id: frag.token })).value, (value) => value?.state === "Unsealed", 180000, 3000);
+    const current = await poll(async () => (await view("note", { token_id: frag.token })).value, (v) => v?.state === "Unsealed", 180000, 3000);
     if (current?.state !== "Unsealed") return status(`The signer has not answered. Recover opens at NEAR block ${Number(current?.pending_since || note.pending_since) + 400}.`, true);
     status("The seal is broken. The signed sweep is ready to broadcast.");
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
-  cachetUi.reveal(document);
 }
 
 async function broadcast(note, signed, base) {
@@ -227,7 +279,6 @@ async function broadcast(note, signed, base) {
     status("The sweep is in the Bitcoin mempool and spends the sealed output.");
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
-  cachetUi.reveal(document);
 }
 
 async function finalize(note, config, base) {
@@ -242,79 +293,152 @@ async function finalize(note, config, base) {
     const depth = tx.status?.confirmed ? tip - Number(tx.status.block_height) + 1 : 0;
     if (depth < Number(config.confirmations)) throw new Error(`The sweep has ${depth} confirmations. ${config.confirmations} are required.`);
     const proof = await cachetBtcProof.inclusionProof(base, spend.txid);
-    const result = await cachetWallet.call(frag.contract, "finalize", { token_id: frag.token, sweep_raw_tx: spend.raw_tx, proof }, { tgas: 150 });
+    const result = await callAs("finalize", { token_id: frag.token, sweep_raw_tx: spend.raw_tx, proof }, 150);
     const failed = cachetOutcome.failureText(result);
     if (failed) throw new Error(failed);
     session.tx.finalize = txHash(result);
-    await poll(async () => (await view("note", { token_id: frag.token })).value, (value) => value === null, 120000, 3000);
+    await poll(async () => (await view("note", { token_id: frag.token })).value, (v) => v === null, 120000, 3000);
     status("The note is finalized and no longer exists.");
   } catch (error) { status(error.message, true); }
   finally { busy = false; await render(); }
-  cachetUi.reveal(document);
 }
 
-/* ---- the four stations ---- */
-function txLink(hash, label) { return hash ? h("p", { class: "station-tx" }, label, " ", link(`${net.nearExplorer}/txns/${hash}`, short(hash, 10, 6), "hexlink")) : null; }
+/* ---- the panel ---- */
+const txUrl = (hash) => `${net.nearExplorer}/txns/${hash}`;
+const setBody = (...nodes) => $("panel-body").replaceChildren(...nodes.flat().filter(Boolean));
 
-function exportClaimKey(saved, key) {
-  const url = URL.createObjectURL(new Blob([key], { type: "text/plain" }));
-  const anchor = h("a", { href: url, download: `cachet-${saved.accountId}.key`, class: "btn btn-paper" }, "Export claim key");
-  anchor.addEventListener("click", () => setTimeout(() => URL.revokeObjectURL(url), 1000), { once: true });
-  return anchor;
+function amountBlock(note) {
+  return note?.utxo ? [h("p", { class: "panel-sats panel-amount" }, `${int(note.utxo.sats)} sats`), h("p", { class: "panel-btc panel-amount" }, btc(note.utxo.sats))] : [h("p", { class: "panel-sats" }, "No funding yet")];
 }
 
-async function walletlessKeyControls() {
-  const saved = await cachetLinkdrop.createImplicitAccount(localStorage, net.name);
-  const key = await cachetLinkdrop.secretKeyString(saved.seedHex);
-  if (tg) {
-    try {
-      if (await backupToCloud(saved)) {
-        keySaved = true;
-        return [h("div", { class: "field claim-key-backup" },
-          h("span", null, "Your claim key is saved in your Telegram cloud. Open Cachet from Telegram on any device to reach this claim account."),
-          cachetUi.copyButton(key, "Copy key"))];
-      }
-    } catch (error) { status(`Telegram cloud backup failed: ${error.message} Save the key below instead.`, true); }
+// One square per share: wax is open, outlined is claimed, ink is the visitor's own.
+function shareRow(mineToken) {
+  if (!shares?.total) return null;
+  const marks = shares.reads.map((r) => {
+    const open = r.note?.state === "Sealed" && r.note.claim;
+    const mine = mineToken && r.token === mineToken;
+    return h("li", { class: "share-mark", dataset: { state: mine ? "mine" : open ? "open" : "claimed" }, title: `Share ${r.token}` });
+  });
+  return h("div", { class: "shares" }, h("ul", { class: "share-marks", "aria-hidden": "true" }, marks), h("p", { class: "shares-left" }, sharesLine()));
+}
+
+function stepsRow(active, first) {
+  const labels = [first, "Claim sent", "NEAR confirms"];
+  return h("ol", { class: "claim-steps", "aria-label": "Claim progress" }, labels.map((label, i) => {
+    const state = i < active ? "done" : i === active ? "current" : "waiting";
+    return h("li", { dataset: { state } }, h("span", { class: "step-word" }, { done: "Done", current: "Now", waiting: "Waiting" }[state]), label);
+  }));
+}
+
+let progressNote = null;
+function progress(text, active, first) {
+  setBody(amountBlock(progressNote), shareRow(null), h("p", { class: "panel-say" }, text), stepsRow(active, first));
+}
+
+function actionBar(...nodes) { return h("div", { class: "panel-act" }, ...nodes); }
+
+function idlePanel(note) {
+  const go = h("button", { class: "btn btn-primary", id: "claim-go", type: "button", onclick: () => claim(false) }, "Claim my share");
+  setBody(amountBlock(note), shareRow(null),
+    h("p", { class: "panel-say" }, frag.sender ? "Your share goes into a new claim account in this browser. No NEAR wallet needed." : "Connect a NEAR account and sign. The contract moves your share to it, and the link stops working."),
+    actionBar(go, frag.sender ? h("button", { class: "textlink panel-alt", type: "button", onclick: () => claim(true) }, "Use my NEAR wallet instead") : null),
+    frag.sender ? h("p", { class: "panel-note" }, "Your key is saved as a file when you claim. Keep it to keep the share.") : null);
+  if (!frag.sender) go.textContent = "Claim with my NEAR wallet";
+}
+
+function errorPanel(note, message) {
+  setBody(h("div", { class: "panel-state", role: "alert" },
+    h("h2", { class: "panel-title" }, "The claim did not go through."),
+    h("p", { class: "panel-say" }, message),
+    h("p", { class: "panel-say" }, "Your share is still sealed.")),
+  actionBar(h("button", { class: "btn btn-primary", id: "claim-go", type: "button", onclick: () => claim(false) }, "Try again")));
+}
+
+function slowPanel() {
+  setBody(h("div", { class: "panel-state" },
+    h("h2", { class: "panel-title" }, "NEAR accepted the claim."),
+    h("p", { class: "panel-say" }, "The new owner has not shown yet."),
+    session.tx.claim ? h("p", { class: "panel-tx" }, link(txUrl(session.tx.claim), "Claim transaction ", "hexlink"), link(txUrl(session.tx.claim), short(session.tx.claim, 4, 6), "hexlink")) : null),
+  actionBar(h("button", { class: "btn btn-primary", type: "button", onclick: recheck }, "Check again")));
+}
+
+async function nextShare() {
+  await readShares();
+  const open = shares.reads.find((r) => r.note?.state === "Sealed" && r.note.claim && r.token !== frag.token);
+  if (!open) return location.assign("hongbao.html");
+  history.replaceState(null, "", `${location.pathname}${location.search}#${open.fragment}`);
+  location.reload();
+}
+
+async function claimTxOf(owner) {
+  if (session.tx.claim && owner === you()) return session.tx.claim;
+  const stored = owner === you() ? localStorage.getItem(`cachet:claim-tx:${frag.contract}:${frag.token}`) : null;
+  if (stored) return stored;
+  try { return (await cachetChain.claimTx(frag.contract, frag.token, owner, net))?.hash || null; } catch { return null; }
+}
+
+async function openedPanel(note, owner, since) {
+  const hash = await claimTxOf(owner);
+  setBody(h("div", { class: "panel-state" },
+    h("h2", { class: "panel-title" }, "This share was already claimed."),
+    h("p", { class: "panel-say" }, owner ? `Note #${frag.token} belongs to ${short(owner)}${since ? ` since NEAR block ${int(since)}` : ""}.` : `Note #${frag.token} is finalized.`),
+    shareRow(null)),
+  actionBar(h("button", { class: "btn btn-primary", type: "button", onclick: nextShare }, "Claim the next share"),
+    hash ? h("a", { class: "textlink panel-alt", href: txUrl(hash), target: "_blank", rel: "noopener noreferrer" }, "See the claim on NEAR") : null));
+}
+
+async function examplePanel(s) {
+  const owner = s.nft?.owner_id;
+  setBody(amountBlock(s.note), h("p", { class: "panel-say" }, `Owner: ${short(owner || "")}`),
+    example?.tx ? h("p", { class: "panel-tx" }, link(txUrl(example.tx), "Claim transaction ", "hexlink"), link(txUrl(example.tx), short(example.tx, 4, 6), "hexlink")) : null,
+    actionBar(h("a", { class: "btn btn-primary", href: "hongbao.html" }, "Send an envelope")));
+}
+
+async function ownedPanel(s, account) {
+  const saved = savedAccount();
+  const walletless = !cachetWallet.accountId && saved?.accountId === account;
+  const hash = await claimTxOf(account);
+  const key = walletless ? await cachetLinkdrop.secretKeyString(saved.seedHex) : null;
+  const next = [];
+  if (s.note?.state === "Sealed") {
+    next.push(h("button", { class: "btn btn-paper", id: "move-go", type: "button", disabled: stationsOpen, onclick: () => { stationsOpen = true; $("stations").hidden = false; $("move-go").disabled = true; $("stations").scrollIntoView({ block: "nearest", behavior: cachetUi.reducedMotion() ? "auto" : "smooth" }); } }, "Move it to a Bitcoin address"));
   }
-  return [
-    h("div", { class: "field claim-key-backup" },
-      h("span", null, "Claim account key. Save it somewhere safe before opening the gift."),
-      h("code", null, key), cachetUi.copyButton(key, "Copy key"),
-      h("label", { for: "claim-key-backup", class: "check" }, h("input", { id: "claim-key-backup", type: "checkbox", checked: keySaved, onchange: (event) => { keySaved = event.target.checked; } }), " I saved this key and can access the claim account.")),
-    exportClaimKey(saved, key),
-  ];
+  setBody(
+    h("div", { class: "panel-state" },
+      h("h2", { class: "panel-title" }, session.claimed ? "Your share is yours." : "Your share."),
+      h("p", { class: "panel-say" }, session.claimed ? sharesLine() : null)),
+    ...amountBlock(s.note).slice(0, 2),
+    h("dl", { class: "panel-rows" },
+      h("div", null, h("dt", null, "Owner"), h("dd", null, `you, claim account ${short(account, 8, 6)}`)),
+      hash ? h("div", null, h("dt", null, "Claim transaction"), h("dd", null, link(txUrl(hash), short(hash, 4, 6), "hexlink"))) : null,
+      walletless ? h("div", null, h("dt", null, "Key"), h("dd", null, session.keyFile || tg ? `Saved as ${session.keyFile || "your Telegram cloud backup"}.` : "Saved on this browser.", copyButton(key, "Copy key again"))) : null),
+    shareRow(frag.token),
+    next.length ? actionBar(...next) : null,
+    h("p", { class: "panel-note" }, link("hongbao.html", "Send a red envelope like this one")));
+  $("stations").hidden = !(stationsOpen || (s.note && s.note.state !== "Sealed"));
 }
+
+/* ---- the stations ---- */
+function txLink(hash, label) { return hash ? h("p", { class: "station-tx" }, label, " ", link(txUrl(hash), short(hash, 10, 6), "hexlink")) : null; }
 
 function station(title, state, ...body) {
   const word = { done: "Done", current: "Now", waiting: "Waiting" }[state];
   return h("li", { class: "station", dataset: { state } }, h("div", { class: "station-head" }, h("h3", null, title), h("p", { class: "where" }, word)), ...body);
 }
 
-async function stations(s, matches) {
-  const { note, nft, config, base, outspend, spend } = s;
-  const account = cachetWallet.accountId;
-  const owner = nft?.owner_id || null;
+async function accountFunds(account) {
+  try { const r = await cachetChain.rpc("query", { request_type: "view_account", finality: "final", account_id: account }, net); return BigInt(r.amount); }
+  catch (error) { if (/does not exist|unknown/i.test(error.message)) return 0n; throw error; }
+}
+
+async function stations(s) {
+  const { note, config, base, outspend, spend } = s;
+  const account = you();
+  const owner = s.nft?.owner_id || null;
   const mine = Boolean(account && owner === account);
   const swept = outspend?.spent === true;
   const out = [];
 
-  // 1 Claim
-  if (!note) out.push(station("Claim", "done", h("p", { class: "say" }, `Note ${frag.token} is finalized. Its Bitcoin left to the address the owner chose.`)));
-  else if (note.claim) {
-    const walletless = frag.sender && !cachetWallet.accountId;
-    const claimBtn = h("button", { class: "btn btn-primary", id: "claim-go", type: "button", disabled: !matches, onclick: claim }, frag.sender ? "Open this gift" : "Claim this gift");
-    const details = walletless ? await walletlessKeyControls() : [];
-    out.push(station("Claim", "current",
-      h("p", { class: "say" }, matches ? (frag.sender ? `No NEAR wallet needed. The sender's claim-only link key pays the transaction fee and assigns note ${frag.token} to your claim account.` : `Connect a NEAR account and sign. The contract moves note ${frag.token} to it, and the link stops working.`) : "This link no longer matches the claim key on the note."),
-      ...details,
-      claimBtn));
-  } else {
-    const saved = frag.sender ? JSON.parse(localStorage.getItem(`cachet:claim-account:${net.name}`) || "null") : null;
-    const controls = saved?.accountId === owner ? [h("p", { class: "say" }, `Claim account: ${saved.accountId}`), exportClaimKey(saved, await cachetLinkdrop.secretKeyString(saved.seedHex))] : [];
-    out.push(station("Claim", "done", h("p", { class: "say" }, `nft_token(${frag.token}).owner_id reads ${owner}.`), ...controls, txLink(session.tx.claim, "Claim transaction")));
-  }
-
-  // 2 Unseal
   const sealed = note && !note.claim && note.state === "Sealed";
   if (sealed && mine) {
     const dest = h("input", { id: "claim-destination", autocomplete: "off", autocapitalize: "none", spellcheck: "false", placeholder: `${config.hrp}1...` });
@@ -335,15 +459,20 @@ async function stations(s, matches) {
     };
     dest.addEventListener("input", explain); feeIn.addEventListener("input", explain);
     form.addEventListener("submit", (event) => { event.preventDefault(); unseal(note, config, dest, feeIn); });
-    out.push(station("Unseal", "current", h("p", { class: "say" }, "Choose where the Bitcoin goes and at what fee."), form));
+    const own = !cachetWallet.accountId && savedAccount()?.accountId === account;
+    const funds = own ? h("p", { class: "consequence-box", id: "claim-funds" }, "Checking the claim account balance.") : null;
+    if (own) accountFunds(account).then((n) => {
+      funds.textContent = n >= FEE_FLOOR ? "This claim account pays the network fee for the unseal call." : "";
+      if (n < FEE_FLOOR) funds.replaceChildren(`This claim account pays its own network fee. Send about 0.05 NEAR to ${account} `, copyButton(account, "Copy account"), ", then break the seal. A NEAR wallet that imports your saved key can do the same.");
+    }).catch(() => { funds.textContent = ""; });
+    out.push(station("Unseal", "current", h("p", { class: "say" }, "Choose the Bitcoin address that receives the share and the fee."), funds, form));
     if (net.name === "testnet") cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
     feeDefault(base).then((r) => { feeIn.value = String(r); explain(); }).catch(() => { feeIn.value = "5"; explain(); });
     explain();
   } else if (note && ["Unsealing", "Resigning"].includes(note.state)) out.push(station("Unseal", "current", h("p", { class: "say" }, "The signer is producing the sweep signature.")));
   else if (!note || note.state !== "Sealed") out.push(station("Unseal", "done", h("p", { class: "say" }, "The seal is broken and the sweep is signed."), txLink(session.tx.unseal, "Unseal transaction")));
-  else out.push(station("Unseal", "waiting", h("p", { class: "say" }, note.claim ? "After the claim, the owner picks a Bitcoin destination and breaks the seal." : "Connect the owner account to choose a Bitcoin destination.")));
+  else out.push(station("Unseal", "waiting", h("p", { class: "say" }, "Claim the share first, then pick a Bitcoin destination.")));
 
-  // 3 Broadcast
   const signed = note?.state === "Unsealed" ? (note.sweep?.signed_tx || (await view("signed_sweep_tx", { token_id: frag.token })).value) : null;
   if (signed && !swept && mine) {
     out.push(station("Broadcast", "current", h("p", { class: "say" }, "The signed sweep spends the sealed output to your destination. Broadcast it to Bitcoin."),
@@ -355,55 +484,130 @@ async function stations(s, matches) {
     out.push(station("Broadcast", "done", h("p", { class: "say" }, "The output is spent on Bitcoin."), txid ? h("p", { class: "station-tx" }, "Sweep ", link(`${base}/tx/${txid}`, short(txid, 10, 6), "hexlink")) : null));
   } else out.push(station("Broadcast", "waiting", h("p", { class: "say" }, "The signed sweep goes to Bitcoin once the seal is broken.")));
 
-  // 4 Finalize
   if (note && swept && mine) out.push(station("Finalize", "current", h("p", { class: "say" }, `Once the sweep has ${config.confirmations} confirmations, the light client checks its proof and the note is burned.`),
     h("button", { class: "btn btn-primary", type: "button", onclick: () => finalize(note, config, base) }, "Finalize")));
-  else if (!note) out.push(station("Finalize", "done", h("p", { class: "say" }, `note(${frag.token}) and nft_token(${frag.token}) read null.`), txLink(session.tx.finalize, "Finalize transaction")));
+  else if (!note) out.push(station("Finalize", "done", h("p", { class: "say" }, "The note is finalized and no longer exists."), txLink(session.tx.finalize, "Finalize transaction")));
   else out.push(station("Finalize", "waiting", h("p", { class: "say" }, "After the sweep confirms, the light client checks its proof and the note is burned.")));
   return out;
 }
 
+/* ---- draw ---- */
 let rendering = Promise.resolve();
 function render() { rendering = rendering.then(draw, draw); return rendering; }
 
-async function draw() {
-  const s = await readFast();
-  const matches = Boolean(s.note?.claim && s.note.claim.key === await cachetClaim.publicKeyHexFromSeed(frag.key));
-  const slot = $("card-slot");
-  if (!s.note) cachetCard.none(slot, frag.token, frag.contract);
-  else cachetCard.render(slot, s.note, { net, hrp: s.config.hrp, contract: frag.contract });
-  $("stations").replaceChildren(...await stations(s, matches));
-  if (frag.sender && s.nft?.owner_id) {
-    try {
-      const saved = JSON.parse(localStorage.getItem(`cachet:claim-account:${net.name}`) || "null");
-      if (saved?.accountId === s.nft.owner_id) $("claim-connect-status").textContent = `Your claim account: ${saved.accountId}`;
-    } catch { status("The saved claim account could not be read.", true); }
-  }
-  cachetUi.provenance($("foot-facts"), { net, contract: frag.contract, config: s.config, block: s.height });
-  cachetUi.reveal(document);
-  $("gift-sub").textContent = s.note ? (s.note.claim ? `A sealed Bitcoin note, ${int(s.note.utxo?.sats || 0)} sats, read live from ${frag.contract}. ${frag.sender ? "Open it without a NEAR wallet." : "Connect a NEAR account to take it."}` : `Note ${frag.token} belongs to ${s.nft?.owner_id}. Read live from ${frag.contract}.`) : `Note ${frag.token} is finalized on ${frag.contract}.`;
-  document.body.dataset.ready = "1";
-  // Slower Bitcoin proof checks run only after the card and claim button are usable.
-  if (s.note?.utxo) {
-    bitcoinChecks(s).then((checks) => {
-      s.outspend = checks.outspend;
-      s.spend = checks.spend;
-      const st = $("stations");
-      if (st) stations(s, matches).then((nodes) => st.replaceChildren(...nodes)).catch(() => {});
-      cachetUi.reveal(document);
-    }).catch(() => {});
-  }
+function heading(title, sub) {
+  $("gift-title").textContent = title;
+  $("gift-sub").textContent = sub;
 }
 
-async function openGift() {
-  $("gift-title").textContent = "Claim a Bitcoin gift.";
-  $("gift-sub").textContent = `Opening the gift pool on ${net.contract}.`;
+async function draw() {
+  const [s] = await Promise.all([readFast(), readShares()]);
+  const account = you();
+  const owner = s.nft?.owner_id || null;
+  const mine = Boolean(account && owner === account);
+  const open = Boolean(s.note?.claim && frag.key && s.note.claim.key === await cachetClaim.publicKeyHexFromSeed(frag.key));
+  const sender = frag.sender || pool[0]?.frag.sender || net.poolOwner || owner;
+  const slot = $("gift-card");
+  if (!s.note) cachetCard.none(slot, frag.token, frag.contract);
+  else cachetCard.render(slot, s.note, { net, hrp: s.config.hrp, contract: frag.contract, you: account, proofHref: "index.html#record" });
+  progressNote = s.note;
+  if (example) {
+    heading("Every share is claimed.", example.block ? `Here is the last one, claimed at NEAR block ${int(example.block)}.` : "Here is the last one.");
+    await examplePanel(s);
+  } else if (mine) {
+    heading(session.claimed ? "The envelope is yours to keep." : "Your Bitcoin share.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
+    if (slow && !session.claimed) slowPanel(); else await ownedPanel(s, account);
+  } else if (open) {
+    heading("A Bitcoin red envelope is waiting.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
+    if (slow) slowPanel();
+    else if (lastError) errorPanel(s.note, lastError);
+    else idlePanel(s.note);
+  } else {
+    heading("A Bitcoin red envelope.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
+    await openedPanel(s.note, owner, null);
+  }
+  $("stations").replaceChildren(...(mine && !example ? (await stations(s)) : []));
+  if (mine && !example) $("stations").hidden = !(stationsOpen || (s.note && s.note.state !== "Sealed"));
+  else $("stations").hidden = true;
+  cachetUi.provenance($("foot-facts"), { net, contract: frag.contract, config: s.config, block: s.height });
+  strip(frag.contract, s.height);
+  document.body.dataset.ready = "1";
+  if (s.note?.utxo && mine) {
+    bitcoinChecks(s).then(async (checks) => {
+      s.outspend = checks.outspend; s.spend = checks.spend;
+      if ($("stations").hidden && !stationsOpen) return;
+      $("stations").replaceChildren(...await stations(s));
+    }).catch(() => {});
+  }
+  recent();
+}
+
+let stripBusy = false;
+async function strip(contract, block) {
+  if (stripBusy) return;
+  stripBusy = true;
   try {
-    const fragment = await cachetClaim.pickJudgeFragment(net, (f) => cachetChain.callView(f.contract, "note", { token_id: f.token }, net).then((r) => r.value));
-    if (!fragment) { $("gift-sub").textContent = "No sealed gift with an open claim link is in the pool right now."; return; }
-    location.hash = `#${fragment}`;
-    location.reload();
-  } catch (error) { $("gift-sub").textContent = error.message; }
+    const latest = await cachetChain.latestTx(contract, net);
+    $("gift-strip").replaceChildren(...[
+      link(`${net.nearExplorer}/address/${encodeURIComponent(contract)}`, contract), " · read at NEAR block ", int(block),
+      ...(latest ? [" · latest tx ", link(txUrl(latest.hash), short(latest.hash, 4, 6), "hexlink")] : [])]);
+  } catch { $("gift-strip").replaceChildren(link(`${net.nearExplorer}/address/${encodeURIComponent(contract)}`, contract), " · read at NEAR block ", int(block)); }
+  finally { stripBusy = false; }
+}
+
+// Below the fold on index: the last five claimed shares, each with its claim transaction, read from the chain.
+let recentDone = false;
+async function recent() {
+  const list = $("recent-list");
+  if (!list || recentDone || !shares) return;
+  recentDone = true;
+  const claimed = shares.reads.filter((r) => !(r.note?.state === "Sealed" && r.note.claim)).slice(-5);
+  const rows = (await Promise.all(claimed.map(async (r) => {
+    try {
+      const owner = (await view("nft_token", { token_id: r.token })).value?.owner_id;
+      if (!owner) return null;
+      const t = await cachetChain.claimTx(frag.contract, r.token, owner, net);
+      return t ? { token: r.token, owner, ...t } : null;
+    } catch { return null; }
+  }))).filter(Boolean).sort((a, b) => b.blockHeight - a.blockHeight);
+  if (!rows.length) { recentDone = false; return; }
+  list.replaceChildren(...rows.map((r) => h("li", { class: "recent-row" },
+    h("span", { class: "recent-note" }, `Share #${r.token}`), h("span", null, short(r.owner, 8, 6)),
+    h("span", null, `NEAR block ${int(r.blockHeight)}`), link(txUrl(r.hash), short(r.hash, 4, 6), "hexlink"))));
+  $("recent").hidden = false;
+}
+
+/* ---- start ---- */
+async function lastClaimed() {
+  for (const r of [...shares.reads].reverse()) {
+    if (r.note?.state === "Sealed" && r.note.claim) continue;
+    const owner = (await view("nft_token", { token_id: r.token }, frag?.contract || net.contract)).value?.owner_id;
+    if (!owner) continue;
+    const t = await cachetChain.claimTx(net.contract, r.token, owner, net).catch(() => null);
+    return { token: r.token, fragment: r.fragment, owner, tx: t?.hash || null, block: t?.blockHeight || null };
+  }
+  return null;
+}
+
+async function choose() {
+  const saved = savedAccount();
+  if (!frag && saved) {
+    const owned = (await view("nft_tokens_for_owner", { account_id: saved.accountId, from_index: null, limit: 20 }, net.contract)).value;
+    const token = Array.isArray(owned) ? owned.find((t) => pool.some((e) => e.frag.token === t.token_id)) : null;
+    if (token) { frag = { contract: net.contract, token: token.token_id, sender: pool[0]?.frag.sender }; return; }
+  }
+  if (frag) return;
+  const fragment = await cachetClaim.pickJudgeFragment(net, (f) => view("note", { token_id: f.token }, f.contract).then((r) => r.value), pool.map((e) => ({ fragment: e.fragment })));
+  if (fragment) {
+    history.replaceState(null, "", `${location.pathname}${location.search}#${fragment}`);
+    frag = cachetClaim.parseFragment(fragment);
+    return;
+  }
+  await readShares();
+  const last = await lastClaimed();
+  if (!last) throw new Error(`${net.contract} holds no envelope to show.`);
+  frag = cachetClaim.parseFragment(last.fragment);
+  example = last;
 }
 
 async function init() {
@@ -414,23 +618,25 @@ async function init() {
     document.documentElement.classList.add("in-telegram");
     try { await restoreFromCloud(); } catch (error) { status(`Telegram cloud read failed: ${error.message}`, true); }
   }
-  $("claim-connect").addEventListener("click", async () => { if (await connect()) await render(); });
   frag = cachetClaim.parseFragment(location.hash);
   if (!frag) {
-    const start = new URLSearchParams(location.search).get("tgWebAppStartParam");
-    const fragment = cachetClaim.parseMiniAppStartParam(start);
+    const fragment = cachetClaim.parseMiniAppStartParam(new URLSearchParams(location.search).get("tgWebAppStartParam"));
     if (fragment) {
       history.replaceState(null, "", `${location.pathname}${location.search}#${fragment}`);
       frag = cachetClaim.parseFragment(location.hash);
     }
   }
-  if (!frag) return openGift();
-  if (frag.sender) {
-    session.tx.claim = localStorage.getItem(`cachet:claim-tx:${frag.contract}:${frag.token}`);
+  cachetCard.loading($("gift-card"), frag?.token || "");
+  try {
+    await loadPool();
+    await choose();
+    session.tx.claim = localStorage.getItem(`cachet:claim-tx:${frag.contract}:${frag.token}`) || null;
+    await render();
+  } catch (error) {
+    heading("A Bitcoin red envelope.", error.message);
+    status(error.message, true);
+    document.body.dataset.ready = "1";
   }
-  cachetCard.loading($("card-slot"), frag.token);
-  try { await render(); }
-  catch (error) { $("gift-sub").textContent = error.message; status(error.message, true); document.body.dataset.ready = "1"; }
 }
 
 init();

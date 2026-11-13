@@ -99,7 +99,13 @@ async function pickJudgeFragment(net, readNote, entries) {
   return null;
 }
 
-const lib = { pickJudgeFragment, PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment, parseMiniAppStartParam, encodeStartParam };
+// The envelope's shares: reads are [{ token, note }]. A share is left while its note is Sealed with an open claim.
+function tallyShares(reads) {
+  const left = reads.filter((r) => r.note?.state === "Sealed" && r.note.claim);
+  return { total: reads.length, left: left.length };
+}
+
+const lib = { tallyShares, pickJudgeFragment, PKCS8_ED25519_PREFIX, bytesToHex, hexToBytes, publicKeyHexFromSeed, newSeedHex, claimMessage, signClaim, buildFragment, parseFragment, parseMiniAppStartParam, encodeStartParam };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetClaim = lib;
 

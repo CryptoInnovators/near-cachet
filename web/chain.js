@@ -103,6 +103,25 @@ async function latestTx(account, net = network()) {
   return { hash: latest.transaction_hash, blockHeight: latest.tx_block_height, timestampMs: Math.floor(Number(BigInt(latest.tx_block_timestamp) / 1000000n)), success: latest.is_success };
 }
 
+// The claim transaction that moved TOKEN to OWNER, found through OWNER's entries in the FastNear transactions index.
+async function claimTx(contract, token, owner, net = network()) {
+  const post = async (path, body) => {
+    const response = await fetchWithTimeout(`${net.txApi}${path}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) }, 8000);
+    if (!response.ok) throw new Error(`The transactions index returned HTTP ${response.status}.`);
+    return response.json();
+  };
+  const hashes = ((await post("/v0/account", { account_id: owner, limit: 20 })).account_txs || []).map((t) => t.transaction_hash);
+  if (!hashes.length) return null;
+  for (const t of (await post("/v0/transactions", { tx_hashes: hashes })).transactions || []) {
+    const call = t.transaction?.actions?.[0]?.FunctionCall;
+    if (t.transaction?.receiver_id !== contract || call?.method_name !== "claim") continue;
+    let args;
+    try { args = JSON.parse(atob(call.args)); } catch { continue; }
+    if (String(args.token_id) === String(token) && args.new_owner === owner) return { hash: t.transaction.hash, blockHeight: t.execution_outcome?.block_height ?? null };
+  }
+  return null;
+}
+
 async function defaultDestination(net = network(), mempool = mempoolJson) {
   if (!net.poolOwner) return null;
   const tokens = await callView(net.contract, "nft_tokens_for_owner", { account_id: net.poolOwner, from_index: null, limit: 100 }, net);
@@ -116,7 +135,7 @@ async function defaultDestination(net = network(), mempool = mempoolJson) {
   return null;
 }
 
-const lib = { NETWORKS, network, fetchWithTimeout, rpc, callView, mempoolBase, mempoolJson, mempoolText, outspendStatus, latestTx, defaultDestination };
+const lib = { NETWORKS, network, fetchWithTimeout, rpc, callView, mempoolBase, mempoolJson, mempoolText, outspendStatus, latestTx, claimTx, defaultDestination };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetChain = lib;
 

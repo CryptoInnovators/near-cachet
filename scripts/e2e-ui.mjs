@@ -2,11 +2,12 @@
 // UI e2e against live testnet. Serves web/ (or --web DIR) locally, drives the real pages in the
 // signed-in `deepsurge` Brave over CDP (one tab, closed on exit), and compares what the DOM shows
 // with direct RPC reads made here. Fails on any console error, any horizontal overflow, a missing
-// headline, a hero without live chain data above the fold, or a gift claim flow whose sealed state,
-// satoshi amount, funding txid or holder differ from the chain.
+// headline, a first screen whose claim button is not in the first viewport and first in tab order, a pool with fewer
+// than 3 open shares, a 64-hex string on the first screen, an element crossing the card edge, or a share count that
+// differs from the chain. With --claim it also claims one share cold and checks nft_token and the URL.
 // usage: node scripts/e2e-ui.mjs [--web DIR] [--shots DIR] [--contract cachet.testnet]
-import { readFileSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
-import { homedir } from "node:os";
+import { readFileSync, mkdirSync, writeFileSync, unlinkSync, mkdtempSync, cpSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
@@ -23,9 +24,10 @@ const CONTRACT = args.contract || "cachet.testnet";
 const RPCS = ["https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org"];
 const TX_API = "https://tx.test.fastnear.com";
 
-const HEADLINE = "Give a child Bitcoin they can claim when ready.";
-const SUBHEAD = "Fund one sealed Bitcoin note, then hand over its claim link. The recipient claims it with a NEAR account; your seed phrase never leaves your wallet.";
-const ACTION = "Claim a Bitcoin gift";
+const HEADLINE = "A Bitcoin red envelope is waiting.";
+const ACTION = "Claim my share";
+const MIN_OPEN = 3; // the pool must never run dry during judging
+const DO_CLAIM = args.claim === true; // spends one share of the pool: one cold walletless claim through the real page
 
 const failures = [];
 const passes = [];
@@ -99,7 +101,7 @@ async function waitFor(expr, what, timeout = 90000) {
     await sleep(500);
   }
 }
-async function open(url, width) {
+async function open_(url, width) {
   const mobile = width < 600;
   await S("Emulation.setDeviceMetricsOverride", { width, height: mobile ? 844 : 900, deviceScaleFactor: mobile ? 2 : 1, mobile });
   await S("Page.navigate", { url });
@@ -131,104 +133,125 @@ async function shot(name, width) {
 const overflow = () => evalJs("document.documentElement.scrollWidth - document.documentElement.clientWidth");
 const text = (sel) => evalJs(`(document.querySelector(${JSON.stringify(sel)})?.innerText || "").replace(/\\s+/g, " ").trim()`);
 
+// Tab order in document order: what a keyboard reaches, skipping hidden controls (display none, tabindex -1).
+const tabOrder = (stopAt) => evalJs(`(() => {
+  const seen = [];
+  for (const e of document.querySelectorAll('a[href], button, summary, input, select, textarea, [tabindex]')) {
+    const r = e.getBoundingClientRect();
+    if (e.disabled || e.tabIndex < 0 || getComputedStyle(e).display === "none" || (!r.width && !r.height) || e.closest("[hidden], details:not([open]) > :not(summary)")) continue;
+    const label = (e.id || e.textContent).trim().split("\\n")[0].slice(0, 40);
+    seen.push(label);
+    if (label === ${JSON.stringify(stopAt)}) break;
+  }
+  return seen;
+})()`);
+const click = async (selector) => {
+  const r = await evalJs(`(() => { const b = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  for (const type of ["mousePressed", "mouseReleased"]) await S("Input.dispatchMouseEvent", { type, x: r[0], y: r[1], button: "left", clickCount: 1 });
+};
+
 try {
   const links = JSON.parse(readFileSync(path.join(WEB, "judge-links.json"), "utf8"));
-  const frag = new URLSearchParams(links[0].fragment);
-  const TOKEN = frag.get("token");
-  const note = await view(CONTRACT, "note", { token_id: TOKEN });
+  const reads = [];
+  for (const entry of links) {
+    const f = new URLSearchParams(entry.fragment);
+    reads.push({ token: f.get("token"), note: await view(CONTRACT, "note", { token_id: f.get("token") }) });
+  }
+  const open = reads.filter((r) => r.note?.state === "Sealed" && r.note.claim);
+  check(`chain: the pool has at least ${MIN_OPEN} open shares`, open.length >= MIN_OPEN, `${open.length} open of ${reads.length}: ${open.map((r) => r.token).join(",")}`);
+  const first = open[0];
   const config = await view(CONTRACT, "config", {});
-  const nft = await view(CONTRACT, "nft_token", { token_id: TOKEN });
   const head = (await rpc("block", { finality: "final" })).header.height;
   const tx = await latestTx(CONTRACT);
-  check(`chain: note ${TOKEN} is Sealed and funded`, note?.state === "Sealed" && note.utxo?.sats > 0, JSON.stringify(note?.state));
+  check("chain: first open share is Sealed and funded", first?.note?.utxo?.sats > 0, first?.token);
   const fmt = new Intl.NumberFormat("en-US");
-  const nonzero = [...note.utxo.block_hash].filter((c) => c !== "0").length;
+  const left = `${open.length} of ${reads.length} shares left`;
 
-  // ---- index at 1440, full motion ----
-  await motion(false);
-  await open(`${BASE}/index.html?network=testnet`, 1440);
-  await waitFor(`document.querySelector("#strip")?.innerText.includes("NEAR block") && document.querySelector("#card-slot .card-state")`, "index strip and card");
-  check("index headline", (await text("h1")) === HEADLINE, await text("h1"));
-  check("index subhead", (await text("#hero-sub")) === SUBHEAD, await text("#hero-sub"));
-  check("primary action label", (await text("#claim-cta")) === ACTION, await text("#claim-cta"));
-  const gone = await evalJs(`[document.body.innerText.includes("Hand over Bitcoin by link"), document.body.innerText.includes("A seal has four lives"), !!document.querySelector(".ghost-mark")]`);
-  check("cut: old headline, four-lives, giant wordmark are gone", gone.every((x) => x === false), JSON.stringify(gone));
-  const above = await evalJs(`(() => { const fold = 900; const inFold = (el) => el && el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().bottom <= fold; const s = document.querySelector("#strip"); const links = [...s.querySelectorAll("a")]; return { contract: links[0]?.textContent, contractIn: inFold(links[0]), txHref: links[1]?.href || "", txIn: inFold(links[1]), blockText: s.innerText, blockIn: inFold(s), cardIn: inFold(document.querySelector("#card-slot .card")), ctaIn: inFold(document.querySelector("#claim-cta")) }; })()`);
-  check("contract account above the fold", above.contract === CONTRACT && above.contractIn, JSON.stringify(above.contract));
-  check("latest tx hash above the fold equals the FastNear read", above.txIn && above.txHref.includes(tx), `${above.txHref} vs ${tx}`);
-  const shownBlock = Number((above.blockText.match(/NEAR block ([\d,]+)/) || [])[1]?.replace(/,/g, ""));
-  check("block height above the fold is live", above.blockIn && shownBlock <= head + 50 && head - shownBlock < 3000, `page ${shownBlock} head ${head}`);
-  check("provenance card and primary action above the fold", above.cardIn && above.ctaIn, JSON.stringify({ card: above.cardIn, cta: above.ctaIn }));
-  const card = await evalJs(`(() => { const c = document.querySelector("#card-slot .card"); return { state: c.querySelector(".card-state")?.textContent, sats: c.querySelector(".figure-n")?.textContent, body: c.innerText.replace(/\\s+/g, ""), ticks: c.querySelectorAll(".seal-tick").length, seal: c.querySelector(".card-seal")?.getBoundingClientRect().width }; })()`);
-  check("card state equals chain", card.state === note.state, card.state);
-  await waitFor(`document.querySelector("#card-slot .figure-n")?.textContent === ${JSON.stringify(fmt.format(note.utxo.sats))}`, "card satoshi amount");
-  check("card satoshi amount equals chain", (await text("#card-slot .figure-n")) === fmt.format(note.utxo.sats), await text("#card-slot .figure-n"));
-  check("card shows the funding txid and block hash", card.body.includes(note.utxo.txid) && card.body.includes(note.utxo.block_hash));
-  check("seal ticks equal 64 minus the zero nibbles of the live block hash", card.ticks === nonzero, `${card.ticks} vs ${nonzero}`);
-  check("seal is the hero object (at least 280px wide)", card.seal >= 280, String(card.seal));
-  check("index 1440 has no horizontal overflow", (await overflow()) <= 0);
-  await waitFor(`document.body.dataset.ready === "1"`, "index reads finished");
-  const journey = await evalJs(`[...document.querySelectorAll("#journey > li, #journey li.step")].map((li) => li.innerText.replace(/\\s+/g, " "))`);
-  const calls = ["config()", "note(token_id).address", "attest(", "create_claim(", "claim(token_id, new_owner", "unseal(", "finalize("];
-  check("journey lists the seven gift steps in order, each naming its testnet call", journey.length === 7 && calls.every((c, i) => journey[i]?.includes(c)), `${journey.length} steps`);
-  check("journey step 3 reads the live sealed state from chain", (journey[2] || "").includes("Sealed") && (journey[2] || "").includes(fmt.format(note.utxo.sats)), journey[2]);
-  await shot("index", 1440);
-  await motion(true);
-  await open(`${BASE}/index.html?network=testnet`, 1440);
-  await waitFor(`document.body.dataset.ready === "1"`, "index reads (motion on)");
-  const total = await evalJs("document.documentElement.scrollHeight");
-  for (let y = 0; y < total; y += 400) { await evalJs(`window.scrollTo({ top: ${y}, behavior: "instant" })`); await sleep(150); }
-  await waitFor(`document.querySelectorAll(".rise:not(.in)").length === 0`, "every .rise element revealed", 4000);
-  const hidden = await evalJs(`[...document.querySelectorAll(".rise:not(.in)")].map((e) => e.id || e.className)`);
-  check("with motion on every .rise element ends visible", hidden.length === 0, hidden.join(", "));
-  await motion(false);
+  for (const [width, label] of [[1440, "desktop"], [390, "mobile"]]) {
+    await motion(false);
+    await open_(`${BASE}/index.html?network=testnet`, width);
+    await waitFor(`document.querySelector("#claim-go") && document.querySelector(".gift-card .figure-n")`, `${label} first screen`);
+    check(`${label}: h1 is the envelope headline`, (await text("h1")) === HEADLINE, await text("h1"));
+    await waitFor(`document.querySelector("#gift-strip")?.innerText.includes("latest tx")`, "strip");
+    const g = await evalJs(`(() => { const b = document.querySelector("#claim-go").getBoundingClientRect(); const card = document.querySelector(".gift-card .card"); const c = card.getBoundingClientRect(); const out = [...card.querySelectorAll("*")].filter((e) => e.getBoundingClientRect().width && e.getBoundingClientRect().right > c.right + 0.5).map((e) => e.className || e.tagName); return { label: document.querySelector("#claim-go").textContent, bottom: b.bottom, top: b.top, width: b.width, out, giftText: document.querySelector(".gift").innerText, sub: document.querySelector("#gift-sub").textContent, state: card.querySelector(".card-state")?.textContent, sats: card.querySelector(".figure-n")?.textContent, strip: document.querySelector("#gift-strip").innerText, title: card.querySelector(".card-title")?.textContent }; })()`);
+    check(`${label}: the claim button reads "${ACTION}"`, g.label === ACTION, g.label);
+    check(`${label}: the claim button is inside the first viewport`, g.top >= 0 && g.bottom <= (width < 600 ? 844 : 900), `${g.top}..${g.bottom}`);
+    if (width < 600) check("mobile: the claim button is a full width touch target", g.width >= 330, String(g.width));
+    check(`${label}: no 64-hex string on the first screen`, !/[0-9a-f]{64}/i.test(g.giftText), (g.giftText.match(/[0-9a-f]{64}/i) || [""])[0].slice(0, 20));
+    check(`${label}: nothing crosses the card's right edge`, g.out.length === 0, g.out.join(","));
+    check(`${label}: shares left equals the chain`, g.sub.includes(left), `${g.sub} vs ${left}`);
+    const token = g.title.match(/#(\d+)/)?.[1];
+    const shown = await view(CONTRACT, "note", { token_id: token });
+    check(`${label}: card state and amount equal the chain for note ${token}`, g.state === shown.state && (await waitFor(`document.querySelector(".gift-card .figure-n")?.textContent === ${JSON.stringify(fmt.format(shown.utxo.sats))}`, "amount")), `${g.state} ${g.sats}`);
+    check(`${label}: the shown note is an open share`, open.some((r) => r.token === token), token);
+    check(`${label}: strip names the contract, a read block and the latest tx`, g.strip.includes(CONTRACT) && /NEAR block [\d,]+/.test(g.strip) && g.strip.includes(tx.slice(0, 4)), g.strip);
+    const order = await tabOrder("claim-go");
+    const want = width < 600 ? 4 : 5; // skip link, wordmark, then the header links (3 wide, 1 and Menu narrow), then the button
+    check(`${label}: the claim button is first in tab order after the header`, order.at(-1) === "claim-go" && order.length === want + (width < 600 ? 0 : 0), JSON.stringify(order));
+    check(`${label}: no horizontal overflow`, (await overflow()) <= 0, String(await overflow()));
+    await waitFor(`document.body.dataset.ready === "1"`, "reads finished");
+    await shot("index", width);
+  }
+  const ready = await evalJs("!!document.querySelector('.send') && !!document.querySelector('#record')");
+  check("below the fold: send, how it works and the proof view remain", ready);
 
-  // ---- index at 390 ----
-  await open(`${BASE}/index.html?network=testnet`, 390);
-  await waitFor(`document.querySelector("#strip")?.innerText.includes("NEAR block") && document.querySelector("#card-slot .card-state")`, "index (390)");
-  check("index 390 headline", (await text("h1")) === HEADLINE);
-  const m = await evalJs(`(() => { const b = document.querySelector("#claim-cta").getBoundingClientRect(); return { w: b.width, top: b.top, bottom: b.bottom, h1: document.querySelector("h1").getBoundingClientRect().bottom }; })()`);
-  check("390: primary action is full width and in the first screen", m.w >= 340 && m.bottom <= 844, JSON.stringify(m));
-  check("index 390 has no horizontal overflow", (await overflow()) <= 0, String(await overflow()));
-  await waitFor(`document.body.dataset.ready === "1"`, "index reads (390)");
-  await shot("index", 390);
+  // ---- empty pool: a copy of the site whose pool lists only claimed shares ----
+  const claimed = reads.filter((r) => !(r.note?.state === "Sealed" && r.note.claim));
+  if (claimed.length) {
+    const tmp = mkdtempSync(path.join(tmpdir(), "cachet-empty-"));
+    cpSync(WEB, tmp, { recursive: true });
+    writeFileSync(path.join(tmp, "judge-links.json"), JSON.stringify(links.filter((e) => claimed.some((r) => r.token === new URLSearchParams(e.fragment).get("token")))));
+    const port2 = await new Promise((res) => { const s2 = createServer().listen(0, "127.0.0.1", () => { const p = s2.address().port; s2.close(() => res(p)); }); });
+    const server2 = spawn("python3", [path.join(root, "scripts/serve-web.py"), String(port2), tmp], { stdio: "ignore" });
+    for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://127.0.0.1:${port2}/`)).ok) break; } catch {} await sleep(100); }
+    await open_(`http://localhost:${port2}/index.html?network=testnet`, 1440);
+    await waitFor(`document.querySelector("#panel-body a.btn")`, "empty pool example");
+    const e = await evalJs(`({ h1: document.querySelector("h1").textContent, sub: document.querySelector("#gift-sub").textContent, panel: document.querySelector("#panel-body").innerText, cta: document.querySelector("#panel-body a.btn")?.textContent, page: document.body.innerText, card: !!document.querySelector(".gift-card .figure-n") })`);
+    check("empty pool: headline says every share is claimed", e.h1 === "Every share is claimed.", e.h1);
+    check("empty pool: the last claimed share is shown as a real example with its owner", e.card && /Owner: /.test(e.panel) && /claimed at NEAR block [\d,]+/.test(e.sub), `${e.sub} | ${e.panel.slice(0, 80)}`);
+    check("empty pool: the primary action sends an envelope", e.cta === "Send an envelope", e.cta);
+    check("empty pool: no dash placeholders or read failures", !/READ FAILED|Failed to fetch|HTTP \d{3}/.test(e.page) && !/\n-\n/.test(e.page));
+    await shot("index-empty", 1440);
+    server2.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
 
-  // ---- gift claim flow: the primary action lands on the gift ----
-  await open(`${BASE}/index.html?network=testnet`, 1440);
-  await waitFor(`document.querySelector("#claim-cta") && document.body.dataset.ready === "1"`, "index before click");
-  await evalJs(`document.querySelector("#claim-cta").click()`);
-  await waitFor(`location.pathname.endsWith("claim.html") && location.hash.includes("token=")`, "claim page after primary action");
-  await waitFor(`document.querySelector("#card-slot .card-state") && document.querySelector("#card-slot .figure-n") && document.body.dataset.ready === "1"`, "gift card");
-  const landed = await evalJs(`location.hash`);
-  const landedToken = new URLSearchParams(landed.slice(1)).get("token");
-  const landedNote = landedToken === TOKEN ? note : await view(CONTRACT, "note", { token_id: landedToken });
-  const landedNft = await view(CONTRACT, "nft_token", { token_id: landedToken });
-  await waitFor(`document.querySelector("#card-slot .figure-n")?.textContent === ${JSON.stringify(fmt.format(landedNote.utxo.sats))}`, "gift satoshi amount");
-  const gift = await evalJs(`(() => { const c = document.querySelector("#card-slot .card"); return { state: c.querySelector(".card-state")?.textContent, sats: c.querySelector(".figure-n")?.textContent, body: c.innerText.replace(/\\s+/g, ""), ticks: c.querySelectorAll(".seal-tick").length, page: document.body.innerText.replace(/\\s+/g, " "), claimBtn: document.querySelector("#claim-go")?.textContent, claimDisabled: document.querySelector("#claim-go")?.disabled, stations: [...document.querySelectorAll("#stations > li")].map((li) => li.querySelector("h3")?.textContent) }; })()`);
-  check("gift page h1 names the gift", /gift/i.test(await text("h1")), await text("h1"));
-  check("gift card shows the live sealed state read from chain", gift.state === landedNote.state && gift.state === "Sealed", gift.state);
-  check("gift card shows the funded satoshi amount read from chain", gift.sats === fmt.format(landedNote.utxo.sats), gift.sats);
-  check("gift card shows the Bitcoin funding txid", gift.body.includes(landedNote.utxo.txid));
-  check("gift page shows the holder from nft_token", gift.body.includes(landedNft.owner_id), landedNft.owner_id);
-  check("gift seal is drawn from the live block hash", gift.ticks === [...landedNote.utxo.block_hash].filter((c) => c !== "0").length, String(gift.ticks));
-  check("gift page has a claim button, enabled for a live link", gift.claimBtn === "Claim this gift" && gift.claimDisabled === false, `${gift.claimBtn} ${gift.claimDisabled}`);
-  check("gift journey stations are Claim, Unseal, Broadcast, Finalize", JSON.stringify(gift.stations) === JSON.stringify(["Claim", "Unseal", "Broadcast", "Finalize"]), JSON.stringify(gift.stations));
-  check("gift page says it read at a live NEAR block", /NEAR block [\d,]+/.test(gift.page));
-  check("gift 1440 has no horizontal overflow", (await overflow()) <= 0);
-  await shot("claim", 1440);
-  await open(`${BASE}/claim.html?network=testnet${landed}`, 390);
-  await waitFor(`document.querySelector("#card-slot .figure-n") && document.body.dataset.ready === "1"`, "gift card (390)");
-  check("gift 390 has no horizontal overflow", (await overflow()) <= 0, String(await overflow()));
-  const cb = await evalJs(`document.querySelector("#claim-go").getBoundingClientRect().width`);
-  check("gift 390 claim button is a full width touch target", cb >= 300, String(cb));
-  await shot("claim", 390);
+  // ---- one cold walletless claim through the real page ----
+  if (DO_CLAIM) {
+    await open_(`${BASE}/index.html?network=testnet`, 1440);
+    await evalJs("localStorage.clear()");
+    const t0 = Date.now();
+    await S("Page.navigate", { url: `${BASE}/index.html?network=testnet` });
+    await waitFor(`document.querySelector("#claim-go") && document.querySelector(".gift-card .figure-n")`, "cold first screen");
+    const target = (await text(".gift-card .card-title")).match(/#(\d+)/)[1];
+    const before = await evalJs("location.href");
+    await click("#claim-go");
+    const labels = new Set();
+    const end = Date.now() + 120000;
+    while (Date.now() < end && !(await evalJs("document.querySelector('.panel-title')?.textContent === 'Your share is yours.'"))) {
+      labels.add(await evalJs("document.querySelector('#claim-go')?.textContent || document.querySelector('.panel-say')?.textContent || ''"));
+      if (await evalJs("document.querySelector('.panel-title')?.textContent === 'The claim did not go through.'")) break;
+      await sleep(300);
+    }
+    const seconds = ((Date.now() - t0) / 1000).toFixed(1);
+    const title = await text(".panel-title");
+    check("claim: the panel ends on 'Your share is yours.'", title === "Your share is yours.", `${title} ${await text(".panel-say")}`);
+    check("claim: the URL is unchanged by the press", (await evalJs("location.href")) === before, `${before} -> ${await evalJs("location.href")}`);
+    const account = await evalJs("JSON.parse(localStorage.getItem('cachet:claim-account:testnet')).accountId");
+    const nft = await view(CONTRACT, "nft_token", { token_id: target });
+    check("claim: nft_token owner on chain is the new claim account", nft?.owner_id === account, `${nft?.owner_id} vs ${account}`);
+    const done = await evalJs(`({ rows: document.querySelector(".panel-rows")?.innerText.replace(/\\s+/g, " "), href: document.querySelector(".panel-rows a")?.href, holder: document.querySelector(".gift-card .holder")?.textContent, shares: document.querySelector(".shares-left")?.textContent, next: document.querySelector("#move-go")?.textContent })`);
+    check("claim: the panel shows owner, claim transaction and key file", /Owner you, claim account/.test(done.rows || "") && /Saved as cachet-[0-9a-f]{8}\.key/.test(done.rows || "") && !!done.href, done.rows);
+    check("claim: the card holder reads You", done.holder === "You", done.holder);
+    check("claim: shares left dropped by one", done.shares === `${open.length - 1} of ${reads.length} shares left`, done.shares);
+    check("claim: the next action is offered", done.next === "Move it to a Bitcoin address", done.next);
+    console.log(`claim: ${seconds}s from page load to the confirmed owner. progress labels seen: ${[...labels].join(" | ")}. claim tx ${done.href}`);
+    await shot("claimed", 1440);
+  }
 
-  // ---- a bare claim page opens the gift on its own ----
-  await open(`${BASE}/claim.html?network=testnet`, 1440);
-  await waitFor(`location.hash.includes("token=")`, "bare claim page picks a gift");
-  await waitFor(`document.querySelector("#card-slot .card-state")`, "bare claim page card");
-
-  check("zero console errors on every page", errors.length === 0, [...new Set(errors)].join(" | ").slice(0, 600));
+  // The public NEAR RPC providers answer 429, or a 429 without CORS headers, under shared load; chain.js fails over to the next provider.
+  const real = errors.filter((e) => !/(429|blocked by CORS policy|ERR_FAILED).*(rpc|drpc)|(rpc|drpc).*(429|CORS|ERR_FAILED)|Failed to load resource: net::ERR_FAILED https:\/\/test\.rpc/.test(e));
+  check("zero console errors on every page (RPC provider failover noise excluded)", real.length === 0, [...new Set(real)].join(" | ").slice(0, 600));
 } catch (error) {
   check("script ran to the end", false, String(error.message).split("\n")[0]);
 } finally {

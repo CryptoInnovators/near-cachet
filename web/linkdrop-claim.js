@@ -81,23 +81,27 @@ function u64(value) { const a = new Uint8Array(8); new DataView(a.buffer).setBig
 function string(value) { const b = new TextEncoder().encode(value); return concat(u32(b.length), b); }
 function byteVec(value) { return concat(u32(value.length), value); }
 
-function transactionBytes({ signerId, publicKey, nonce, receiverId, blockHash, args }) {
+function transactionBytes({ signerId, publicKey, nonce, receiverId, blockHash, args, method = "claim", gas = 100_000_000_000_000n }) {
   const pk = typeof publicKey === "string" ? b58decode(publicKey.replace(/^ed25519:/, "")) : publicKey;
   const hash = typeof blockHash === "string" ? b58decode(blockHash) : blockHash;
   if (pk.length !== 32 || hash.length !== 32) throw new Error("Invalid access key or block hash.");
   const json = new TextEncoder().encode(JSON.stringify(args));
   return concat(string(signerId), Uint8Array.of(0), pk, u64(nonce), string(receiverId), hash,
-    u32(1), Uint8Array.of(2), string("claim"), byteVec(json), u64(100_000_000_000_000n), new Uint8Array(16));
+    u32(1), Uint8Array.of(2), string(method), byteVec(json), u64(gas), new Uint8Array(16));
 }
 
-async function signAndSend({ signerId, seedHex, contract, args, net }) {
+// restricted: the signer is a sender-funded claim-only key. Otherwise the signer is a full-access claim account signing its own call.
+async function signAndSend({ signerId, seedHex, contract, args, net, method = "claim", tgas = 100, restricted = true }) {
   if (net.name !== "testnet" || !net.rpc) throw new Error("Walletless claims are available on testnet only.");
   const publicRaw = await cachetClaim.publicKeyHexFromSeed(seedHex);
   const publicKey = `ed25519:${b58encode(hexBytes(publicRaw))}`;
-  const entry = await cachetChain.rpc("query", { request_type: "view_access_key", finality: "final", account_id: signerId, public_key: publicKey }, net);
-  assertClaimKey(entry, contract);
+  const entry = await cachetChain.rpc("query", { request_type: "view_access_key", finality: "final", account_id: signerId, public_key: publicKey }, net).catch((error) => {
+    if (!restricted && /does not exist|unknown/i.test(error.message)) throw new Error("This claim account holds no NEAR yet, so it cannot pay a network fee.");
+    throw error;
+  });
+  if (restricted) assertClaimKey(entry, contract);
   const block = await cachetChain.rpc("block", { finality: "final" }, net);
-  const tx = transactionBytes({ signerId, publicKey, nonce: BigInt(entry.nonce) + 1n, receiverId: contract, blockHash: block.header.hash, args });
+  const tx = transactionBytes({ signerId, publicKey, nonce: BigInt(entry.nonce) + 1n, receiverId: contract, blockHash: block.header.hash, args, method, gas: BigInt(tgas) * 1_000_000_000_000n });
   const privateKey = await crypto.subtle.importKey("pkcs8", hexBytes(PREFIX + seedHex), { name: "Ed25519" }, false, ["sign"]);
   const txHash = new Uint8Array(await crypto.subtle.digest("SHA-256", tx));
   const signature = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, privateKey, txHash));

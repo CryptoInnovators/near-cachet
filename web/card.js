@@ -2,8 +2,10 @@
 
 (() => {
 // The provenance card: one note, its wax seal and the facts the contract holds about it.
-const { h, int, sats, btc, groupHex, link, copyButton, countUp, reducedMotion } = cachetUi;
+const { h, int, sats, btc, groupHex, short, link, copyButton, countUp, reducedMotion } = cachetUi;
+let counted = false; // the amount counts up once per page load; later renders show the final figure
 
+const net_ = () => (typeof cachetChain !== "undefined" ? cachetChain.network().contract : "the contract");
 const PENDING = {
   Attesting: "The Bitcoin light client is checking the funding proof.",
   Unsealing: "The signer is producing the sweep signature.",
@@ -11,9 +13,12 @@ const PENDING = {
   Finalizing: "The Bitcoin light client is checking the sweep proof.",
 };
 
-function consequence(note) {
+// Holder as a reader sees it: "You" for this browser's claim account, else the short form.
+const holder = (owner, you) => (owner && owner === you ? "You" : short(owner || ""));
+
+function consequence(note, you) {
   if (note.state === "Minted") return "Waiting for one funding output.";
-  if (note.state === "Sealed") return `Only ${note.owner_id} can ask the signer to release it.`;
+  if (note.state === "Sealed") return "";
   if (note.state === "Unsealed") return `The sweep is signed. ${int(note.utxo.sats - (note.sweep?.fee_sats || 0))} sats leave to its destination once it is broadcast.`;
   return PENDING[note.state] || "";
 }
@@ -26,7 +31,7 @@ function microprint(txid) { return Array(5).fill(txid).join("  ·  "); }
 
 function facts(note, ctx) {
   const mempool = cachetChain.mempoolBase(ctx.hrp);
-  const rows = [row("Holder", link(`${ctx.net.nearExplorer}/address/${encodeURIComponent(note.owner_id)}`, note.owner_id))];
+  const rows = [row("Holder", link(`${ctx.net.nearExplorer}/address/${encodeURIComponent(note.owner_id)}`, short(note.owner_id)), copyButton(note.owner_id, "Copy"))];
   if (note.state === "Minted" && ctx.funding?.address) {
     const a = ctx.funding.activity;
     rows.push(row("Fund once with one output", groupHex(ctx.funding.address, 6), copyButton(ctx.funding.address, "Copy address")));
@@ -34,9 +39,9 @@ function facts(note, ctx) {
   }
   if (note.utxo) {
     const outpoint = `${note.utxo.txid}:${note.utxo.vout}`;
-    rows.push(row("Funded by", mempool ? link(`${mempool}/tx/${note.utxo.txid}`, groupHex(note.utxo.txid), "hexlink") : groupHex(note.utxo.txid), h("span", { class: "vout" }, ` output ${note.utxo.vout}`), copyButton(outpoint, "Copy outpoint")));
+    rows.push(row("Funded by", mempool ? link(`${mempool}/tx/${note.utxo.txid}`, short(note.utxo.txid), "hexlink") : short(note.utxo.txid), h("span", { class: "vout" }, ` output ${note.utxo.vout}`), copyButton(outpoint, "Copy")));
     const zeros = leadingZeros(note.utxo.block_hash);
-    rows.push(row("In Bitcoin block", mempool ? link(`${mempool}/block/${note.utxo.block_hash}`, groupHex(note.utxo.block_hash), "hexlink") : groupHex(note.utxo.block_hash), h("span", { class: "work" }, `${zeros} leading zeros are the work behind it.`)));
+    rows.push(row("In Bitcoin block", mempool ? link(`${mempool}/block/${note.utxo.block_hash}`, short(note.utxo.block_hash), "hexlink") : short(note.utxo.block_hash), h("span", { class: "work" }, ` ${zeros} leading zeros are the work behind it.`), copyButton(note.utxo.block_hash, "Copy")));
   }
   if (note.state === "Unsealed" && note.sweep) {
     rows.push(row("Sweep", `Signed at ${sats(note.sweep.fee_sats)} fee`, note.sweep.signed_tx ? copyButton(note.sweep.signed_tx, "Copy signed sweep") : null));
@@ -64,7 +69,7 @@ function placeholder(slot, title, line, tone) {
   ]));
 }
 
-// ctx: { net, hrp, funding?: { address, activity } }. Plays the seal animation once per distinct note state.
+// ctx: { net, hrp, contract, you?, funding?: { address, activity }, proofHref? }. Plays the seal press once per distinct note state.
 function render(slot, note, ctx) {
   const key = `${ctx.net.name}:${ctx.contract}:${note.token_id}:${note.state}:${note.utxo?.block_hash || ""}`;
   const play = slot.dataset.sealKey !== key && !reducedMotion();
@@ -72,7 +77,14 @@ function render(slot, note, ctx) {
   const art = h("div", { class: "card-seal", role: "presentation" });
   art.innerHTML = sealMarkup(note);
   art.querySelectorAll(".seal-tick").forEach((tick) => tick.style.setProperty("--i", tick.dataset.i));
-  const figure = h("span", { class: "figure-n" }, note.utxo ? int(note.utxo.sats) : "0");
+  const count = Boolean(note.utxo) && !counted && !reducedMotion();
+  const figure = h("span", { class: "figure-n" }, note.utxo ? (count ? "0" : int(note.utxo.sats)) : "0");
+  const proof = h("details", { class: "proof" },
+    h("summary", null, "Show how it is checked"),
+    note.utxo ? h("p", { class: "card-note" }, `The seal has one tick per hex digit of the Bitcoin block hash. ${leadingZeros(note.utxo.block_hash)} leading zeros are the gap at the top.`) : null,
+    facts(note, ctx),
+    note.utxo ? h("p", { class: "microprint", "aria-hidden": "true" }, microprint(note.utxo.txid)) : null,
+    h("p", null, link(ctx.proofHref || "index.html#record", "Open the full proof view")));
   const card = shell(note.state, [
     h("div", { class: "card-head" },
       h("h2", { class: "card-title" }, "Cachet note ", h("span", { class: "tok" }, `#${note.token_id}`)),
@@ -82,23 +94,23 @@ function render(slot, note, ctx) {
       note.utxo
         ? [h("p", { class: "figure" }, figure, h("span", { class: "figure-u" }, " sats")), h("p", { class: "figure-sub" }, btc(note.utxo.sats))]
         : h("p", { class: "figure figure-wait" }, "Not funded yet"),
-      h("p", { class: "consequence" }, consequence(note))),
-    note.utxo ? h("p", { class: "card-note" }, `Each tick is one hex digit of the Bitcoin block hash. ${leadingZeros(note.utxo.block_hash)} leading zeros are the gap at the top.`) : null,
-    facts(note, ctx),
-    note.utxo ? h("p", { class: "microprint", "aria-hidden": "true" }, microprint(note.utxo.txid)) : null,
+      consequence(note, ctx.you) ? h("p", { class: "consequence" }, consequence(note, ctx.you)) : null),
+    h("dl", { class: "rows rows-plain" }, row("Holder", h("span", { class: "holder" }, holder(note.owner_id, ctx.you)))),
+    proof,
   ]);
   if (play) card.dataset.play = "1";
   slot.replaceChildren(card);
-  if (note.utxo && play) countUp(figure, note.utxo.sats, { delay: 560 });
+  if (count) { counted = true; countUp(figure, note.utxo.sats, { delay: 560 }); }
   return card;
 }
 
 const lib = {
   render,
-  loading: (slot, token) => placeholder(slot, `Cachet note #${token}`, "Reading the note from the contract.", "loading"),
-  none: (slot, token, contract) => placeholder(slot, `Cachet note #${token}`, `${contract} has no token with this id. A note exists once mint_note finishes.`, "none"),
-  failed: (slot, token, message) => placeholder(slot, `Cachet note #${token}`, message, "error"),
+  loading: (slot, token) => placeholder(slot, `Cachet note${token ? ` #${token}` : ""}`, `Reading the gift from ${net_()}.`, "loading"),
+  none: (slot, token, contract) => placeholder(slot, `Cachet note${token ? ` #${token}` : ""}`, `${contract} has no token with this id. A note exists once mint_note finishes.`, "none"),
+  failed: (slot, token, message) => placeholder(slot, `Cachet note${token ? ` #${token}` : ""}`, message, "error"),
   leadingZeros,
+  holder,
 };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 globalThis.cachetCard = lib;
