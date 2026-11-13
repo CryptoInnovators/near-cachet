@@ -502,7 +502,11 @@ function passedPanel(s, rec) {
 
 async function receiverPanel(s) {
   const u = s.note?.utxo;
-  const spent = u ? (await Promise.race([cachetChain.outspendStatus(s.base, u.txid, u.vout), delay(6000).then(() => ({ spent: null }))])).spent : null;
+  let spent = null;
+  for (let attempt = 0; u && spent === null && attempt < 3; attempt++) {
+    if (attempt) await delay(1500);
+    spent = (await Promise.race([cachetChain.outspendStatus(s.base, u.txid, u.vout), delay(8000).then(() => ({ spent: null }))])).spent;
+  }
   const sealed = s.note?.state === "Sealed" && !s.note.claim;
   const checks = [
     ["Seal", sealed ? "Sealed. No one holds a key that can spend it." : `Not accepted: the note reads ${s.note?.state || "missing"}.`],

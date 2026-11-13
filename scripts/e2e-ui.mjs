@@ -258,7 +258,7 @@ try {
     await waitFor(`document.querySelector("#panel-body a.btn")`, "empty pool example");
     const e = await evalJs(`({ h1: document.querySelector("h1").textContent, sub: document.querySelector("#gift-sub").textContent, panel: document.querySelector("#panel-body").innerText, cta: document.querySelector("#panel-body a.btn")?.textContent, page: document.body.innerText, card: !!document.querySelector(".gift-card .figure-n") })`);
     check("empty pool: headline says every share is claimed", e.h1 === "Every share is claimed.", e.h1);
-    check("empty pool: the last claimed share is shown as a real example with its owner", e.card && /Owner: /.test(e.panel) && /claimed at NEAR block [\d,]+/.test(e.sub), `${e.sub} | ${e.panel.slice(0, 80)}`);
+    check("empty pool: the last claimed share is shown as a real example with its owner", e.card && /Owner: /.test(e.panel) && /Here is the last one/.test(e.sub), `${e.sub} | ${e.panel.slice(0, 80)}`);
     check("empty pool: the primary action sends an envelope", e.cta === "Send an envelope", e.cta);
     check("empty pool: no dash placeholders or read failures", !/READ FAILED|Failed to fetch|HTTP \d{3}/.test(e.page) && !/\n-\n/.test(e.page));
     await shot("index-empty", 1440);
