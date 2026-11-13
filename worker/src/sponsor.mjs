@@ -50,7 +50,7 @@ async function rpc(fetchImpl, method, params, pause = sleep) {
         const response = await fetchImpl(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-sponsor", method, params }), signal: AbortSignal.timeout(12000) });
         const payload = await response.json().catch(() => null);
         if (!payload || payload.error?.code === -429 || [408, 429, 502, 503, 504].includes(response.status) || /timeout|rate limit/i.test(payload.error?.message || "")) { failure = new Error(`${new URL(url).host} is unavailable (HTTP ${response.status}).`); continue; }
-        if (payload.error) { const e = new Error(payload.error.data?.toString?.() || payload.error.message || "RPC error"); e.rpc = payload.error; throw e; }
+        if (payload.error) { const e = new Error((typeof payload.error.data === "string" ? payload.error.data : [payload.error.message, payload.error.cause?.name, payload.error.cause?.info?.error_message].filter(Boolean).join(": ")) || "RPC error"); e.rpc = payload.error; throw e; }
         return payload.result;
       } catch (error) { if (error.rpc) throw error; failure = error; }
     }
