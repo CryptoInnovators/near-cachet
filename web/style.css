@@ -533,3 +533,8 @@ html.in-telegram body[data-heir-owned="1"] .station[data-state="current"] { bord
 .steal-receipt .receipt-bound dd { color: #1f6b3a; }
 .steal-receipt .receipt-why { margin: 6px 0 0; }
 .steal-receipt .receipt-why a { text-decoration: underline; font-weight: 600; }
+
+/* A swept heir note: the pill turns to a green check and the Bitcoin link reads as a link on the red card. */
+.card.env[data-swept="1"] .env-lock svg { color: #7fe3a0; }
+.card.env[data-swept="1"] .env-lock svg path { stroke: #0f3d22; }
+.card.env[data-swept="1"] .consequence a { color: #fff; text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
