@@ -157,7 +157,8 @@ async function runPass(target) {
       const wait = (cond, label, ms = 90000) => waitFor(cond, label, ms);
       const nftBefore = await view(CONTRACT, "note", { token_id: target });
       await click("#pass-go");
-      await wait(`document.querySelector("#pass-link")`, "pass link shown").catch(async (e) => { console.log("pass page state:", JSON.stringify(await evalJs(`({ t: document.querySelector(".panel-title")?.textContent, say: document.querySelector(".panel-say")?.textContent, st: document.querySelector("#claim-status")?.textContent, btn: document.querySelector("#pass-go")?.textContent })`))); throw e; });
+      await wait(`document.querySelector("#pass-link")`, "pass link shown");
+      if (!(await evalJs(`!!document.querySelector("#pass-link")`))) { console.log("pass page state:", JSON.stringify(await evalJs(`({ t: document.querySelector(".panel-title")?.textContent, say: document.querySelector(".panel-say")?.textContent, st: document.querySelector("#claim-status")?.textContent, btn: document.querySelector("#pass-go")?.textContent, err: document.body.innerText.slice(0, 600) })`))); return; }
       const passed = await evalJs(`({ title: document.querySelector(".panel-title")?.textContent, link: document.querySelector("#pass-link").textContent, rows: document.querySelector(".panel-rows").innerText.replace(/\\s+/g, " "), tg: document.querySelector("#pass-share")?.href, tx: [...document.querySelectorAll(".panel-rows a")].map((a) => a.href)[0] })`);
       check("pass: the panel says 'Send this link.' and the seal did not move", passed.title === "Send this link." && /did not move/.test(passed.rows), passed.rows);
       const passFrag = new URLSearchParams(passed.link.split("#")[1]);

@@ -104,7 +104,7 @@ async function signAndSend({ signerId, seedHex, contract, args, net, method = "c
       if (entry?.nonce === undefined) throw new Error(entry?.error || "unknown access key");
       break;
     } catch (error) {
-      if (!restricted && /does not exist|unknown/i.test(error.message)) { if (Date.now() < until) { await new Promise((resolve) => setTimeout(resolve, 1000)); continue; } throw new Error("This claim account holds no NEAR yet, so it cannot pay a network fee."); }
+      if (!restricted && /does not exist|unknown|server error/i.test(`${error.message} ${error.rpc?.cause?.name || ""}`)) { if (Date.now() < until) { await new Promise((resolve) => setTimeout(resolve, 1000)); continue; } throw new Error("This claim account holds no NEAR yet, so it cannot pay a network fee."); }
       throw error;
     }
   }
