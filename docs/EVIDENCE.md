@@ -139,3 +139,13 @@ Run: `node scripts/e2e-ui.mjs --base https://near-cachet.earn-shield-alerts.work
 | Replay of the spent link: the link account signs `nft_transfer` again | refused by the contract, `Sender not approved`, owner unchanged | https://testnet.nearblocks.io/txns/DvCJkQQmn2prnTDkYKR2Vg9syrbhHrmXvXoLpEZzu13N |
 
 Sponsor guard (worker/src/sponsor.mjs) has a must-fail unit test: with the guard removed one test is red, restored it is green.
+
+## Claim inside the Telegram Mini App (2026-11-13, live)
+
+Run: `node scripts/e2e-ui.mjs --base https://near-cachet.earn-shield-alerts.workers.dev --claim --miniapp <launch url>`. The launch URL comes from Telegram's own `messages.RequestAppWebView` for the `t.me/cachet_envelope_bot/envelope?startapp=…` button that @cachet_envelope_bot posted in a real group after `/envelope 3400 2`, so the page opens with Telegram.WebApp.initData present and the envelope read from the start parameter. The key backup goes to Telegram CloudStorage (the page refuses to claim until it is saved); the harness answers that one host call the way the native client does.
+
+| Step | Result | Transaction |
+|---|---|---|
+| One press of Claim my share in the Mini App, sender pays the fee | note 12 owner on chain is the new claim account ae7d3bce…d329f6, 14.3 s from page load, key shown as saved to the Telegram cloud backup | https://testnet.nearblocks.io/txns/3c7PWFASqwi9cCzNmXR5fGs847Wro5KuhWJ6Qyipu1x9 |
+
+Fix that run found: a Telegram host that never answers CloudStorage held the envelope on its loading screen forever; the calls now give up after 6 s.

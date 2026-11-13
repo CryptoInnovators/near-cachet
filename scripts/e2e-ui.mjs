@@ -282,6 +282,18 @@ try {
     const t0 = Date.now();
     const pin = args.token ? links.find((e) => new URLSearchParams(e.fragment).get("token") === String(args.token)) : null;
     const MINI = typeof args.miniapp === "string" ? readFileSync(args.miniapp, "utf8").trim() : null; // a Telegram web-app launch URL (RequestAppWebView), opened as Telegram opens the Mini App
+    if (MINI) await S("Page.addScriptToEvaluateOnNewDocument", { source: `(() => { // the native-client side of Telegram CloudStorage (TelegramWebviewProxy), answering custom method calls from this page
+      const store = new Map();
+      window.TelegramWebviewProxy = { postEvent(type, data) {
+        if (type !== "web_app_invoke_custom_method") return;
+        const call = JSON.parse(data || "{}");
+        const params = call.params || {};
+        let result = true;
+        if (call.method === "saveStorageValue") store.set(params.key, params.value);
+        if (call.method === "getStorageValues") result = Object.fromEntries((params.keys || []).filter((k) => store.has(k)).map((k) => [k, store.get(k)]));
+        setTimeout(() => window.Telegram.WebView.receiveEvent("custom_method_invoked", { req_id: call.req_id, result }), 30);
+      } };
+    })()` });
     await S("Page.navigate", { url: MINI || `${BASE}/index.html?network=testnet${pin ? `#${pin.fragment}` : ""}` });
     if (pin) { await sleep(500); await S("Page.reload"); } // a hash-only navigation does not reload the page
     await waitFor(`document.querySelector("#claim-go") && document.querySelector(".gift-card .figure-n")`, "cold first screen");
@@ -309,7 +321,7 @@ try {
     const nft = await view(CONTRACT, "nft_token", { token_id: target });
     check("claim: nft_token owner on chain is the new claim account", nft?.owner_id === account, `${nft?.owner_id} vs ${account}`);
     const done = await evalJs(`({ rows: document.querySelector(".panel-rows")?.innerText.replace(/\\s+/g, " "), href: document.querySelector(".panel-rows a")?.href, holder: document.querySelector(".gift-card .holder")?.textContent, shares: document.querySelector(".shares-left")?.textContent, next: document.querySelector("#move-go")?.textContent })`);
-    check("claim: the panel shows owner, claim transaction and key file", /Owner you, claim account/.test(done.rows || "") && /Saved as cachet-[0-9a-f]{8}\.key/.test(done.rows || "") && !!done.href, done.rows);
+    check("claim: the panel shows owner, claim transaction and key file", /Owner you, claim account/.test(done.rows || "") && (MINI ? /Saved as your Telegram cloud backup/ : /Saved as cachet-[0-9a-f]{8}\.key/).test(done.rows || "") && !!done.href, done.rows);
     check("claim: the card holder reads You", done.holder === "You", done.holder);
     check("claim: shares left dropped by one", done.shares === `${open.length - 1} of ${reads.length} shares left`, done.shares);
     check("claim: the next action is offered", done.next === "Move it to a Bitcoin address", done.next);
