@@ -7,7 +7,7 @@ SWEEP=${1:-dc4e322b039eecf10a5d4f02cde246b4406b7845fc9ed9345b97df2654fffdde}
 FUND=eaf498e49379648fc48d10ec58840d89f47b89d8d844c3bdd67a1055e54d124b
 ADDR=tb1qqesag4graaen9v6f9ug4xawf4e8lacdhhkffsj
 DEST=tb1qerzrlxcfu24davlur5sqmgzzgsal6wusda40er
-NEARRPC=${NEARRPC:-https://rpc.testnet.near.org}
+NEARRPC=${NEARRPC:-https://near-testnet.drpc.org}
 MEMPOOL=${MEMPOOL:-https://blockstream.info/testnet/api}
 
 curl -fsS -m 30 "$MEMPOOL/tx/$SWEEP" | jq -e --arg fund "$FUND" --arg addr "$ADDR" --arg dest "$DEST" '

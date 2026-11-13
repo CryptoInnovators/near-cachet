@@ -62,7 +62,18 @@ open_page() { # path-with-query; opens a fresh tab, switches to it
 }
 # other agents share the profile and may switch the attached tab, so every call re-attaches to ours first
 goto_page() { "${B[@]}" use "$TAB" >/dev/null; "${B[@]}" goto "http://127.0.0.1:$PORT/$1" >/dev/null; }  # same tab, new document (fresh __errs)
-ev() { "${B[@]}" use "$TAB" >/dev/null; "${B[@]}" eval "$1" | jq -r '.value'; }      # eval JS, raw value
+# the profile is shared: another agent can re-attach it between our `use` and `eval`, so the expression only runs
+# when the attached page is ours (port guard) and is retried after re-attaching otherwise
+ev() {
+  local out i
+  for i in 1 2 3 4 5 6 7 8; do
+    "${B[@]}" use "$TAB" >/dev/null
+    out="$("${B[@]}" eval "(location.port==='$PORT'?($1):'__WRONG_TAB__')" | jq -r '.value')"
+    [ "$out" != __WRONG_TAB__ ] && { printf '%s\n' "$out"; return 0; }
+    sleep 0.3
+  done
+  return 1
+}      # eval JS, raw value
 evj() { ev "JSON.stringify($1)"; }                  # eval JS expr, JSON out
 waitjs() { # JS predicate, timeout seconds
   local end=$((SECONDS + ${2:-60}))
@@ -102,9 +113,14 @@ rpc() { # rpc_url method params-json -> .result JSON
   fail "rpc $2 failed on $1"
 }
 
-RPC="${E2E_RPC:-https://test.rpc.fastnear.com}"
+RPC="${E2E_RPC:-https://near-testnet.drpc.org}"
 CONTRACT="${E2E_CONTRACT:-cachet.testnet}"
-MEMPOOL="${E2E_MEMPOOL:-https://mempool.space/testnet/api}"
+MEMPOOLS="${E2E_MEMPOOL:-https://mempool.space/testnet/api https://blockstream.info/testnet/api}"
+explorer() { # path -> body from the first Esplora-compatible explorer that answers (mempool.space, then its blockstream twin)
+  local base
+  for base in $MEMPOOLS; do curl -sf -m 15 "$base$1" && return 0; done
+  return 1
+}
 jp() { ev "$1"; }
 txt() { jp "document.getElementById('$1').innerText.replace(/\\s+/g,' ')"; }
 
@@ -149,12 +165,14 @@ open_page "index.html?network=testnet&contract=$CONTRACT&token=${TOKENS%% *}"
 NT="(id=>document.getElementById(id).innerText.replace(/\\s+/g,' '))"
 waitjs "$NT('strip').includes('Read at NEAR block') && /Light client tip [0-9,]+/.test($NT('tiles')) && /Cachet note #/.test($NT('card-slot'))" 120
 
+waitjs "document.body.dataset.ready==='1'" 120
 first=1
 for tok in $TOKENS; do
   if [ "$first" = 0 ]; then
     # journey: type another token id, press "Read live"
     ev "(()=>{const t=document.getElementById('token-input');t.value='$tok';t.dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('read-button').click();return 1})()" >/dev/null
     waitjs "$NT('card-slot').includes('#$tok') && $NT('tiles').includes('cachet/$tok/0')" 90
+    waitjs "document.body.dataset.ready==='1'" 120   # every tile has finished reading, not only the key tile
   fi
   first=0
   read -r want_addr want_pub <<<"$(derive "$tok")"
@@ -170,24 +188,28 @@ for tok in $TOKENS; do
   fi
   eq "[token $tok] chain address equals independent derivation" "$(jq -r .address <<<"$note")" "$want_addr"
   eq "[token $tok] chain pubkey equals independent derivation" "$(jq -r .pubkey <<<"$note")" "$want_pub"
-  for f in state owner_id; do
-    v="$(jq -r ".$f" <<<"$note")"
-    case "$card" in *"$v"*) ;; *) fail "[token $tok] note $f '$v' missing from page: $card";; esac
-  done
+  # the card shows one plain word: a Sealed note whose claim link is spent reads "Claimed", every other state shows as is
+  word="$(jq -r 'if .state == "Sealed" and .claim == null then "Claimed" else .state end' <<<"$note")"
+  case "$card" in *"$word"*) ;; *) fail "[token $tok] note state '$(jq -r .state <<<"$note")' (card word '$word') missing from page: $card";; esac
+  # the holder is shown as first 8 and last 6 characters of the account id
+  owner="$(jq -r .owner_id <<<"$note")"
+  case "$card" in *"${owner:0:8}…${owner: -6}"*) ;; *) fail "[token $tok] holder '${owner:0:8}…${owner: -6}' missing from page: $card";; esac
   pass "[token $tok] note state and holder match the contract"
   if [ "$(jq -r '.utxo != null' <<<"$note")" = true ]; then
     ftxid="$(jq -r .utxo.txid <<<"$note")"; fvout="$(jq -r .utxo.vout <<<"$note")"; fsats="$(jq -r .utxo.sats <<<"$note")"; fblock="$(jq -r .utxo.block_hash <<<"$note")"
-    case "$card" in *"$ftxid"*) ;; *) fail "[token $tok] funding txid $ftxid missing from page card";; esac
+    # the proof block is a closed <details>, so read its text and links from the DOM, not from innerText
+    cardfull="$(jp "(()=>{const c=document.getElementById('card-slot');return (c.textContent+' '+[...c.querySelectorAll('a')].map(a=>a.href).join(' ')).replace(/\\s+/g,' ')})()")"
+    case "$cardfull" in *"${ftxid:0:8}…${ftxid: -6}"*"/tx/$ftxid"*|*"/tx/$ftxid"*"${ftxid:0:8}…${ftxid: -6}"*) ;; *) fail "[token $tok] funding txid $ftxid (shown ${ftxid:0:8}…${ftxid: -6}, linked in full) missing from page card: $cardfull";; esac
     case "$tiles" in *"$fblock"*) ;; *) fail "[token $tok] funding block $fblock missing from page tiles";; esac
     # the funding output the page reports is the output the Bitcoin explorer reports
-    tx="$(curl -sf -m 30 "$MEMPOOL/tx/$ftxid")"
+    tx="$(explorer "/tx/$ftxid")"
     eq "[token $tok] explorer funding address" "$(jq -r ".vout[$fvout].scriptpubkey_address" <<<"$tx")" "$want_addr"
     eq "[token $tok] explorer funding sats" "$(jq -r ".vout[$fvout].value" <<<"$tx")" "$fsats"
     eq "[token $tok] explorer funding block" "$(jq -r .status.block_hash <<<"$tx")" "$fblock"
     fmtsats="$(python3 -c 'import sys;print(f"{int(sys.argv[1]):,}")' "$fsats")"
     case "$tiles" in *"$fmtsats sats"*) pass "[token $tok] page shows $fmtsats sats";; *) fail "[token $tok] page lacks '$fmtsats sats': $tiles";; esac
     # spend status read from the explorer, same outpoint
-    sp="$(curl -sf -m 30 "$MEMPOOL/tx/$ftxid/outspend/$fvout" | jq -r .spent)"
+    sp="$(explorer "/tx/$ftxid/outspend/$fvout" | jq -r .spent)"
     if [ "$sp" = false ]; then
       case "$tiles" in *"Verified unspent"*) pass "[token $tok] page says verified unspent, explorer agrees";; *) fail "[token $tok] explorer says unspent, page: $tiles";; esac
     else
