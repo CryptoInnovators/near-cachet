@@ -705,6 +705,20 @@ function heading(title, sub) {
   $("gift-sub").textContent = sub;
 }
 
+// Connect HOT: the wallet Telegram users already hold signs a NEP-413 message on mainnet; the worker verifies it.
+function hotChip() {
+  const hot = globalThis.cachetHot;
+  if (!hot) return null;
+  const on = hot.remembered();
+  const msg = h("p", { class: "hot-msg", id: "hot-msg", "aria-live": "polite" });
+  if (on) return h("div", { class: "wallet-hot", id: "wallet-hot", dataset: { state: "on" } }, h("p", { class: "hot-on" }, "HOT ", h("strong", null, short(on.account_id, 14, 8)), " is your receiving wallet"), h("button", { class: "textlink", type: "button", onclick: () => { hot.disconnect(); render(); } }, "Disconnect"));
+  return h("div", { class: "wallet-hot", id: "wallet-hot", dataset: { state: "off" } },
+    h("button", { class: "btn btn-paper", id: "hot-go", type: "button", onclick: async (event) => {
+      event.currentTarget.disabled = true; msg.textContent = "Waiting for HOT…";
+      try { await hot.connect(); T()?.haptic("success"); render(); } catch (error) { msg.textContent = error.message; event.currentTarget.disabled = false; }
+    } }, "Connect HOT"), msg);
+}
+
 // The Mini App's wallet header: the signed-in Telegram user and the Bitcoin held by notes this claim account owns.
 function renderWallet(s, account) {
   const t = T();
@@ -721,6 +735,7 @@ function renderWallet(s, account) {
     h("div", { class: "wallet-who" },
       t.avatar({ name: u?.name || "You", photo: u?.photo, size: 44 }),
       h("div", null, h("p", { class: "wallet-hi" }, u?.first ? `Hi, ${u.first}` : "Your wallet"), h("p", { class: "wallet-sub" }, u?.username ? `@${u.username}` : "Telegram wallet"))),
+    hotChip(),
     h("div", { class: "wallet-bal" },
       h("p", { class: "wallet-label" }, "Bitcoin balance"),
       h("p", { class: "wallet-amount" }, t.icon("btc", "ico-coin"), h("span", { class: "wallet-figure" }, `${int(total)} sats`), h("span", { class: "wallet-btc" }, btc(total)))));

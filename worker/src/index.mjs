@@ -2,6 +2,7 @@ import { cardSvg, envelopeHtml } from "./card.mjs";
 import { handleSponsor } from "./sponsor.mjs";
 import { handleTelegram } from "./telegram.mjs";
 import { handleTmaSend, isTransientRpcError, validateInitData } from "./initdata.mjs";
+import { handleHotChallenge, handleHotVerify } from "./hot.mjs";
 
 const RPCS = ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"];
 const CONTRACT = "heir.cachet-ops.testnet";
@@ -85,6 +86,8 @@ export default {
       if (!checked.ok) return new Response(JSON.stringify({ error: checked.reason, code: "telegram_initdata_refused" }), { status: 401, headers: { "content-type": "application/json", "cache-control": "no-store" } });
       return handleSponsor(new Request(request.url, { method: "POST", headers: request.headers, body: text }), env);
     }
+    if (url.pathname === "/api/hot/challenge") return handleHotChallenge(request, env);
+    if (url.pathname === "/api/hot/verify") return handleHotVerify(request, env);
     if (url.pathname === "/api/tma/send") return handleTmaSend(request, env, { contract: CONTRACT, rpc: sendRpc });
     if (url.pathname === "/api/telegram") return handleTelegram(request, env);
     if (url.pathname === "/claim") return env.ASSETS.fetch(new Request(new URL("/claim.html", url.origin), request));

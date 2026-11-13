@@ -506,3 +506,8 @@ html.in-telegram .claim-steps li[data-state="current"] .step-word { color: var(-
 html.in-telegram .share-mark { border-color: var(--ground-dim); }
 html.in-telegram .share-mark[data-state="mine"] { background: var(--ink); border-color: var(--ink); }
 html.in-telegram .share-mark[data-state="open"] { background: var(--wax); border-color: var(--wax); }
+
+.wallet-hot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+.wallet-hot .btn { min-height: 36px; padding: 6px 14px; font-size: 14px; }
+.hot-on, .hot-msg { margin: 0; font: 400 14px/1.35 var(--f-text); }
+.hot-msg:empty { display: none; }
