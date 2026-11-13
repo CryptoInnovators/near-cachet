@@ -32,6 +32,9 @@ for i in $(seq 0 $((count - 1))); do
   [[ $(jq -r '.state' <<<"$n") == Sealed ]] || { echo "FAIL: $contract note $token is $(jq -r '.state' <<<"$n")" >&2; exit 1; }
   [[ $(jq -r '.owner_id' <<<"$n") == "$OWNER" ]] || { echo "FAIL: note $token owner is $(jq -r '.owner_id' <<<"$n")" >&2; exit 1; }
   [[ $(jq -r '.claim.key' <<<"$n") == "$pub" ]] || { echo "FAIL: note $token claim key does not match the link secret" >&2; exit 1; }
+  pub_near=$(node -e 'const c=require("./web/linkdrop-claim.js");process.stdout.write("ed25519:"+c.b58encode(Uint8Array.from(process.argv[1].match(/../g),x=>parseInt(x,16))))' "$pub")
+  key=$(curl -fsS -m 30 "$NEARRPC" -H 'content-type: application/json' --data "$(jq -cn --arg a "${ACCESS_ACCOUNT:-$OWNER}" --arg p "$pub_near" '{jsonrpc:"2.0",id:1,method:"query",params:{request_type:"view_access_key",finality:"final",account_id:$a,public_key:$p}}')")
+  jq -e --arg c "$contract" '.result.permission.FunctionCall.receiver_id == $c and .result.permission.FunctionCall.method_names == ["claim"] and ((.result.permission.FunctionCall.allowance | tonumber) >= 150000000000000000000000)' <<<"$key" >/dev/null || { echo "FAIL: note $token has no claim-only access key with 0.15 NEAR allowance on ${ACCESS_ACCOUNT:-$OWNER}, so a walletless claim cannot be sent" >&2; exit 1; }
   (( $(jq -r '.claim.expires_at_block // .claim.expiry // 0' <<<"$n") > head_block )) || { echo "FAIL: note $token claim lock already expired" >&2; exit 1; }
   txid=$(jq -r '.utxo.txid' <<<"$n"); vout=$(jq -r '.utxo.vout' <<<"$n")
   tx=$(curl -fsS -m 30 "$ESPLORA/tx/$txid")

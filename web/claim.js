@@ -370,11 +370,20 @@ async function nextShare() {
   location.reload();
 }
 
+// The claim transaction of a token never changes once found, so it is cached per token and owner.
+async function findClaimTx(token, owner) {
+  const key = `cachet:claimtx:${net.contract}:${token}:${owner}`;
+  try { const hit = JSON.parse(localStorage.getItem(key) || "null"); if (hit?.hash) return hit; } catch {}
+  const found = await cachetChain.claimTx(net.contract, token, owner, net);
+  if (found) localStorage.setItem(key, JSON.stringify(found));
+  return found;
+}
+
 async function claimTxOf(owner) {
   if (session.tx.claim && owner === you()) return session.tx.claim;
   const stored = owner === you() ? localStorage.getItem(`cachet:claim-tx:${frag.contract}:${frag.token}`) : null;
   if (stored) return stored;
-  try { return (await cachetChain.claimTx(frag.contract, frag.token, owner, net))?.hash || null; } catch { return null; }
+  try { return (await findClaimTx(frag.token, owner))?.hash || null; } catch { return null; }
 }
 
 async function openedPanel(note, owner, since) {
@@ -562,14 +571,15 @@ async function recent() {
   if (!list || recentDone || !shares) return;
   recentDone = true;
   const claimed = shares.reads.filter((r) => !(r.note?.state === "Sealed" && r.note.claim)).slice(-5);
-  const rows = (await Promise.all(claimed.map(async (r) => {
+  const found = [];
+  for (const r of claimed) {
     try {
       const owner = (await view("nft_token", { token_id: r.token })).value?.owner_id;
-      if (!owner) return null;
-      const t = await cachetChain.claimTx(frag.contract, r.token, owner, net);
-      return t ? { token: r.token, owner, ...t } : null;
-    } catch { return null; }
-  }))).filter(Boolean).sort((a, b) => b.blockHeight - a.blockHeight);
+      const t = owner ? await findClaimTx(r.token, owner) : null;
+      if (t) found.push({ token: r.token, owner, ...t });
+    } catch {}
+  }
+  const rows = found.sort((a, b) => b.blockHeight - a.blockHeight);
   if (!rows.length) { recentDone = false; return; }
   list.replaceChildren(...rows.map((r) => h("li", { class: "recent-row" },
     h("span", { class: "recent-note" }, `Share #${r.token}`), h("span", null, short(r.owner, 8, 6)),
@@ -583,7 +593,7 @@ async function lastClaimed() {
     if (r.note?.state === "Sealed" && r.note.claim) continue;
     const owner = (await view("nft_token", { token_id: r.token }, frag?.contract || net.contract)).value?.owner_id;
     if (!owner) continue;
-    const t = await cachetChain.claimTx(net.contract, r.token, owner, net).catch(() => null);
+    const t = await findClaimTx(r.token, owner).catch(() => null);
     return { token: r.token, fragment: r.fragment, owner, tx: t?.hash || null, block: t?.blockHeight || null };
   }
   return null;

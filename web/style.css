@@ -302,6 +302,8 @@ button, input, select { font: inherit; color: inherit; }
 button[hidden] { display: none; }
 @media (max-width: 899px) {
   .gift { padding-bottom: 150px; }
+  .gift-card { order: 1; }
+  .gift-side { order: 2; }
   .panel-amount { display: none; }
   .gift-panel { padding-inline: 0; background: none; min-height: 0; }
   .panel-act { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px var(--m) calc(12px + env(safe-area-inset-bottom)); background: var(--paper); }
@@ -310,8 +312,8 @@ button[hidden] { display: none; }
 @media (min-width: 900px) {
   .gift { grid-template-columns: repeat(12, minmax(0, 1fr)); padding-block: 12px 96px; row-gap: 24px; }
   .gift-copy { grid-column: 1 / -1; }
-  .gift-card { grid-column: 1 / span 7; }
-  .gift-side { grid-column: 8 / -1; }
+  .gift-card { grid-column: 1 / span 7; grid-row: 2; }
+  .gift-side { grid-column: 8 / -1; grid-row: 2; }
   .gift-panel { padding: 32px 32px 0; min-height: 0; }
   .panel-rows { margin-inline: -32px; }
   .panel-rows > div { padding: 10px 32px; }

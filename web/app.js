@@ -563,7 +563,7 @@ function mountPage() {
 
   /* ---- the journey: seven steps, each tied to the contract call it names and what that call reads now ---- */
   const STEPS = [
-    { who: "sender", seal: "Minted", say: "Open Your notes and connect the owner account.", call: "config(), note(token_id), nft_token(token_id)",
+    { who: "sender", seal: "Minted", say: "Open Send an envelope and connect the owner account.", call: "config(), note(token_id), nft_token(token_id)",
       read: (c) => `config reads signer ${c.config.signer_id} and ${c.config.confirmations} confirmations. nft_token(${c.tokenId}).owner_id reads ${c.nft?.owner_id ?? "no owner"}.` },
     { who: "sender", seal: "Minted", say: "Choose a funded note and check its funding output.", call: "note(token_id).address, then the Bitcoin explorer",
       read: (c) => !c.note.utxo ? "No funding output is attested on this note." : c.tx ? `Address ${short(c.note.address, 10, 6)} receives output ${c.note.utxo.vout}: ${int(c.note.utxo.sats)} sats, in Bitcoin block ${int(c.tx.status?.block_height)}.` : `Address ${short(c.note.address, 10, 6)} receives output ${c.note.utxo.vout}.` },
@@ -571,7 +571,7 @@ function mountPage() {
       read: (c) => c.note.utxo ? `note(${c.tokenId}).state reads ${c.note.state}: ${short(c.note.utxo.txid, 8, 6)}:${c.note.utxo.vout}, ${int(c.note.utxo.sats)} sats, block ${short(c.note.utxo.block_hash, 14, 6)}.` : `note(${c.tokenId}).state reads ${c.note.state}.` },
     { who: "sender", seal: "Sealed", say: "Create the claim link.", call: "create_claim(token_id, claim_key, expires_at_block)",
       read: (c) => c.note.claim ? `note(${c.tokenId}).claim.key reads ${short(c.note.claim.key, 10, 6)}, ${c.note.claim.locked ? "locked" : "open"} until NEAR block ${int(c.note.claim.expires_at_block)}.` : `note(${c.tokenId}).claim reads null.` },
-    { who: "recipient", seal: "Sealed", say: "Open the link, connect a NEAR account and sign the claim.", call: "claim(token_id, new_owner, signature)",
+    { who: "recipient", seal: "Sealed", say: "Open the link and claim your share.", call: "claim(token_id, new_owner, signature)",
       read: (c) => `nft_token(${c.tokenId}).owner_id reads ${c.nft?.owner_id ?? "no owner"}. After the claim it reads the recipient and note(${c.tokenId}).claim reads null.` },
     { who: "recipient", seal: "Unsealed", say: "Choose a Bitcoin destination and fee, then unseal.", call: "unseal(token_id, btc_dest, fee_rate)",
       read: (c) => `note(${c.tokenId}).state reads ${c.note.state}. It reads Unsealed when the signer answers, and the note then holds signed_sweep_tx.` },

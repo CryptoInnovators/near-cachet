@@ -24,6 +24,15 @@ view() {
   done
   echo "view $method failed: $body" >&2; return 1
 }
+# Adds the claim-only function-call key for a claim link to OWNER and polls until the chain shows it. A link without this key cannot be claimed without a wallet.
+ensure_key() { # SEED
+  local pub_near access
+  pub_near=$(node -e 'require("./web/claim-lib.js").publicKeyHexFromSeed(process.argv[1]).then((h)=>process.stdout.write("ed25519:" + require("./web/linkdrop-claim.js").b58encode(Uint8Array.from(h.match(/../g), (x) => parseInt(x, 16)))))' "$1")
+  key_ok() { access=$(curl -fsS -m 20 "$NEARRPC" -H 'content-type: application/json' --data "$(jq -cn --arg a "$OWNER" --arg p "$pub_near" '{jsonrpc:"2.0",id:1,method:"query",params:{request_type:"view_access_key",finality:"final",account_id:$a,public_key:$p}}')" 2>/dev/null) && jq -e --arg c "$CONTRACT" '.result.permission.FunctionCall.receiver_id == $c and .result.permission.FunctionCall.method_names == ["claim"] and ((.result.permission.FunctionCall.allowance | tonumber) >= 150000000000000000000000)' <<<"$access" >/dev/null 2>&1; }
+  key_ok || near account add-key "$OWNER" grant-function-call-access --allowance '0.15 NEAR' --contract-account-id "$CONTRACT" --function-names claim use-manually-provided-public-key "$pub_near" network-config "$NETCFG" sign-with-legacy-keychain send >/dev/null
+  for _ in $(seq 1 24); do key_ok && return 0; sleep 5; done
+  echo "claim-only key for $pub_near not live on $OWNER" >&2; return 1
+}
 note() { view note "$(jq -cn --arg t "$1" '{token_id:$t}')"; }
 call() { # METHOD ARGS DEPOSIT
   near contract call-function as-transaction "$CONTRACT" "$1" json-args "$2" prepaid-gas '300 Tgas' attached-deposit "$3" \
@@ -63,9 +72,17 @@ case ${1:-} in
     for _ in $(seq 1 24); do [[ $(note "$t" | jq -r '.claim.key') == "$pub" ]] && break; sleep 5; done
     [[ $(note "$t" | jq -r '.claim.key') == "$pub" ]] || { echo "claim key post-condition failed for $t" >&2; exit 1; }
     fragment=$(node -e 'process.stdout.write(require("./web/claim-lib.js").buildFragment({contract:process.argv[1],token:process.argv[2],key:process.argv[3],sender:process.argv[4]}))' "$CONTRACT" "$t" "$seed" "$OWNER")
+    ensure_key "$seed"
+
     [[ -f $LINKS ]] || echo '[]' > "$LINKS"
     jq --arg f "$fragment" --arg t "$t" --argjson s "$(jq -r '.utxo.sats' <<<"$n")" '. + [{fragment:$f,token_id:$t,sats:$s}]' "$LINKS" > "$LINKS.tmp" && mv "$LINKS.tmp" "$LINKS"
     echo "linked $t"
     ;;
-  *) echo "Usage: $0 {mint|status|seal TOKEN|link TOKEN}" >&2; exit 2 ;;
+  keys) # a claim-only key for every link whose note still has an open claim
+    while read -r t seed; do
+      [[ $(note "$t" | jq -r '.claim.key // empty') ]] || continue
+      ensure_key "$seed" && echo "claim key live for note $t"
+    done < <(jq -r '.[] | [.token_id, (.fragment | capture("key=(?<k>[0-9a-f]{64})").k)] | @tsv' "$LINKS")
+    ;;
+  *) echo "Usage: $0 {mint|status|seal TOKEN|link TOKEN|keys}" >&2; exit 2 ;;
 esac

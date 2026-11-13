@@ -98,3 +98,15 @@ test("claim broadcast uses send_tx", async () => {
   assert.equal(broadcast.params.wait_until, "EXECUTED_OPTIMISTIC");
   assert.equal(calls.some((c) => c.method === "broadcast_tx_commit"), false);
 });
+
+test("a claim account signs its own unseal call with the method and gas it names", () => {
+  const base = { signerId: "a".repeat(64), publicKey: "1".repeat(32), nonce: 1, receiverId: "cachet.testnet", blockHash: "1".repeat(32), args: { token_id: "5" } };
+  const text = (bytes) => new TextDecoder("latin1").decode(bytes);
+  const claim = linkdrop.transactionBytes(base);
+  const unseal = linkdrop.transactionBytes({ ...base, method: "unseal", gas: 300_000_000_000_000n });
+  assert.ok(text(claim).includes("claim") && !text(claim).includes("unseal"));
+  assert.ok(text(unseal).includes("unseal") && !text(unseal).includes("claim"));
+  const gas = (bytes) => new DataView(bytes.buffer, bytes.byteOffset + bytes.length - 24, 8).getBigUint64(0, true);
+  assert.equal(gas(claim), 100_000_000_000_000n);
+  assert.equal(gas(unseal), 300_000_000_000_000n);
+});

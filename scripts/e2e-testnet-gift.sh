@@ -25,7 +25,7 @@ mempool_text() { sleep 1; curl -fsS --retry 6 --retry-all-errors --retry-delay 1
 wait_light_client() {
   local lc; lc=$(view config '{}' | jq -r '.btc_light_client')
   for _ in $(seq 1 160); do
-    [[ $(curl -fsS "$NEARRPC" -H 'content-type: application/json' --data "$(jq -cn --arg lc "$lc" --arg a "$(printf '{"height":%s}' "$1" | base64)" '{jsonrpc:"2.0",id:1,method:"query",params:{request_type:"call_function",finality:"final",account_id:$lc,method_name:"get_block_hash_by_height",args_base64:$a}}')" | jq -r '(.result.result // []) | implode') != "" ]] && return 0
+    [[ $(curl -fsS "$NEARRPC" -H 'content-type: application/json' --data "$(jq -cn --arg lc "$lc" --arg a "$(printf '{"height":%s}' "$1" | base64)" '{jsonrpc:"2.0",id:1,method:"query",params:{request_type:"call_function",finality:"final",account_id:$lc,method_name:"get_block_hash_by_height",args_base64:$a}}')" | jq -r '(.result.result // []) | implode') =~ ^\"[0-9a-f]{64}\"$ ]] && return 0 # a missing height answers the JSON text null
     sleep 15
   done
   echo "Light client $lc does not hold block $1 after 40 minutes" >&2; return 1
