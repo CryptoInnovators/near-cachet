@@ -367,7 +367,8 @@ try {
       await click("#stations .station[data-state=current] .btn-primary");
       await waitFor("[...document.querySelectorAll('.station')].some((s) => s.querySelector('h3')?.textContent === 'Broadcast' && s.dataset.state === 'done')", "broadcast done", 120000);
       const sweepTxid = await evalJs("([...document.querySelectorAll('.station')].find((s) => s.querySelector('h3')?.textContent === 'Broadcast')?.querySelector('.station-tx a')?.href || '').split('/tx/')[1] || ''");
-      const btcTx = sweepTxid ? await (await fetch(`https://blockstream.info/testnet/api/tx/${sweepTxid}`)).json().catch(() => null) : null;
+      let btcTx = null;
+      for (let attempt = 0; sweepTxid && !btcTx && attempt < 12; attempt += 1) { btcTx = await (await fetch(`https://blockstream.info/testnet/api/tx/${sweepTxid}`).catch(() => ({ json: async () => null }))).json().catch(() => null); if (!btcTx?.vout) { btcTx = null; await sleep(5000); } }
       check("heir: the Bitcoin sweep pays only the bound heir address", !!btcTx && btcTx.vout.length === 1 && btcTx.vout[0].scriptpubkey_address === heir, `${sweepTxid} ${JSON.stringify(btcTx?.vout?.map((o) => o.scriptpubkey_address))}`);
       console.log(`heir: Bitcoin sweep https://blockstream.info/testnet/tx/${sweepTxid}`);
       await shot("heir-swept", 1440);
