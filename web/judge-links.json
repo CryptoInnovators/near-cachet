@@ -5,11 +5,6 @@
     "sats": 1700
   },
   {
-    "fragment": "v=2&contract=cachet.testnet&token=14&key=f68e8a57b48e2a9eca520f5e9e72e40e9d1fd4983673ba73097a7580848d28ee&sender=cachet-ops.testnet",
-    "token_id": "14",
-    "sats": 1700
-  },
-  {
     "fragment": "v=2&contract=cachet.testnet&token=15&key=45c10553cfb9177bc385213328e5041a8a300f38718d58b3b3b84a7e91aaeca7&sender=cachet-ops.testnet",
     "token_id": "15",
     "sats": 1700

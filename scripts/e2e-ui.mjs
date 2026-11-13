@@ -150,6 +150,7 @@ const tabOrder = (stopAt) => evalJs(`(() => {
 })()`);
 const click = async (selector) => {
   const r = await evalJs(`(() => { const b = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  await send("Target.activateTarget", { targetId }); // the profile is shared: another session may have raised its own tab, and a background tab drops synthetic mouse input
   for (const type of ["mousePressed", "mouseReleased"]) await S("Input.dispatchMouseEvent", { type, x: r[0], y: r[1], button: "left", clickCount: 1 });
 };
 
