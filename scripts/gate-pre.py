@@ -6,7 +6,8 @@ env: CACHET_ORIGIN, CACHET_BOT (default cachet_envelope_bot), CACHET_APP (defaul
 import asyncio, json, os, re, sys, time
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
-from telethon import TelegramClient, functions, types
+from telethon import TelegramClient
+from telethon.tl import functions, types
 from telethon.sessions import StringSession
 
 ORIGIN = os.environ.get("CACHET_ORIGIN", "https://near-cachet.earn-shield-alerts.workers.dev")
@@ -66,17 +67,21 @@ async def main(out_file):
     button = None
     for row in (reply.reply_markup.rows if reply.reply_markup else []):
         for b in row.buttons:
-            if isinstance(b, types.KeyboardButtonUrl) and b.text == "Open the red envelope": button = b
+            if getattr(getattr(b, "type", None), "url", None) and b.text == "Open the red envelope": button = b
+    if not button: log("buttons: " + repr([(type(b).__name__, b.text) for row in (reply.reply_markup.rows if reply.reply_markup else []) for b in row.buttons]))
     if not button: raise SystemExit(f"FAIL: the bot message has no 'Open the red envelope' Mini App button: {reply.message[:140]}")
-    start = parse_qs(urlparse(button.url).query).get("startapp", [None])[0]
+    start = parse_qs(urlparse(button.type.url).query).get("startapp", [None])[0]
     if not start: raise SystemExit("FAIL: the button carries no startapp parameter")
     log(f"bot posted the envelope with the Open the red envelope button in {time.time() - t0:.1f}s (startapp length {len(start)})")
     bot_input = await client.get_input_entity(bot)
     peer = await client.get_input_entity(group)
     res = await client(functions.messages.RequestAppWebViewRequest(
         peer=peer, app=types.InputBotAppShortName(bot_id=bot_input, short_name=APP), platform="web", write_allowed=True, start_param=start))
+    url = res.url
+    for k, v in (("tgWebAppVersion", "9.2"), ("tgWebAppPlatform", "web")):  # what the Telegram client appends to the launch URL
+        if k + "=" not in url: url += f"&{k}={v}"
     fd = os.open(out_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f: f.write(res.url)
+    with os.fdopen(fd, "w") as f: f.write(url)
     log(f"signed Mini App launch URL written to a 0600 file (host {urlparse(res.url).netloc}, tgWebAppData present: {'tgWebAppData' in res.url})")
     log(f"note {token}, {sats} sats, telegram user {me.id}")
     await client.disconnect()

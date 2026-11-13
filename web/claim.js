@@ -373,7 +373,7 @@ function progress(text, active, first, second) {
 function actionBar(...nodes) { return h("div", { class: "panel-act" }, ...nodes); }
 
 function idlePanel(note) {
-  const inTelegram = Boolean(tg);
+  const inTelegram = Boolean(tg || globalThis.Telegram?.WebApp?.initData);
   const go = !inTelegram && frag.sender
     ? h("a", { class: "btn btn-primary", id: "open-telegram", href: `https://t.me/cachet_envelope_bot/envelope?startapp=${btoa(location.hash.slice(1)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}` }, "Open in Telegram")
     : h("button", { class: "btn btn-primary", id: "claim-go", type: "button", onclick: () => claim(false) }, "Claim my share");

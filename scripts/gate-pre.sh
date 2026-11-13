@@ -10,7 +10,7 @@ PY=${TELEGRAM_PY:-$HOME/Developer/telegram-mcp/.venv/bin/python}
 OUT=.progress/design/gate; mkdir -p "$OUT/tma"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 export NODE_OPTIONS="--dns-result-order=ipv4first --no-network-family-autoselection"
-redact() { sed -E 's/tgWebApp[A-Za-z]*=[^& "]*/tgWebApp…=<redacted>/g; s/key=[0-9a-f]{64}/key=<redacted>/g; s/https:\/\/[^ ]*tgWebApp[^ ]*/<launch-url>/g'; }
+redact() { sed -l -E 's/tgWebApp[A-Za-z]*=[^& "]*/tgWebApp…=<redacted>/g; s/key=[0-9a-f]{64}/key=<redacted>/g; s/https:\/\/[^ ]*tgWebApp[^ ]*/<launch-url>/g'; }
 {
   "$PY" -I scripts/gate-pre.py "$tmp/launch.url" 2>&1 | redact
   [ -s "$tmp/launch.url" ] || { echo "FAIL: no launch URL"; exit 1; }
