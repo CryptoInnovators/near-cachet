@@ -1,5 +1,6 @@
 import { cardSvg, envelopeHtml } from "./card.mjs";
 import { handleSponsor } from "./sponsor.mjs";
+import { handleTelegram } from "./telegram.mjs";
 
 const RPCS = ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"];
 const CONTRACT = "cachet.testnet";
@@ -61,6 +62,7 @@ export default {
       } catch (error) { return errorResponse(error.message); }
     }
     if (url.pathname === "/api/sponsor") return handleSponsor(request, env);
+    if (url.pathname === "/api/telegram") return handleTelegram(request, env);
     if (url.pathname === "/claim") return env.ASSETS.fetch(new Request(new URL("/claim.html", url.origin), request));
     return env.ASSETS.fetch(request);
   },

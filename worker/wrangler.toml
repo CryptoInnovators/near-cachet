@@ -1,7 +1,12 @@
 name = "near-cachet"
 main = "src/index.mjs"
 compatibility_date = "2026-11-10"
+compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = "../web"
 binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "CACHET_STATE"
+id = "51e6a6179fab46dd85c0ba4bb979cc4c"

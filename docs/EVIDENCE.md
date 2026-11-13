@@ -127,3 +127,15 @@ The sender's `cachet-ops.testnet` account added an Ed25519 function-call key wit
 | Add a disposable stale claim-only key | `zBy4pVkEL2B1T6VppbQH4iHXDKu3ViCri34hJoimC5i` | Final success |
 | Delete the disposable stale key | `A2Fu171yNfL3aLUuQVTb3FCPsjtpxTVJuK6thJvXUeKo` | Final success; check reports zero stale keys |
 | Delete the claim key for claimed note 2 | `FjALFsgntXjT15EfFh2dc1HZ1c9QmLhJ5cAcrMSVc2C2` | Final success; `view_access_key_list` confirms the key is absent |
+
+## Pass it on: a sealed note changes hands in chat, the Bitcoin output never moves (2026-11-13, live)
+
+Run: `node scripts/e2e-ui.mjs --base https://near-cachet.earn-shield-alerts.workers.dev --pass` (cold claim, then pass, take, replay). Note 11, Bitcoin output a90714ae…1d1242:0, 5,500 sats.
+
+| Step | Result | Transaction |
+|---|---|---|
+| Claim account passes the note to a link account (`nft_transfer`, 1 yocto) | success, note still Sealed, same Bitcoin output | https://testnet.nearblocks.io/txns/AhAQTkQL4bKnYSdvMyw4hR8A3zRnzXJ2cdZU9SGhahf2 |
+| Link opener in a clean browser state sees seal and unspent checks, presses Take it, sponsor pays the fee | `nft_token` owner is the opener's new account, 22.1 s from opening the link | https://testnet.nearblocks.io/txns/2ySpUrZWD6UsndC9A4NJLCoY7UTbCoNeGXk4gm8uYPom |
+| Replay of the spent link: the link account signs `nft_transfer` again | refused by the contract, `Sender not approved`, owner unchanged | https://testnet.nearblocks.io/txns/DvCJkQQmn2prnTDkYKR2Vg9syrbhHrmXvXoLpEZzu13N |
+
+Sponsor guard (worker/src/sponsor.mjs) has a must-fail unit test: with the guard removed one test is red, restored it is green.

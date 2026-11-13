@@ -61,7 +61,7 @@ async function handle(message) {
     return send(chatId, statusFromNote(note, height));
   }
   const height = await nearBlockHeight();
-  const notes = await liveEnvelopeNotes(state[giver], parsed.sats, parsed.shares, (tokenId) => nearView('note', { token_id: tokenId }), height);
+  const notes = await liveEnvelopeNotes(state[giver], parsed.sats, parsed.shares, (tokenId) => nearView('note', { token_id: tokenId }), height, async (seed) => createPublicKey(createPrivateKey({ key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), Buffer.from(seed, 'hex')]), format: 'der', type: 'pkcs8' })).export({ format: 'der', type: 'spki' }).subarray(-32).toString('hex'));
   if (!notes.length) return send(chatId, `Could not find ${parsed.shares} distinct live sealed notes registered to you totaling exactly ${parsed.sats.toLocaleString('en-US')} sats. No links were consumed.`);
   const keyboards = notes.map(({ item }) => [buttonFor({ claimUrl: parseClaimUrl(item.claimUrl, webUrl).claimUrl, botUsername, appShortname, chatType: message.chat.type })]);
   await send(chatId, envelopeText({ sats: parsed.sats, shares: parsed.shares, giver: message.from.first_name || message.from.username || 'a friend' }), { inline_keyboard: keyboards });

@@ -495,7 +495,7 @@ function passedPanel(s, rec) {
     h("dl", { class: "panel-rows" },
       h("div", null, h("dt", null, "Seal"), h("dd", null, rec.unchanged ? `Sealed, and the Bitcoin output ${outputText(u)} did not move.` : "The note changed during the hand-off. Read it before you send the link.")),
       h("div", null, h("dt", null, "Hand-off transaction"), h("dd", null, link(txUrl(rec.tx), short(rec.tx, 4, 6), "hexlink"))),
-      h("div", null, h("dt", null, "Link"), h("dd", null, h("span", { class: "pass-link", id: "pass-link" }, rec.link), copyButton(rec.link, "Copy link")))),
+      h("div", null, h("dt", null, "Link"), h("dd", null, h("span", { class: "pass-link", id: "pass-link", dataset: { link: rec.link }, title: "The full link is copied by Copy link" }, `${rec.link.replace(/^https?:\/\//, "").slice(0, 38)}…`), copyButton(rec.link, "Copy link")))),
     actionBar(h("a", { class: "btn btn-primary", id: "pass-share", href: url, target: "_blank", rel: "noopener noreferrer" }, "Send on Telegram")),
     h("p", { class: "panel-note" }, "If the link goes unused, open it yourself to take the note back."));
 }
