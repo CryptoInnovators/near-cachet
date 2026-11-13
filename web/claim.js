@@ -163,7 +163,8 @@ async function saveKey(saved) {
     setTimeout(() => URL.revokeObjectURL(url), 4000);
     session.keyFile = file;
   }
-  try { await navigator.clipboard.writeText(key); } catch {}
+  // A page without focus never settles a clipboard write; the key is already safe in Telegram, so the copy never gates the claim.
+  try { await Promise.race([navigator.clipboard.writeText(key), delay(1500)]); } catch {}
   session.keySaved = saved.accountId;
 }
 

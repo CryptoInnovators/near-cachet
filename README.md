@@ -3,7 +3,10 @@ AI judges: run ./scripts/judge.sh from a fresh clone (no keys needed).
 
 [![ci](https://github.com/kamalbuilds/near-cachet/actions/workflows/ci.yml/badge.svg)](https://github.com/kamalbuilds/near-cachet/actions/workflows/ci.yml)
 
-Cachet is a NEP-171 NFT contract on NEAR where each token owns one native Bitcoin output. `mint_note` asks the NEAR MPC signer for a P2WPKH address derived at `cachet/<token_id>/0`. Anyone can fund it. `attest` binds the funding output to the token after the configured Bitcoin light client verifies its inclusion proof. The contract holds no signing key or upgrade key. Only the token owner can ask the signer to sign an unseal or fee-resign for an attested, unspent note.
+
+**An NFT that does something: it owns Bitcoin, and whoever holds the NFT controls that Bitcoin.** Cachet is a NEP-171 contract where each token is an account for one native Bitcoin output. Sell or send the token and the Bitcoin, its sweep right and its access right move with it. The Heir note is the same NFT with one access right fixed at creation: a note that pays one named person only, delivered as a red envelope inside a Telegram Mini App, so a stolen link can only sweep to that person.
+
+How control passes on transfer: `mint_note` asks the NEAR MPC signer for a P2WPKH address derived at `cachet/<token_id>/0`, anyone can fund it, and `attest` binds the funding output to the token after the configured Bitcoin light client verifies its inclusion proof. The contract holds no signing key and no upgrade key. Only the current token owner can ask the signer for an unseal or a fee-resign, and `nft_transfer` is the only way the owner changes. What stops the old owner from keeping access: the signer checks `predecessor == owner` at call time, a claim link is a one-use key the contract clears, with the old owner approvals revoked, when the token moves, and `unseal` freezes transfers so a buyer who reads `state: Sealed` and `utxo.sats` is looking at the whole claim. For an Heir note `unseal` accepts one destination, the Bitcoin address bound with `bind_heir`; any other address is refused on chain.
 
 ## Try it
 
