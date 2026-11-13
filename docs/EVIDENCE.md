@@ -149,3 +149,17 @@ Run: `node scripts/e2e-ui.mjs --base https://near-cachet.earn-shield-alerts.work
 | One press of Claim my share in the Mini App, sender pays the fee | note 12 owner on chain is the new claim account ae7d3bce…d329f6, 14.3 s from page load, key shown as saved to the Telegram cloud backup | https://testnet.nearblocks.io/txns/3c7PWFASqwi9cCzNmXR5fGs847Wro5KuhWJ6Qyipu1x9 |
 
 Fix that run found: a Telegram host that never answers CloudStorage held the envelope on its loading screen forever; the calls now give up after 6 s.
+
+## Telegram Mini App run on the Heir contract (2026-11-13, live)
+
+Run: `bash scripts/gate-pre.sh`. The Telethon WORK session creates the `cachet-gate` group with @cachet_envelope_bot, posts `/link` and `/envelope`, requests the signed launch URL with `messages.RequestAppWebViewRequest`, and the page runs inside that launch.
+
+| Step | Result | Evidence |
+|---|---|---|
+| Bot posts the envelope with the Open the red envelope button | 6.0 s after `/envelope` | gate log `.progress/design/gate/tma-run.log` |
+| Claim inside the Mini App, written through `/api/tma/send` | note 3 owner is the new claim account, 9.5 s from page load | https://testnet.nearblocks.io/txns/3t8QiEBeTqKH1NzsAbepGjtrtj8gdtThjUcNxDX8Ekz9 |
+| Worker refuses a write without Telegram initData | HTTP 401 `telegram_initdata_refused` on `/api/tma/send` and `/api/sponsor` | `worker/test/initdata.test.mjs` (red with the signature compare removed, green restored) |
+| Heir contract binds the only sweep address | `bind_heir` for notes 2, 3, 4 | https://testnet.nearblocks.io/txns/5im958SLHNsdEAkvfX1HtadiYWBw9N448whWAizgTUwY |
+| Pool refill funding | notes 2, 3, 4 funded 1,700 sats each | https://blockstream.info/testnet/tx/02b7ea2c69bd33c2658b194ebf7ff8c5a7af57a986f96fdd24f3dbd0e5524d43 |
+
+Fix that run found: a sponsored claim account held 0.05 NEAR and an unseal prepays 300 Tgas (0.30 NEAR); the sponsor now grants 0.4 NEAR.
