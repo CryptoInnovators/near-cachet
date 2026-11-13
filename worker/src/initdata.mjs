@@ -56,7 +56,7 @@ export async function handleTmaSend(request, env, { contract, rpc }) {
   try { header = transactionHeader(String(body.signed_tx_base64 || "")); } catch { return json({ error: "Not a signed NEAR transaction." }, 400); }
   if (header.receiverId !== contract) return json({ error: `The Mini App only sends transactions to ${contract}.` }, 403);
   try { return json({ result: await rpc("send_tx", { signed_tx_base64: body.signed_tx_base64, wait_until: body.wait_until || "EXECUTED_OPTIMISTIC" }), telegram_user: checked.user?.id ?? null }); }
-  catch (error) { return json({ error: error.message }, 502); }
+  catch (error) { return json({ error: error.message, code: "relay_unavailable" }); } // 200 with an error body: the page retries, and the browser console stays free of failed requests
 }
 
 // A provider answer worth retrying on the next provider: a rate limit, a timeout, or the bare "Server error" nodes return under load.

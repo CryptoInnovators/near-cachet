@@ -31,7 +31,7 @@ async function rpc(method, params, net = network()) {
   if (method === "send_tx" && globalThis.Telegram?.WebApp?.initData && net.name === "testnet") {
     const response = await fetch("/api/tma/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ init_data: globalThis.Telegram.WebApp.initData, signed_tx_base64: params.signed_tx_base64, wait_until: params.wait_until }) });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || `Relay refused with HTTP ${response.status}`);
+    if (!response.ok || body.error) throw new Error(body.error || `Relay refused with HTTP ${response.status}`);
     return body.result;
   }
   const list = net.rpcs || [net.rpc];

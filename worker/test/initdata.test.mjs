@@ -51,6 +51,13 @@ test("/api/tma/send relays a valid call and never reaches NEAR for an invalid on
   assert.equal(wrongContract.status, 403);
   assert.deepEqual(sent, [], "a refused call must not reach send_tx");
 });
+test("/api/tma/send answers 200 with an error body when every provider fails, so the page retries without a failed request in the console", async () => {
+  const initData = sign({ ...fields, auth_date: String(Math.floor(Date.now() / 1000) - 5) });
+  const down = await handleTmaSend(post({ init_data: initData, signed_tx_base64: tx("heir.cachet-ops.testnet") }), env, { contract: "heir.cachet-ops.testnet", rpc: async () => { throw new Error("NEAR RPC HTTP 429"); } });
+  assert.equal(down.status, 200);
+  const body = await down.json();
+  assert.equal(body.code, "relay_unavailable"); assert.match(body.error, /429/);
+});
 test("transactionHeader reads signer and receiver", () => {
   assert.deepEqual(transactionHeader(tx("heir.cachet-ops.testnet")), { signerId: "signer.testnet", receiverId: "heir.cachet-ops.testnet" });
 });
