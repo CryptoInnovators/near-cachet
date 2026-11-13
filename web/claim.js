@@ -304,7 +304,7 @@ async function steal(note, feeIn) {
     const failed = cachetOutcome.failureText(result);
     session.steal = { hash: txHash(result), refused: Boolean(failed), reason: failed ? String(failed).replace(/^Smart contract panicked: /, "") : null };
   } catch (error) { session.steal = { error: error.message }; }
-  finally { busy = false; await render(); }
+  finally { busy = false; status(""); await render(); }
 }
 
 async function broadcast(note, signed, base) {
@@ -409,11 +409,12 @@ function idlePanel(note) {
   const go = !inTelegram && frag.sender
     ? h("a", { class: "btn btn-primary", id: "open-telegram", href: `https://t.me/cachet_envelope_bot/envelope?startapp=${btoa(location.hash.slice(1)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}` }, "Open in Telegram")
     : h("button", { class: "btn btn-primary", id: "claim-go", type: "button", onclick: () => claim(false) }, CLAIM_ACTION);
-  setBody(amountBlock(note), shareRow(null),
+  const preview = Boolean(note?.heir) && !inTelegram;
+  setBody(...(preview ? [] : [amountBlock(note), shareRow(null)]),
     note?.heir && !inTelegram ? h("p", { class: "panel-lock" }, "Only ", h("strong", null, short(note.heir, 12, 8)), " can open this") : null,
     h("p", { class: "panel-say" }, frag.sender ? (inTelegram ? "The note goes into a claim account saved in your Telegram. A stolen link can only pay the address above." : "This envelope is claimed inside Telegram. No NEAR wallet needed.") : "Connect a NEAR account and sign. The contract moves your share to it, and the link stops working."),
-    actionBar(go, frag.sender ? h("button", { class: "textlink panel-alt", type: "button", onclick: () => claim(true) }, "Use my NEAR wallet instead") : null),
-    frag.sender ? h("p", { class: "panel-note" }, (inTelegram ? "Your key is backed up in your Telegram cloud when you claim." : "Your key is saved as a file when you claim. Keep it to keep the share.")) : null);
+    actionBar(go, frag.sender && !preview ? h("button", { class: "textlink panel-alt", type: "button", onclick: () => claim(true) }, "Use my NEAR wallet instead") : null),
+    frag.sender && !preview ? h("p", { class: "panel-note" }, (inTelegram ? "Your key is backed up in your Telegram cloud when you claim." : "Your key is saved as a file when you claim. Keep it to keep the share.")) : null);
   if (!frag.sender) go.textContent = "Claim with my NEAR wallet";
   if (inTelegram && go.id === "claim-go") nativeMain({ text: CLAIM_ACTION, onClick: () => claim(false) });
 }

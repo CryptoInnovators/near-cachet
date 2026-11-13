@@ -142,7 +142,7 @@ function render(slot, note, ctx) {
         ? [h("p", { class: "figure" }, figure, h("span", { class: "figure-u" }, " sats")), h("p", { class: "figure-sub" }, btc(note.utxo.sats))]
         : h("p", { class: "figure figure-wait" }, "Not funded yet"),
       consequence(note, ctx.you) ? h("p", { class: "consequence" }, consequence(note, ctx.you)) : null),
-    h("dl", { class: "rows rows-plain" }, row("Holder", h("span", { class: "holder" }, holder(note.owner_id, ctx.you)))),
+    note.heir ? null : h("dl", { class: "rows rows-plain" }, row("Holder", h("span", { class: "holder" }, holder(note.owner_id, ctx.you)))),
     proof,
   ]);
   if (play) card.dataset.play = "1";
