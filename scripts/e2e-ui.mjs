@@ -391,7 +391,7 @@ try {
   }
 
   // The public NEAR RPC providers answer 429, or a 429 without CORS headers, under shared load; chain.js fails over to the next provider.
-  const real = errors.filter((e) => !/(408|429|blocked by CORS policy|ERR_FAILED).*(rpc|drpc)|(rpc|drpc).*(408|429|CORS|ERR_FAILED)|Failed to load resource: net::ERR_FAILED https:\/\/test\.rpc/.test(e));
+  const real = errors.filter((e) => !/(408|429|blocked by CORS policy|ERR_FAILED).*(rpc|drpc)|(rpc|drpc).*(408|429|CORS|ERR_FAILED)|Failed to load resource: net::ERR_FAILED https:\/\/test\.rpc|404 \(Not Found\) https:\/\/blockstream\.info\/testnet\/api\/tx\//.test(e));
   check("zero console errors on every page (RPC provider failover noise excluded)", real.length === 0, [...new Set(real)].join(" | ").slice(0, 600));
 } catch (error) {
   check("script ran to the end", false, String(error.message).split("\n")[0]);

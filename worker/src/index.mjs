@@ -10,14 +10,18 @@ const isId = (id) => /^\d+$/.test(id);
 const SEND_RPCS = ["https://archival-rpc.testnet.fastnear.com", "https://test.rpc.fastnear.com", "https://near-testnet.drpc.org"];
 async function sendRpc(method, params) {
   let failure;
-  for (const url of SEND_RPCS) {
-    try {
-      const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-tma", method, params }), signal: AbortSignal.timeout(20000) });
-      const payload = await response.json();
-      if (payload?.error) { failure = new Error((typeof payload.error.data === "string" && payload.error.data) || [payload.error.message, payload.error.cause?.name, payload.error.cause?.info?.error_message].filter(Boolean).join(": ") || "NEAR RPC error"); if (isTransientRpcError(payload.error)) continue; throw failure; }
-      if (payload?.result) return payload.result;
-      failure = new Error(`NEAR RPC HTTP ${response.status}`);
-    } catch (error) { failure = error; }
+  // The Cloudflare egress IP is shared, so every provider can rate limit at once for a second or two: go around again after a pause.
+  for (let round = 0; round < 3; round += 1) {
+    if (round > 0) await new Promise((resolve) => setTimeout(resolve, 900 * round));
+    for (const url of SEND_RPCS) {
+      try {
+        const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "cachet-tma", method, params }), signal: AbortSignal.timeout(20000) });
+        const payload = await response.json();
+        if (payload?.error) { failure = new Error((typeof payload.error.data === "string" && payload.error.data) || [payload.error.message, payload.error.cause?.name, payload.error.cause?.info?.error_message].filter(Boolean).join(": ") || "NEAR RPC error"); if (isTransientRpcError(payload.error)) continue; throw Object.assign(failure, { final: true }); }
+        if (payload?.result) return payload.result;
+        failure = new Error(`NEAR RPC HTTP ${response.status}`);
+      } catch (error) { if (error.final) throw error; failure = error; }
+    }
   }
   throw failure || new Error("No NEAR RPC answered.");
 }

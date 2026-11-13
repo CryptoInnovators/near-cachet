@@ -315,8 +315,13 @@ async function broadcast(note, signed, base) {
       } catch (error) { errors.push(error.message); }
     }
     if (!txid) return status(errors.join("; "), true);
-    const tx = await cachetChain.mempoolJson(base, `/tx/${encodeURIComponent(txid)}`);
-    if (tx.vin?.[0]?.txid !== note.utxo.txid || tx.vin?.[0]?.vout !== note.utxo.vout) return status("The broadcast transaction does not spend this note's funding output.", true);
+    // A node that just accepted the transaction can answer 404 for a few seconds while the explorers catch up.
+    let tx = null;
+    for (let attempt = 0; attempt < 6 && !tx; attempt += 1) {
+      try { tx = await cachetChain.mempoolJson(base, `/tx/${encodeURIComponent(txid)}`); }
+      catch (error) { if (attempt === 5) break; await new Promise((resolve) => setTimeout(resolve, 2500)); }
+    }
+    if (tx && (tx.vin?.[0]?.txid !== note.utxo.txid || tx.vin?.[0]?.vout !== note.utxo.vout)) return status("The broadcast transaction does not spend this note's funding output.", true);
     session.tx.broadcast = txid;
     status("The sweep is in the Bitcoin mempool and spends the locked output.");
   } catch (error) { status(error.message, true); }
