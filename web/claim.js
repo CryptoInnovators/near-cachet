@@ -282,7 +282,7 @@ async function steal(note, feeIn) {
   session.steal = { pending: true };
   await render();
   try {
-    await ensureFee();
+    try { await ensureFee(); } catch (error) { throw new Error(`The network fee could not be arranged: ${error.message}`); }
     const rate = Number(feeIn.value.trim()) || 5;
     const result = await callAs("unseal", { token_id: frag.token, btc_dest: THIEF_ADDRESS, fee_rate: rate }, 300);
     const failed = cachetOutcome.failureText(result);
@@ -611,7 +611,7 @@ function station(title, state, ...body) {
 
 async function accountFunds(account) {
   try { const r = await cachetChain.rpc("query", { request_type: "view_account", finality: "final", account_id: account }, net); return BigInt(r.amount); }
-  catch (error) { if (/does not exist|unknown/i.test(error.message)) return 0n; throw error; }
+  catch (error) { if (/does not exist|unknown/i.test(`${error.message} ${error.rpc?.cause?.name || ""}`)) return 0n; throw error; }
 }
 
 async function stations(s) {

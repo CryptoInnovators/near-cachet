@@ -46,6 +46,7 @@ async function rpc(method, params, net = network()) {
     let payload;
     try { payload = JSON.parse(text); } catch {}
     if (payload?.error?.code === -429 || /timeout|rate limit/i.test(payload?.error?.message || "") || [408, 429, 502, 503, 504].includes(response.status)) { failure = new Error(`The RPC at ${url} answered HTTP ${response.status}, rate limited or unavailable.`); continue; }
+    if (payload?.error?.message === "Server error" && !payload.error.data && !payload.error.cause) { failure = new Error(`The RPC at ${url} answered a Server error.`); continue; }
     if (payload?.error) { const error = new Error(payload.error.message || "The RPC returned an error."); error.rpc = payload.error; throw error; }
     if (!payload) { failure = new Error(`The RPC returned HTTP ${response.status} with a non-JSON body: ${text.slice(0, 240)}`); continue; }
     if (!response.ok) { failure = new Error(`The RPC returned HTTP ${response.status}.`); continue; }

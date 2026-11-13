@@ -176,3 +176,19 @@ test("signAndSend waits for a just-funded account whose key the RPC reports as a
     assert.equal(calls.filter((m) => m === "view_access_key").length, 4);
   } finally { chain.rpc = real; }
 });
+
+test("rpc tries the next provider on a bare Server error but keeps a Server error that names its cause", async () => {
+  const real = globalThis.fetch;
+  const net = { name: "server-error-test", rpc: "https://a.example", rpcs: ["https://a.example", "https://b.example"] };
+  const calls = [];
+  const reply = (body) => new Response(JSON.stringify(body), { status: 200 });
+  try {
+    globalThis.fetch = async (url) => { calls.push(String(url)); return String(url).startsWith("https://a.example") ? reply({ error: { code: -32000, message: "Server error" } }) : reply({ result: { ok: true } }); };
+    assert.deepEqual(await chain.rpc("query", {}, net), { ok: true });
+    assert.deepEqual(calls, ["https://a.example", "https://b.example"]);
+    calls.length = 0;
+    globalThis.fetch = async (url) => { calls.push(String(url)); return reply({ error: { code: -32000, message: "Server error", cause: { name: "UNKNOWN_ACCOUNT" } } }); };
+    await assert.rejects(chain.rpc("query", {}, { ...net, name: "server-error-test-2" }), (error) => error.rpc?.cause?.name === "UNKNOWN_ACCOUNT");
+    assert.equal(calls.length, 1, "an answer that names its cause is final");
+  } finally { globalThis.fetch = real; }
+});
