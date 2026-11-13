@@ -101,7 +101,7 @@ async function waitFor(expr, what, timeout = 90000) {
   const end = Date.now() + timeout;
   for (;;) {
     try { if (await evalJs(`!!(${expr})`)) return true; } catch {}
-    if (Date.now() > end) { check(`waited for ${what}`, false, `timeout; page shows: ${await evalJs("document.body.innerText.replace(/\\s+/g, ' ').slice(0, 300)").catch(() => "")}`); return false; }
+    if (Date.now() > end) { check(`waited for ${what}`, false, `timeout; page shows: ${await evalJs("document.body.innerText.replace(/\\s+/g, ' ').slice(0, 300) + ' || ACT: ' + (document.querySelector('.panel-act')?.innerHTML || 'none').slice(0, 300) + ' || TG: ' + [!!globalThis.Telegram?.WebApp?.initData, globalThis.Telegram?.WebApp?.version, location.search.slice(0, 40)].join(',')").catch(() => "")}`); return false; }
     await sleep(500);
   }
 }
@@ -222,7 +222,7 @@ try {
   const fmt = new Intl.NumberFormat("en-US");
   const left = `${open.length} of ${reads.length} shares left`;
 
-  for (const [width, label] of args.keep === true ? [] : [[1440, "desktop"], [390, "mobile"]]) {
+  for (const [width, label] of args.keep === true || typeof args.miniapp === "string" ? [] : [[1440, "desktop"], [390, "mobile"]]) {
     await motion(false);
     await open_(`${BASE}/index.html?network=testnet`, width);
     await evalJs("localStorage.clear()"); // a first visit has no claim account from an earlier run in this shared profile
@@ -309,9 +309,6 @@ try {
     console.log("pre-click", JSON.stringify(await evalJs("({ y: scrollY, w: innerWidth, h: innerHeight, r: JSON.stringify(document.querySelector('#claim-go').getBoundingClientRect()), hash: location.hash.slice(0, 40) })")));
     await click("#claim-go");
     await sleep(1500);
-    for (let i = 0; i < 8; i++) { console.log("t+" + i, JSON.stringify(await evalJs("({ btn: document.querySelector('#claim-go')?.textContent, dis: document.querySelector('#claim-go')?.disabled, top: document.elementFromPoint(1100, 554)?.id || document.elementFromPoint(1100, 554)?.tagName, prog: document.querySelector('.progress, #claim-progress')?.innerText?.slice(0, 80) })")), JSON.stringify([...new Set(errors)].slice(-3)).slice(0, 300)); await sleep(1000); }
-    await evalJs("document.querySelector('#claim-go').click()"); await sleep(1500);
-    console.log("js-click", JSON.stringify(await evalJs("({ btn: document.querySelector('#claim-go')?.textContent, say: document.querySelector('.panel-say')?.textContent })")));
     console.log("post-click", JSON.stringify(await evalJs("({ btn: document.querySelector('#claim-go')?.textContent, say: document.querySelector('.panel-say')?.textContent, st: document.querySelector('#claim-status').textContent })")));
     const labels = new Set();
     const end = Date.now() + 120000;

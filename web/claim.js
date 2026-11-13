@@ -10,7 +10,7 @@ const net = cachetChain.network();
 const { h, int, short, link, btc, copyButton } = cachetUi;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const FEE_FLOOR = 50000000000000000000000n; // 0.05 NEAR, enough for an unseal call from a claim account
-const FEE_LOW = 10000000000000000000000n; // 0.01 NEAR, enough for a hand-off call
+const FEE_LOW = 350000000000000000000000n; // 0.35 NEAR: an unseal prepays 300 Tgas, which costs 0.3 NEAR before the refund
 
 const session = { tx: {}, keySaved: null, keyFile: null, claimed: false, steal: null };
 // The thief's address in the "Steal this link" attempt: any valid witness address that is not the bound heir.

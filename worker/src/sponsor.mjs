@@ -6,8 +6,8 @@ const PKCS8_PREFIX = "302e020100300506032b657004220420";
 const RPCS = ["https://archival-rpc.testnet.fastnear.com", "https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"];
 export const SPONSOR_ID = "cachet-sponsor.testnet";
 export const CONTRACT = "heir.cachet-ops.testnet";
-export const GRANT = 50_000_000_000_000_000_000_000n; // 0.05 NEAR
-export const LOW_WATER = 20_000_000_000_000_000_000_000n; // under 0.02 NEAR counts as empty
+export const GRANT = 400_000_000_000_000_000_000_000n; // 0.4 NEAR: an unseal prepays 300 Tgas (0.3 NEAR at the current gas price), the unused part comes back
+export const LOW_WATER = 350_000_000_000_000_000_000_000n; // under 0.35 NEAR cannot prepay an unseal
 
 const hexBytes = (hex) => Uint8Array.from(hex.match(/../g), (x) => parseInt(x, 16));
 const concat = (...parts) => { const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0)); let at = 0; for (const p of parts) { out.set(p, at); at += p.length; } return out; };

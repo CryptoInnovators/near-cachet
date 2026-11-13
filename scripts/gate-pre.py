@@ -83,6 +83,7 @@ async def main(out_file):
     fd = os.open(out_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f: f.write(url)
     log(f"signed Mini App launch URL written to a 0600 file (host {urlparse(res.url).netloc}, tgWebAppData present: {'tgWebAppData' in res.url})")
+    u = urlparse(url); log("launch url shape: path=%s query_keys=%s hash_keys=%s" % (u.path, sorted(parse_qs(u.query)), sorted(parse_qs(u.fragment))))
     log(f"note {token}, {sats} sats, telegram user {me.id}")
     await client.disconnect()
 
