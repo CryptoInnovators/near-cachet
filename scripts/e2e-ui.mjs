@@ -332,6 +332,7 @@ try {
     const account = await evalJs("JSON.parse(localStorage.getItem('cachet:claim-account:testnet')).accountId");
     const nft = await view(CONTRACT, "nft_token", { token_id: target });
     check("claim: nft_token owner on chain is the new claim account", nft?.owner_id === account, `${nft?.owner_id} vs ${account}`);
+    await evalJs(`document.querySelector("#owner-details")?.setAttribute("open", "")`);
     const done = await evalJs(`({ rows: document.querySelector(".panel-rows")?.innerText.replace(/\\s+/g, " "), href: document.querySelector(".panel-rows a")?.href, holder: document.querySelector(".gift-card .holder")?.textContent, shares: document.querySelector(".shares-left")?.textContent, next: document.querySelector("#move-go")?.textContent })`);
     check("claim: the panel shows owner, claim transaction and key file", /Owner you, claim account/.test(done.rows || "") && (MINI ? /Saved as your Telegram cloud backup/ : /Saved as cachet-[0-9a-f]{8}\.key/).test(done.rows || "") && !!done.href, done.rows);
     check("claim: the card holder reads You", done.holder === "You", done.holder);

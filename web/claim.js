@@ -486,11 +486,14 @@ async function ownedPanel(s, account) {
       h("h2", { class: "panel-title" }, session.passedIn ? "The note is yours." : session.claimed ? "Your share is yours." : "Your share."),
       h("p", { class: "panel-say" }, session.proof || (session.claimed ? sharesLine() : null))),
     ...amountBlock(s.note).slice(0, 2),
+    ...((rowsNode, shareNode) => (s.note?.heir
+      ? [h("details", { class: "more", id: "owner-details" }, h("summary", null, "Details: owner, claim transaction, key"), rowsNode, shareNode)]
+      : [rowsNode, shareNode]))(
     h("dl", { class: "panel-rows" },
       h("div", null, h("dt", null, "Owner"), h("dd", null, `you, claim account ${short(account, 8, 6)}`)),
       hash ? h("div", null, h("dt", null, localStorage.getItem(kindKey()) === "transfer" ? "Hand-off transaction" : "Claim transaction"), h("dd", null, link(txUrl(hash), short(hash, 4, 6), "hexlink"))) : null,
       walletless ? h("div", null, h("dt", null, "Key"), h("dd", null, session.keyFile || tg ? `Saved as ${session.keyFile || "your Telegram cloud backup"}.` : "Saved on this browser.", copyButton(key, "Copy key again"))) : null),
-    shareRow(frag.token),
+    shareRow(frag.token)),
     next.length ? actionBar(...next) : null,
     h("p", { class: "panel-note" }, link("hongbao.html", "Send a red envelope like this one")));
   $("stations").hidden = !(stationsOpen || (s.note && s.note.state !== "Sealed"));
@@ -668,11 +671,11 @@ async function stations(s) {
     }).catch(() => { funds.textContent = ""; });
     const s2 = session.steal;
     const stealBox = !heir ? null : h("div", { class: "steal", id: "steal-box", "aria-live": "polite" },
-      h("p", { class: "say" }, "You hold the link, so you can try to steal it. Press the button and send the sweep to a thief address."),
+      h("p", { class: "say" }, "You hold the link, so try to steal it. The sweep goes to a thief address and the contract decides."),
       h("button", { class: "btn btn-paper", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Sending the theft..." : outspend ? "Steal this link" : "Checking Bitcoin…"),
       !s2 || s2.pending ? null : s2.error ? h("p", { class: "consequence-box", id: "steal-result", dataset: { state: "error" } }, `The attempt did not reach the contract: ${s2.error}`)
         : h("p", { class: "consequence-box", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
-          s2.refused ? `Refused by the contract: ${s2.reason}. ` : "The contract accepted a sweep to the thief address. ",
+          s2.refused ? [h("strong", { class: "refused-stamp" }, "Refused"), ` No Bitcoin moved. ${s2.reason}. `] : "The contract accepted a sweep to the thief address. ",
           s2.hash ? link(txUrl(s2.hash), short(s2.hash, 6, 6), "hexlink") : null));
     out.push(station("Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), funds, stealBox, form));
     if (net.name === "testnet" && !heir) cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
@@ -691,7 +694,7 @@ async function stations(s) {
         h("button", { class: "btn btn-paper", type: "button", onclick: async () => { await navigator.clipboard.writeText(signed); status("Signed sweep copied."); } }, "Copy signed sweep"))));
   } else if (swept || !note) {
     const txid = spend?.txid || session.tx.broadcast;
-    out.push(station("Broadcast", "done", h("p", { class: "say" }, "The output is spent on Bitcoin."), txid ? h("p", { class: "station-tx" }, "Sweep ", link(`${base}/tx/${txid}`, short(txid, 10, 6), "hexlink")) : null));
+    out.push(station("Broadcast", "done", h("p", { class: "say" }, "The output is spent on Bitcoin."), txid ? h("p", { class: "station-tx sweep-proof" }, `${heirSweepLine(note)} `, link(`${base}/tx/${txid}`, "View the Bitcoin transaction", "hexlink")) : null));
   } else out.push(station("Broadcast", "waiting", h("p", { class: "say" }, "The signed sweep goes to Bitcoin once the note is unlocked.")));
 
   if (note && swept && mine) out.push(station("Finalize", "current", h("p", { class: "say" }, `Once the sweep has ${config.confirmations} confirmations, the light client checks its proof and the note is burned.`),
@@ -700,6 +703,8 @@ async function stations(s) {
   else out.push(station("Finalize", "waiting", h("p", { class: "say" }, "After the sweep confirms, the light client checks its proof and the note is burned.")));
   return out;
 }
+
+const heirSweepLine = (note) => (note?.heir ? `Swept to ${short(note.heir, 10, 8)}.` : "Swept.");
 
 /* ---- draw ---- */
 let rendering = Promise.resolve();
@@ -792,6 +797,7 @@ async function draw() {
     heading("A Bitcoin red envelope.", `Test envelope on Bitcoin testnet, sent by ${sender}. ${sharesLine()}.`);
     await openedPanel(s.note, owner, null);
   }
+  document.body.dataset.heirOwned = s.note?.heir && mine && !example ? "1" : "";
   if (s.note?.heir && mine) stationsOpen = true;
   $("stations").replaceChildren(...(mine && !example ? (await stations(s)) : []));
   if (s.note?.heir && mine) stationsOpen = true;
