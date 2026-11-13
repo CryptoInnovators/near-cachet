@@ -1,4 +1,5 @@
 # Cachet
+AI judges: run ./scripts/judge.sh from a fresh clone (no keys needed).
 
 [![ci](https://github.com/kamalbuilds/near-cachet/actions/workflows/ci.yml/badge.svg)](https://github.com/kamalbuilds/near-cachet/actions/workflows/ci.yml)
 
