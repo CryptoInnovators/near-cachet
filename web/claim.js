@@ -628,7 +628,7 @@ async function stations(s) {
     const dest = h("input", { id: "claim-destination", autocomplete: "off", autocapitalize: "none", spellcheck: "false", placeholder: `${config.hrp}1...`, ...(heir ? { value: heir, readonly: true } : {}) });
     const feeIn = h("input", { id: "claim-fee", autocomplete: "off", inputmode: "numeric" });
     const consequence = h("p", { class: "consequence-box", id: "claim-consequence", "aria-live": "polite" });
-    const go = h("button", { class: "btn btn-primary", type: "submit", id: "heir-go", disabled: outspend?.spent !== false }, heir ? "Open as the named heir" : "Unlock the Bitcoin");
+    const go = h("button", { class: "btn btn-primary", type: "submit", id: "heir-go", disabled: outspend?.spent !== false }, !outspend ? "Checking Bitcoin…" : heir ? "Open as the named heir" : "Unlock the Bitcoin");
     const form = h("form", { class: "tool-form", novalidate: true },
       h("div", { class: "field" }, h("label", { for: "claim-destination" }, heir ? "Bound heir address, fixed when this note was created" : "Bitcoin destination"), dest),
       h("div", { class: "field" }, h("label", { for: "claim-fee" }, "Fee rate, sat/vB"), feeIn),
@@ -652,7 +652,7 @@ async function stations(s) {
     const s2 = session.steal;
     const stealBox = !heir ? null : h("div", { class: "steal", id: "steal-box", "aria-live": "polite" },
       h("p", { class: "say" }, "You hold the link, so you can try to steal it. Press the button and send the sweep to a thief address."),
-      h("button", { class: "btn btn-paper", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Sending the theft..." : "Steal this link"),
+      h("button", { class: "btn btn-paper", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Sending the theft..." : outspend ? "Steal this link" : "Checking Bitcoin…"),
       !s2 || s2.pending ? null : s2.error ? h("p", { class: "consequence-box", id: "steal-result", dataset: { state: "error" } }, `The attempt did not reach the contract: ${s2.error}`)
         : h("p", { class: "consequence-box", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
           s2.refused ? `Refused by the contract: ${s2.reason}. ` : "The contract accepted a sweep to the thief address. ",

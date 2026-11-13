@@ -488,3 +488,21 @@ html.in-telegram .env .figure-sub { color: #fff; }
 html.in-telegram .env .proof { min-height: 0; margin: 0; display: block; }
 html.in-telegram .env .proof summary { list-style: none; }
 html.in-telegram .env .proof summary::-webkit-details-marker { display: none; }
+
+/* Mini App stations: the unlock flow as rounded Telegram-style sections */
+html.in-telegram .stations { gap: 10px; }
+html.in-telegram .station { padding: 16px 14px; border-radius: 18px; background: var(--paper); gap: 12px; }
+html.in-telegram .station[data-state="current"] { padding: 16px 14px; }
+html.in-telegram .station[data-state="waiting"] { background: transparent; border: 1px solid var(--paper-2); }
+html.in-telegram .station h3 { font: 700 19px/1.2 var(--f-text); }
+html.in-telegram .station .where { color: var(--tg-accent, var(--tg-link, var(--wax))); }
+html.in-telegram .station[data-state="waiting"] .where { color: var(--ground-dim); }
+html.in-telegram .field input, html.in-telegram .field select, html.in-telegram .station .field input { border-radius: 12px; min-height: 48px; background: var(--ground); color: var(--ink); border: 1px solid var(--paper-2); font-size: 15px; }
+html.in-telegram .field label, html.in-telegram .station .field label { color: var(--ground-dim); }
+html.in-telegram .btn-paper, html.in-telegram .btn-quiet { background: var(--ground); color: var(--ink); border: 1px solid var(--paper-2); border-radius: 12px; min-height: 46px; }
+html.in-telegram .btn-paper:hover, html.in-telegram .btn-quiet:hover { background: var(--paper-2); color: var(--ink); }
+html.in-telegram .btn[disabled] { opacity: .5; }
+html.in-telegram .claim-steps li[data-state="current"] .step-word { color: var(--tg-link, var(--wax)); }
+html.in-telegram .share-mark { border-color: var(--ground-dim); }
+html.in-telegram .share-mark[data-state="mine"] { background: var(--ink); border-color: var(--ink); }
+html.in-telegram .share-mark[data-state="open"] { background: var(--wax); border-color: var(--wax); }

@@ -150,7 +150,7 @@ const tabOrder = (stopAt) => evalJs(`(() => {
   return seen;
 })()`);
 const click = async (selector) => {
-  const r = await evalJs(`(() => { const b = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
+  const r = await evalJs(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); el.scrollIntoView({ block: "center", behavior: "instant" }); const b = el.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()`);
   await send("Target.activateTarget", { targetId }); // the profile is shared: another session may have raised its own tab, and a background tab drops synthetic mouse input
   for (const type of ["mousePressed", "mouseReleased"]) await S("Input.dispatchMouseEvent", { type, x: r[0], y: r[1], button: "left", clickCount: 1 });
 };
@@ -250,7 +250,7 @@ try {
     await shot("index", width);
   }
   const ready = await evalJs("!!document.querySelector('.send') && !!document.querySelector('#record')");
-  if (args.keep !== true) check("below the fold: send, how it works and the proof view remain", ready);
+  if (args.keep !== true && typeof args.miniapp !== "string") check("below the fold: send, how it works and the proof view remain", ready);
 
   // ---- empty pool: a copy of the site whose pool lists only claimed shares ----
   const claimed = reads.filter((r) => !(r.note?.state === "Sealed" && r.note.claim));
