@@ -241,7 +241,7 @@ async function callAs(method, args, tgas) {
   if (cachetWallet.accountId) return cachetWallet.call(frag.contract, method, args, { tgas });
   const saved = savedAccount();
   if (!saved) throw new Error("No claim account is saved in this browser.");
-  return cachetLinkdrop.signAndSend({ signerId: saved.accountId, seedHex: saved.seedHex, contract: frag.contract, args, net, method, tgas, restricted: false });
+  return cachetLinkdrop.signAndSend({ signerId: saved.accountId, seedHex: saved.seedHex, contract: frag.contract, args, net, method, tgas, restricted: false, waitForAccountMs: 45000 });
 }
 
 async function unseal(note, config, dest, fee) {
