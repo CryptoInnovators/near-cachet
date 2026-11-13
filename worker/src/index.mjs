@@ -1,4 +1,5 @@
 import { cardSvg, envelopeHtml } from "./card.mjs";
+import { handleSponsor } from "./sponsor.mjs";
 
 const RPCS = ["https://near-testnet.drpc.org", "https://test.rpc.fastnear.com"];
 const CONTRACT = "cachet.testnet";
@@ -59,6 +60,7 @@ export default {
         return new Response(cardSvg(await getNote(match[1])), { headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=30" } });
       } catch (error) { return errorResponse(error.message); }
     }
+    if (url.pathname === "/api/sponsor") return handleSponsor(request, env);
     if (url.pathname === "/claim") return env.ASSETS.fetch(new Request(new URL("/claim.html", url.origin), request));
     return env.ASSETS.fetch(request);
   },

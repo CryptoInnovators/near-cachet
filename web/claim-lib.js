@@ -49,8 +49,9 @@ async function signClaim(seedHex, contract, tokenId, newOwner) {
   return bytesToHex(new Uint8Array(sig));
 }
 
-function buildFragment({ contract, token, key, sender }) {
-  return new URLSearchParams({ v: sender ? "2" : "1", contract, token, key, ...(sender ? { sender } : {}) }).toString();
+// pass: the link hands over a note already held by the account this key controls (Pass it on), not a claim-only key.
+function buildFragment({ contract, token, key, sender, pass }) {
+  return new URLSearchParams({ v: sender ? "2" : "1", contract, token, key, ...(sender ? { sender } : {}), ...(pass && sender ? { pass: "1" } : {}) }).toString();
 }
 
 function parseFragment(hash) {
@@ -62,7 +63,7 @@ function parseFragment(hash) {
   const version = p.get("v");
   if (!(["1", "2"].includes(version)) || !contract || !token || !/^[0-9a-f]{64}$/i.test(key || "")) return null;
   if (version === "2" && (!sender || !/^(?:[a-z0-9]+[._-])*[a-z0-9]+$/.test(sender) || sender.length > 64)) return null;
-  return { contract, token, key: key.toLowerCase(), ...(version === "2" ? { sender } : {}) };
+  return { contract, token, key: key.toLowerCase(), ...(version === "2" ? { sender } : {}), ...(version === "2" && p.get("pass") === "1" ? { pass: true } : {}) };
 }
 
 // Telegram start_param allows only [A-Za-z0-9_-]{1,512}, so a claim fragment travels base64url-encoded.

@@ -110,3 +110,18 @@ test("a claim account signs its own unseal call with the method and gas it names
   assert.equal(gas(claim), 100_000_000_000_000n);
   assert.equal(gas(unseal), 300_000_000_000_000n);
 });
+
+test("a hand-off call carries exactly one yoctoNEAR and a claim call carries none", () => {
+  const base = { signerId: "a".repeat(64), publicKey: "1".repeat(32), nonce: 1, receiverId: "cachet.testnet", blockHash: "1".repeat(32), args: { receiver_id: "b".repeat(64), token_id: "5" }, method: "nft_transfer", gas: 30_000_000_000_000n };
+  const deposit = (bytes) => new DataView(bytes.buffer, bytes.byteOffset + bytes.length - 16, 16).getBigUint64(0, true);
+  assert.equal(deposit(linkdrop.transactionBytes({ ...base, deposit: 1n })), 1n);
+  assert.equal(deposit(linkdrop.transactionBytes(base)), 0n);
+});
+
+test("a pass link round trips and a claim link never reads as one", () => {
+  const key = "ab".repeat(32);
+  const fragment = cachetClaim.buildFragment({ contract: "cachet.testnet", token: "5", key, sender: "c".repeat(64), pass: true });
+  assert.equal(cachetClaim.parseFragment(fragment).pass, true);
+  const claimLink = cachetClaim.buildFragment({ contract: "cachet.testnet", token: "5", key, sender: "cachet-ops.testnet" });
+  assert.equal(cachetClaim.parseFragment(claimLink).pass, undefined);
+});
