@@ -19,8 +19,17 @@ view() {
     | jq -er '[.result.result[]] | implode | fromjson'
 }
 note() { view note "$(jq -cn --arg token "$TOKEN" '{token_id:$token}')"; }
-mempool_json() { curl -fsS "$MEMPOOL$1"; }
-mempool_text() { curl -fsS "$MEMPOOL$1"; }
+mempool_json() { curl -fsS --retry 6 --retry-all-errors --retry-delay 10 "$MEMPOOL$1"; } # esplora answers 429 under load
+mempool_text() { curl -fsS --retry 6 --retry-all-errors --retry-delay 10 "$MEMPOOL$1"; }
+# Wait until the contract's light client main chain holds HEIGHT; the light client lags the explorer.
+wait_light_client() {
+  local lc; lc=$(view config '{}' | jq -r '.btc_light_client')
+  for _ in $(seq 1 160); do
+    [[ $(curl -fsS "$NEARRPC" -H 'content-type: application/json' --data "$(jq -cn --arg lc "$lc" --arg a "$(printf '{"height":%s}' "$1" | base64)" '{jsonrpc:"2.0",id:1,method:"query",params:{request_type:"call_function",finality:"final",account_id:$lc,method_name:"get_block_hash_by_height",args_base64:$a}}')" | jq -r '(.result.result // []) | implode') != "" ]] && return 0
+    sleep 15
+  done
+  echo "Light client $lc does not hold block $1 after 40 minutes" >&2; return 1
+}
 proof_json() {
   local txid=$1 tx block proof coinbase cproof raw vout address
   tx=$(mempool_json "/tx/$txid")
@@ -65,6 +74,8 @@ case $1 in
     [[ $# == 2 ]] || { usage; exit 2; }
     p=$(proof_json "$2")
     jq -e '.vout != null' <<<"$p" >/dev/null || { echo "No output of $2 pays the note address" >&2; exit 1; }
+    # attest needs config.confirmations blocks on the light client, counting the funding block
+    wait_light_client $(( $(mempool_json "/tx/$2" | jq -er '.status.block_height') + $(view config '{}' | jq -er '.confirmations') - 1 )) || exit 1
     args=$(jq -c --arg token "$TOKEN" --argjson p "$p" '{token_id:$token,raw_tx:$p.raw_tx,vout:$p.vout,proof:$p.proof}' <<< '{}')
     tx_call "$OWNER" attest "$args"
     n=$(wait_note Sealed 120)
@@ -133,13 +144,7 @@ case $1 in
       sleep 30
       tx=$(mempool_json "/tx/$txid")
     done
-    # the light client lags the explorer: wait until its main chain holds the sweep's block
-    lc=$(view config '{}' | jq -r '.btc_light_client')
-    h=$(jq -r '.status.block_height' <<<"$tx")
-    for _ in $(seq 1 120); do
-      [[ $(curl -fsS "$NEARRPC" -H 'content-type: application/json' --data "$(jq -cn --arg lc "$lc" --arg a "$(printf '{"height":%s}' "$(( h + 1 ))" | base64)" '{jsonrpc:"2.0",id:1,method:"query",params:{request_type:"call_function",finality:"final",account_id:$lc,method_name:"get_block_hash_by_height",args_base64:$a}}')" | jq -r '(.result.result // []) | implode') != "" ]] && break
-      sleep 15
-    done
+    wait_light_client $(( $(jq -r '.status.block_height' <<<"$tx") + 1 )) || exit 1
     p=$(proof_json "$txid")
     tx_call "$HOLDER" finalize "$(jq -cn --arg token "$TOKEN" --arg raw "$sweep" --argjson p "$p" '{token_id:$token,sweep_raw_tx:$raw,proof:$p.proof}')"
     for _ in $(seq 1 48); do

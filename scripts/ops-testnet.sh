@@ -48,7 +48,7 @@ case ${1:-} in
   seal)
     t=${2:?token}
     addr=$(note "$t" | jq -r '.address')
-    txid=$(curl -fsS -m 30 "$ESPLORA/address/$addr/txs" | jq -er '[.[] | select(.status.confirmed)] | first | .txid')
+    txid=$(curl -fsS -m 30 --retry 6 --retry-all-errors --retry-delay 10 "$ESPLORA/address/$addr/txs" | jq -er '[.[] | select(.status.confirmed)] | first | .txid')
     MEMPOOL=$ESPLORA NETCFG=$NETCFG TOKEN=$t OWNER=$OWNER CONTRACT=$CONTRACT scripts/e2e-testnet-gift.sh attest "$txid"
     echo "sealed $t with $txid"
     ;;
