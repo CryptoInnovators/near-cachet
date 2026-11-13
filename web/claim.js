@@ -119,7 +119,7 @@ function destinationScriptLen(value) {
 }
 
 async function feeDefault(base) {
-  const rates = await cachetChain.mempoolJson(base, "/v1/fees/recommended");
+  const rates = await cachetChain.feeRates(base);
   const half = Math.max(1, Math.ceil(Number(rates.halfHourFee)));
   return net.name === "testnet" ? Math.min(half, 5) : half;
 }
@@ -305,7 +305,7 @@ async function broadcast(note, signed, base) {
     const fallback = net.name === "testnet" ? "https://blockstream.info/testnet/api/tx" : "https://blockstream.info/api/tx";
     const errors = [];
     let txid;
-    for (const url of [`${base}/api/tx`, fallback]) {
+    for (const url of [fallback, `${base}/api/tx`]) {
       try {
         const response = await cachetChain.fetchWithTimeout(url, { method: "POST", headers: { "content-type": "text/plain" }, body: signed });
         const text = (await response.text()).trim();

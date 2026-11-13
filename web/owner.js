@@ -142,7 +142,7 @@ async function addUnsealForm(contract, tokenId, note, config) {
     catch (error) { report(`Could not read a reusable pool address: ${error.message}`, true); }
   }
   try {
-    const fees = await cachetChain.mempoolJson(base, "/v1/fees/recommended");
+    const fees = await cachetChain.feeRates(base);
     rate = Math.max(1, Math.ceil(Number(fees.halfHourFee)));
     if (ownerNet.name === "testnet") rate = Math.min(rate, 5);
   } catch (error) { report(`Fee estimate unavailable: ${error.message}`, true); }

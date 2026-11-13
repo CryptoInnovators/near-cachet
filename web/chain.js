@@ -83,7 +83,8 @@ const EXPLORER_PAUSE_MS = 60000;
 async function explorerGet(base, path, accept) {
   let urls = [`${base}/api${path}`];
   const twin = esploraTwin(base);
-  if (twin && !path.startsWith("/v1/") && path !== "/blocks") urls.push(`${twin}/api${path}`);
+  // blockstream.info answers where mempool.space hangs, so it goes first for every path both serve.
+  if (twin && !path.startsWith("/v1/") && path !== "/blocks") urls.unshift(`${twin}/api${path}`);
   const healthy = urls.filter((url) => (explorerDownUntil.get(new URL(url).host) || 0) <= Date.now());
   if (healthy.length && healthy.length < urls.length) urls = [...healthy, ...urls.filter((url) => !healthy.includes(url))];
   let failure;
@@ -98,6 +99,19 @@ async function explorerGet(base, path, accept) {
     } catch (error) { if (error.final) throw error; explorerDownUntil.set(host, Date.now() + EXPLORER_PAUSE_MS); failure = error; }
   }
   throw failure;
+}
+
+// Recommended fee rates. Blockstream serves the estimate table; mempool.space serves the named tiers.
+async function feeRates(base) {
+  const twin = esploraTwin(base);
+  if (twin) {
+    try {
+      const table = await (await fetchWithTimeout(`${twin}/api/fee-estimates`, { headers: { accept: "application/json" } }, EXPLORER_TIMEOUT_MS)).json();
+      const rate = Number(table?.["3"] ?? table?.["6"]);
+      if (rate > 0) return { halfHourFee: rate };
+    } catch { /* fall through to mempool.space */ }
+  }
+  return mempoolJson(base, "/v1/fees/recommended");
 }
 
 async function mempoolJson(base, path) { return (await explorerGet(base, path, "application/json")).json(); }
@@ -152,7 +166,7 @@ async function defaultDestination(net = network(), mempool = mempoolJson) {
   return null;
 }
 
-const lib = { NETWORKS, network, fetchWithTimeout, rpc, callView, mempoolBase, mempoolJson, mempoolText, outspendStatus, latestTx, claimTx, defaultDestination };
+const lib = { NETWORKS, network, fetchWithTimeout, rpc, callView, mempoolBase, mempoolJson, feeRates, mempoolText, outspendStatus, latestTx, claimTx, defaultDestination };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetChain = lib;
 
