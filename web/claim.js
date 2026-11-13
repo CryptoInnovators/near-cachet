@@ -256,11 +256,16 @@ async function unseal(note, config, dest, fee) {
   try {
     await ensureFee();
     status("Waiting for the signer to release the Bitcoin sweep.");
-    const result = await callAs("unseal", { token_id: frag.token, btc_dest: address, fee_rate: rate }, 300);
-    const failed = cachetOutcome.failureText(result);
-    if (failed) return status(failed, true);
-    session.tx.unseal = txHash(result);
-    const current = await poll(async () => (await view("note", { token_id: frag.token })).value, (v) => v?.state === "Unsealed", 180000, 3000);
+    let transport = null;
+    try {
+      const result = await callAs("unseal", { token_id: frag.token, btc_dest: address, fee_rate: rate }, 300);
+      const failed = cachetOutcome.failureText(result);
+      if (failed) return status(failed, true);
+      session.tx.unseal = txHash(result);
+    } catch (error) { transport = error; status("Waiting for the signer to release the Bitcoin sweep."); }
+    // The signer answers a few blocks after the call; a relay timeout or a 502 does not mean the call failed, the chain decides.
+    const current = await poll(async () => (await view("note", { token_id: frag.token })).value, (v) => v?.state === "Unsealed", transport ? 120000 : 180000, 3000);
+    if (transport && current?.state !== "Unsealed") return status(transport.message, true);
     if (current?.state !== "Unsealed") return status(`The signer has not answered. Recover opens at NEAR block ${Number(current?.pending_since || note.pending_since) + 400}.`, true);
     status("The note is unlocked. The signed sweep is ready to broadcast.");
   } catch (error) { status(error.message, true); }
