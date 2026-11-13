@@ -4,6 +4,17 @@
 
 Cachet is a NEP-171 NFT contract on NEAR where each token owns one native Bitcoin output. `mint_note` asks the NEAR MPC signer for a P2WPKH address derived at `cachet/<token_id>/0`. Anyone can fund it. `attest` binds the funding output to the token after the configured Bitcoin light client verifies its inclusion proof. The contract holds no signing key or upgrade key. Only the token owner can ask the signer to sign an unseal or fee-resign for an attested, unspent note.
 
+## Try it
+
+Live: https://near-cachet.earn-shield-alerts.workers.dev/ (Bitcoin testnet, no wallet, nothing to install).
+
+1. Open the URL. The first screen is a Bitcoin red envelope: a sealed note with its sats read from the chain and a row of shares left.
+2. Press **Claim my share**. Within about ten seconds the panel reads "Your share is yours." with the NEAR claim transaction on nearblocks (for example https://testnet.nearblocks.io/txns/649SzLd5xjM72pyerXRb6G19mTKBUoEdXCxw3r9HESSg), the card holder reads "You", and shares left drops by one. The key file is saved to your downloads and your clipboard.
+3. Open **Show how it is checked**. The funding block, the confirmations above it, the signer key match and the contract's empty key list are re-read live from NEAR and Bitcoin.
+4. Press **Move it to a Bitcoin address** to break the seal: the signer signs the sweep, you broadcast it, and Bitcoin spends the output the note owned.
+
+`node scripts/e2e-ui.mjs --base https://near-cachet.earn-shield-alerts.workers.dev --claim` runs steps 1 and 2 through a real browser, cold, and asserts the new owner on chain.
+
 ## The problem
 
 Bitcoin held through an NFT today is held by a token-bound account, and the seller can empty the account while the NFT is being sold. Valastin et al. name this in their ERC-6551 comparison (https://arxiv.org/abs/2404.14074): the buyer receives an empty account. A Cachet note has no signing path until its holder calls `unseal`, and `unseal` freezes transfers, so a buyer who sees `state: Sealed` and `utxo.sats` is looking at the whole claim.
