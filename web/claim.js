@@ -658,8 +658,8 @@ async function takeIt() {
 function txLink(hash, label) { return hash ? h("p", { class: "station-tx" }, label, " ", link(txUrl(hash), short(hash, 10, 6), "hexlink")) : null; }
 
 function station(title, state, ...body) {
-  const word = { done: "Done", current: "Now", waiting: "Waiting" }[state];
-  return h("li", { class: "station", dataset: { state } }, h("div", { class: "station-head" }, h("h3", null, title), h("p", { class: "where" }, word)), ...body);
+  const word = { done: "Done", waiting: "Waiting" }[state];
+  return h("li", { class: "station", dataset: { state } }, h("div", { class: "station-head" }, h("h3", null, title), word ? h("p", { class: "where" }, word) : null), ...body);
 }
 
 async function accountFunds(account) {
