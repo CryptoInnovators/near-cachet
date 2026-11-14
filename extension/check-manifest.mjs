@@ -27,7 +27,7 @@ for (const file of ["lib.js", "content.js", "popup.js"]) {
   const source = readFileSync(join(dir, file), "utf8");
   const urls = source.match(/https?:\/\/[^\s"'`]+/g) || [];
   for (const url of urls) {
-    if (!/^https:\/\/(?:x\.com|twitter\.com|rpc\.testnet\.near\.org|near-cachet\.earn-shield-alerts\.workers\.dev)(?:[/:?#$]|$)/i.test(url)) fail(`${file} contains an unapproved remote endpoint`);
+    if (!/^https:\/\/(?:x\.com|twitter\.com|rpc\.testnet\.near\.org|near-cachet\.nearbuild\.workers\.dev)(?:[/:?#$]|$)/i.test(url)) fail(`${file} contains an unapproved remote endpoint`);
   }
   if (/\beval\s*\(|new\s+Function\s*\(/.test(source)) fail(`${file} contains dynamic code execution`);
 }

@@ -5,7 +5,7 @@
 # Never prints the session, claim keys or the launch URL. Log goes to stdout and .progress/design/gate/tma-run.log.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-ORIGIN=${CACHET_ORIGIN:-https://near-cachet.earn-shield-alerts.workers.dev}
+ORIGIN=${CACHET_ORIGIN:-https://near-cachet.nearbuild.workers.dev}
 PY=${TELEGRAM_PY:-$HOME/Developer/telegram-mcp/.venv/bin/python}
 OUT=.progress/design/gate; mkdir -p "$OUT/tma"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT

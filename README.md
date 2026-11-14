@@ -10,7 +10,7 @@ How control passes on transfer: `mint_note` asks the NEAR MPC signer for a P2WPK
 
 ## Try it
 
-Live: https://near-cachet.earn-shield-alerts.workers.dev/ (Bitcoin testnet, no wallet, nothing to install).
+Live: https://near-cachet.nearbuild.workers.dev/ (Bitcoin testnet, no wallet, nothing to install).
 
 1. Open the URL. The first screen is a Bitcoin red envelope: a sealed note with its sats read from the chain and a row of envelopes left.
 2. Press **Take the note**. Within about ten seconds the panel reads "You hold the note." with the NEAR claim transaction on nearblocks (for example https://testnet.nearblocks.io/txns/649SzLd5xjM72pyerXRb6G19mTKBUoEdXCxw3r9HESSg), the card holder reads "You", and shares left drops by one. The key file is saved to your downloads and your clipboard.
@@ -18,7 +18,7 @@ Live: https://near-cachet.earn-shield-alerts.workers.dev/ (Bitcoin testnet, no w
 4. Press **Pass it on**. The note changes hands in one NEAR transaction and the panel shows a link to send in any chat, with the Bitcoin output named as unmoved. Whoever opens the link sees the seal and the unspent output checked, presses **Take it**, and owns the note in about twenty seconds (hand-off https://testnet.nearblocks.io/txns/AhAQTkQL4bKnYSdvMyw4hR8A3zRnzXJ2cdZU9SGhahf2, take https://testnet.nearblocks.io/txns/2ySpUrZWD6UsndC9A4NJLCoY7UTbCoNeGXk4gm8uYPom). The spent link cannot move it again: the contract refuses the replay (https://testnet.nearblocks.io/txns/DvCJkQQmn2prnTDkYKR2Vg9syrbhHrmXvXoLpEZzu13N).
 5. Press **Move it to a Bitcoin address** to break the seal: the signer signs the sweep, you broadcast it, and Bitcoin spends the output the note owned.
 
-`node scripts/e2e-ui.mjs --base https://near-cachet.earn-shield-alerts.workers.dev --pass` runs steps 1, 2 and 4 through a real browser, cold, asserts each new owner on chain, and replays the spent link.
+`node scripts/e2e-ui.mjs --base https://near-cachet.nearbuild.workers.dev --pass` runs steps 1, 2 and 4 through a real browser, cold, asserts each new owner on chain, and replays the spent link.
 
 ## The problem
 

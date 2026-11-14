@@ -3,7 +3,7 @@
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.CachetExtension = api;
 })(globalThis, function () {
-  const DEFAULT_WEB_URL = "https://near-cachet.earn-shield-alerts.workers.dev";
+  const DEFAULT_WEB_URL = "https://near-cachet.nearbuild.workers.dev";
   const CONTRACT = "cachet.testnet";
   const RPC = "https://rpc.testnet.near.org";
 

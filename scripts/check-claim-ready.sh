@@ -3,7 +3,7 @@
 # browser (own background tab) and fail unless the "Open this gift" button is present and enabled
 # within max_seconds. Read-only: never clicks. Closes its tab.
 set -u
-MAX=${1:-6}; BASE=${2:-https://near-cachet.earn-shield-alerts.workers.dev}
+MAX=${1:-6}; BASE=${2:-https://near-cachet.nearbuild.workers.dev}
 cd "$(dirname "$0")/.."
 port=$(jq -r .deepsurge.port ~/.local/share/bhn/ports.json)
 # first judge link whose note is still claimable (claim set, owner not yet an implicit account)
