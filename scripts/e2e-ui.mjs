@@ -30,7 +30,7 @@ const MIN_OPEN = Number(args["min-open"] ?? 3); // the pool must never run dry d
 const DO_UNSEAL = args.unseal === true; // claim, fund the claim account for gas, break the seal through the page (implies --claim)
 const W = Number(args.width ?? 1440); // the Mini App run width: 390 captures the phone layout Telegram shows
 const DO_PASS = args.pass === true; // after the claim: Pass it on, take it from the link in a clean browser, then replay the spent link (must fail)
-const DO_HEIR = args.heir === true; // claim, press Steal this link (the contract must refuse), press Open as the named heir, broadcast, read the sweep on Bitcoin testnet
+const DO_HEIR = args.heir === true; // claim, press Take it anyway (the contract must refuse), press Send it to the heir, broadcast, read the sweep on Bitcoin testnet
 const DO_CLAIM = (args.claim === true || DO_UNSEAL || DO_PASS || DO_HEIR) && args.keep !== true; // spends one share of the pool: one cold walletless claim through the real page
 
 const failures = [];
@@ -349,12 +349,12 @@ try {
       const heir = (await noteNow())?.heir;
       check("heir: the note on chain names its heir", /^tb1q/.test(heir || ""), String(heir));
       check("heir: the headline names one address only", /^(For|A Bitcoin note for) .+\.?$/.test(await text("#gift-title")) && /tb1q/.test(await text("#gift-sub")), await text("#gift-title"));
-      await waitFor("document.querySelector('#steal-go') && !document.querySelector('#steal-go').disabled", "Steal this link enabled", 90000);
+      await waitFor("document.querySelector('#steal-go') && !document.querySelector('#steal-go').disabled", "Take it anyway enabled", 90000);
       const tSteal = Date.now();
       await click("#steal-go");
       await waitFor("document.querySelector('#steal-result')?.dataset.state", "steal result", 120000);
       const stolen = await evalJs("({ state: document.querySelector('#steal-result').dataset.state, text: document.querySelector('#steal-result').innerText, href: document.querySelector('#steal-result a')?.href })");
-      check("heir: Steal this link is refused by the contract with its reason", stolen.state === "refused" && /sweeps only to its heir/.test(stolen.text) && /Tried to send it to\s+tb1qw508d6/.test(stolen.text) && /bound to\s+tb1qjq6uvy/.test(stolen.text) && !!stolen.href, `${stolen.state} ${stolen.text} ${stolen.href}`);
+      check("heir: Take it anyway is refused by the contract with its reason", stolen.state === "refused" && /sweeps only to its heir/.test(stolen.text) && /Tried to send it to\s+tb1qw508d6/.test(stolen.text) && /bound to\s+tb1qjq6uvy/.test(stolen.text) && !!stolen.href, `${stolen.state} ${stolen.text} ${stolen.href}`);
       console.log(`heir: refusal in ${((Date.now() - tSteal) / 1000).toFixed(1)}s, tx ${stolen.href}`);
       const afterSteal = await noteNow();
       check("heir: after the refused theft the note is still Sealed and owned by the claim account", afterSteal?.state === "Sealed" && (await view(CONTRACT, "nft_token", { token_id: target }))?.owner_id === account, String(afterSteal?.state));
@@ -370,7 +370,7 @@ try {
       await waitFor("[...document.querySelectorAll('.station')].some((s) => s.querySelector('h3')?.textContent === 'Broadcast' && s.dataset.state === 'current')", "broadcast station current", 60000);
       await click("#stations .station[data-state=current] .btn-primary");
       await waitFor(`document.querySelector("#gift-card .card")?.dataset.swept === "1"`, "envelope reads sent", 120000);
-      const sweepTxid = await evalJs("(document.querySelector('#gift-card .consequence a')?.href || '').split('/tx/')[1] || ''");
+      const sweepTxid = await evalJs("(document.querySelector('#gift-card .env-arrival a, #gift-card .consequence a')?.href || '').split('/tx/')[1] || ''");
       const sent = await evalJs("({ title: document.querySelector('#gift-title')?.textContent, state: document.querySelector('#gift-card .card-state')?.textContent.trim(), fig: document.querySelector('#gift-card .figure')?.innerText.replace(/\\s+/g, ' '), panel: document.querySelector('.panel-title')?.textContent, waiting: document.querySelectorAll('.station[data-state=waiting]').length, balance: document.querySelector('.wallet-figure')?.textContent })");
       check("heir: after the sweep the heading, status and figure say the Bitcoin was sent", /^Sent to /.test(sent.title) && sent.state === "Sent" && /sats sent/.test(sent.fig) && sent.panel === "Delivered.", JSON.stringify(sent));
       check("heir: no dead waiting cards remain and the wallet balance dropped", sent.waiting === 0 && sent.balance === "0 sats", JSON.stringify(sent));

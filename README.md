@@ -15,7 +15,7 @@ Live: https://near-cachet.nearbuild.workers.dev/ (Bitcoin testnet, no wallet, no
 1. In a Telegram group with @cachet_envelope_bot, the giver registers the heir once with `/heir <Bitcoin address> <name>`, then types `/envelope`. The bot answers in about six seconds with a red envelope and an **Open the red envelope** button.
 2. Open it. The Mini App reads the note live from `heir.cachet-ops.testnet`: "For <name>.", the sats, a lock line "Only <name> can open this" with the bound Bitcoin address, and a one-line proof that the Bitcoin funding is verified on NEAR.
 3. Tap **Take the note**. A claim account is saved in your Telegram, the NEAR claim transaction confirms in about ten seconds, and the panel reads "You hold the note."
-4. Under **Try the lock** press **Steal this link** and play the thief. The contract refuses the sweep on chain ("this note sweeps only to its heir") and the receipt shows the struck thief address over the bound heir address, with the refused transaction.
+4. Under **Try the lock** press **Take it anyway** and play the thief. The contract refuses the sweep on chain ("this note sweeps only to its heir") and the receipt shows the struck thief address over the bound heir address, with the refused transaction.
 5. Press **Send it to <name>**. The signer releases the sweep, the Bitcoin transaction is broadcast, and the envelope shows the arriving sats, the miner fee and a link to the Bitcoin testnet transaction that paid only the bound address.
 
 `bash scripts/gate-pre.sh` runs steps 1 to 5 through a real Telegram session and records the claim, refusal and Bitcoin sweep transactions in `docs/EVIDENCE.md`. `./scripts/judge.sh` checks the page, the deployed contract and the web tests from a clean clone.

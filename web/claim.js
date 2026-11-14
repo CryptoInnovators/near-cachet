@@ -131,7 +131,7 @@ function destinationScriptLen(value) {
 async function feeDefault(base) {
   const rates = await cachetChain.feeRates(base);
   const half = Math.max(1, Math.ceil(Number(rates.halfHourFee)));
-  return net.name === "testnet" ? Math.min(half, 5) : half;
+  return net.name === "testnet" ? Math.min(half, 2) : half;
 }
 
 /* ---- the pool is the envelope ---- */
@@ -432,7 +432,7 @@ async function showRefusalRecord(note) {
     const reason = cachetOutcome.failureText(tx);
     if (!reason) return;
     slot.replaceChildren(h("div", { class: "consequence-box steal-receipt", dataset: { state: "refused" } },
-      h("strong", { class: "refused-stamp" }, "Refused"),
+      h("strong", { class: "refused-stamp" }, "The contract turned it down."),
       h("p", { class: "say" }, "A thief tried this link. The contract answered on NEAR."),
       h("dl", { class: "receipt" },
         h("div", { class: "receipt-tried" }, h("dt", null, "Tried to send it to"), h("dd", null, h("s", null, short(rec.thief, 10, 8)))),
@@ -716,7 +716,7 @@ async function stations(s) {
             h("div", { class: "receipt-bound" }, h("dt", null, "The note is bound to"), h("dd", null, short(heir, 10, 8)))))
         : s2.error ? h("p", { class: "consequence-box", id: "steal-result", dataset: { state: "error" } }, `The attempt did not reach the contract: ${s2.error}`)
         : h("div", { class: "consequence-box steal-receipt", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
-          s2.refused ? h("strong", { class: "refused-stamp" }, "Refused") : null,
+          s2.refused ? h("strong", { class: "refused-stamp" }, "The contract turned it down.") : null,
           h("dl", { class: "receipt" },
             h("div", { class: "receipt-tried" }, h("dt", null, "Tried to send it to"), h("dd", null, h("s", null, short(THIEF_ADDRESS, 10, 8)))),
             h("div", { class: "receipt-bound" }, h("dt", null, "The note is bound to"), h("dd", null, `${short(heir, 10, 8)} \u2713`))),
@@ -727,7 +727,7 @@ async function stations(s) {
     if (net.name === "testnet" && !heir) cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
     // a sane testnet rate is in the field at once, so a press before the explorer answers still signs; the rate never exceeds what this note's sats can pay
     const destLen = destinationScriptLen(heir || dest.value.trim().toLowerCase()) || 22;
-    const startRate = String(cachetOutcome.affordableRate(note.utxo.sats, destLen, 5));
+    const startRate = String(cachetOutcome.affordableRate(note.utxo.sats, destLen, 2));
     feeIn.value = startRate;
     feeDefault(base).then((r) => { if (feeIn.value === startRate) { feeIn.value = String(cachetOutcome.affordableRate(note.utxo.sats, destLen, r)); explain(); } }).catch(() => {});
     explain();

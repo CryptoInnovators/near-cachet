@@ -171,7 +171,7 @@ Driven by `scripts/gate-pre.sh` through a real Telegram account on the live Mini
 | Step | Result | Evidence |
 |---|---|---|
 | Claim with the native MainButton | note 11 owned by the new claim account, 10.6 s from page load | https://testnet.nearblocks.io/txns/6vnN9jPLvr5pLqNZN4zWPqVFEZyGTeHWdW7xHz4S2ZiB |
-| Steal this link | NEAR refuses: the note sweeps only to its heir, 11.5 s | https://testnet.nearblocks.io/txns/BcbyfrbytfV3Lx2Q37hKucSqpipRsbKv47hVZS2W7Cyp |
+| Take it anyway | NEAR refuses: the note sweeps only to its heir, 11.5 s | https://testnet.nearblocks.io/txns/BcbyfrbytfV3Lx2Q37hKucSqpipRsbKv47hVZS2W7Cyp |
 | Open as the named heir | Chain Signatures signs the sweep, note reads Unsealed 9.5 s after the press | latest tx on note 11 (page footer, `heir.cachet-ops.testnet`) |
 | Earlier claims | 8.8 s and 8.4 s | https://testnet.nearblocks.io/txns/ACAHUGfbgGUCt7uffhkFkZSUoAQDgWAE1yRU8JqC9wjX, https://testnet.nearblocks.io/txns/Hic3T6kJNiJ15GiacQvoHGpDT6VkCWZB5VEUgNKtQcm9 |
 | Pool refill funding | notes 11, 12, 13 funded 1,700 sats each | https://blockstream.info/testnet/tx/5c29413410b7b4481b83a3878a456ac84f150b9599f1aed891851730fa41521f |

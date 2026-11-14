@@ -135,8 +135,8 @@ button, input, select { font: inherit; color: inherit; }
 .seal-die { fill: var(--paper-2); }
 .seal-token-die { fill: var(--ground-dim); }
 .seal-half { transform-box: view-box; transform-origin: 50% 50%; }
-.seal-half-a { transform: translate(-7px, -1px) rotate(-3deg); }
-.seal-half-b { transform: translate(7px, 1px) rotate(3deg); }
+.seal-half-a { transform: translate(-7px, -1px); }
+.seal-half-b { transform: translate(7px, 1px); }
 .seal-pending .seal-wax { opacity: .7; }
 
 
@@ -385,8 +385,8 @@ button[hidden] { display: none; }
 }
 @keyframes wax-press { from { transform: scale(1.14); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes tick-rise { from { transform: scale(.78); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-@keyframes crack-a { from { transform: none; } to { transform: translate(-7px, -1px) rotate(-3deg); } }
-@keyframes crack-b { from { transform: none; } to { transform: translate(7px, 1px) rotate(3deg); } }
+@keyframes crack-a { from { transform: none; } to { transform: translate(-7px, -1px); } }
+@keyframes crack-b { from { transform: none; } to { transform: translate(7px, 1px); } }
 
 /* Telegram Mini App. Colours come from Telegram themeParams (set as --tg-* by tma.js); the red envelope stays red in both schemes. */
 .ico { display: inline-flex; width: 18px; height: 18px; flex: none; }
@@ -519,7 +519,7 @@ html.in-telegram .share-mark[data-state="open"] { background: var(--wax); border
 .more { background: var(--paper-2); border-radius: 12px; padding: 0 14px; }
 .more > summary { cursor: pointer; padding: 12px 0; font-weight: 600; font-size: var(--s-small); color: var(--ground-dim); }
 .more[open] > summary { border-bottom: 1px solid var(--paper); }
-.refused-stamp { display: inline-block; padding: 2px 10px; margin-right: 6px; border: 2px solid #b3261e; border-radius: 6px; color: #b3261e; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; transform: rotate(-2deg); }
+.refused-stamp { display: block; margin-bottom: 4px; color: #b3261e; font-weight: 700; }
 #steal-result[data-state="refused"] { border-left: 4px solid #b3261e; background: color-mix(in srgb, #b3261e 10%, var(--paper)); }
 .sweep-proof { border-left: 4px solid var(--ok); padding-left: 10px; }
 html.in-telegram body[data-heir-owned="1"] .gift-side { display: flex; flex-direction: column; gap: 14px; }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Real Telegram gate: the WORK Telethon session posts /link and /envelope in a test group with the bot, requests the
 # signed Mini App launch URL (messages.RequestAppWebViewRequest), then the page runs inside that launch: claim,
-# "Steal this link" (refused on chain), "Open as the named heir" (sweep readable on Bitcoin testnet).
+# "Take it anyway" (refused on chain), "Send it to the heir" (sweep readable on Bitcoin testnet).
 # Never prints the session, claim keys or the launch URL. Log goes to stdout and .progress/design/gate/tma-run.log.
 set -euo pipefail
 cd "$(dirname "$0")/.."
