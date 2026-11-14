@@ -7,7 +7,7 @@ The human edits and posts these. Attach the demo video from `docs/DEMO-SCRIPT.md
 ```unknown
 A Bitcoin red envelope that only the named person can sweep.
 
-Built at #NEARHackathon: Cachet, a NEP-171 NFT that owns a Bitcoin output. NEAR Chain Signatures signs the sweep only for the holder. A heir note pays one bound address. https://near-cachet.nearbuild.workers.dev/ @NEARProtocol
+Built at #NEARHackathon: Cachet, a NEP-171 NFT that owns a Bitcoin output. NEAR Chain Signatures signs the sweep only for the holder. A heir note pays one bound address. https://near-cachet.nearlive.workers.dev/ @NEARProtocol
 ```
 
 ## B (262 characters)
@@ -15,7 +15,7 @@ Built at #NEARHackathon: Cachet, a NEP-171 NFT that owns a Bitcoin output. NEAR 
 ```unknown
 Sell the NFT and the Bitcoin goes with it. Each Cachet note is an NFT with its own Bitcoin address, and the contract holds no signing key and no upgrade key.
 
-Built at #NEARHackathon, running on Bitcoin testnet. Take a note: https://near-cachet.nearbuild.workers.dev/ @NEARProtocol
+Built at #NEARHackathon, running on Bitcoin testnet. Take a note: https://near-cachet.nearlive.workers.dev/ @NEARProtocol
 ```
 
 ## C (216 characters)
@@ -23,7 +23,7 @@ Built at #NEARHackathon, running on Bitcoin testnet. Take a note: https://near-c
 ```unknown
 Tap Take note. About ten seconds later you hold a Bitcoin note on NEAR. Press Pass it on and a link moves it to someone else in one transaction.
 
-Built at #NEARHackathon: Cachet. https://near-cachet.nearbuild.workers.dev/ @NEARProtocol
+Built at #NEARHackathon: Cachet. https://near-cachet.nearlive.workers.dev/ @NEARProtocol
 ```
 
 ## Long form (893 characters)
@@ -37,7 +37,7 @@ An heir note fixes one Bitcoin destination at creation. Unseal to any other addr
 
 Open the live page on Bitcoin testnet, press Take note, then Pass it on. No wallet.
 
-Try it: https://near-cachet.nearbuild.workers.dev/
+Try it: https://near-cachet.nearlive.workers.dev/
 
 @NEARProtocol @NearBuilders @NearLegion
 ```

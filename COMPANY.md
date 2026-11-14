@@ -26,7 +26,7 @@ The NEP-171 contract derives a Bitcoin key for each note through NEAR Chain Sign
 
 ## Try it in 60 seconds
 
-Open [the live Cachet app](https://near-cachet.nearbuild.workers.dev), open a note, then choose **Show how it is checked**. The page reads its NEAR note, signer key and Bitcoin funding proof. A claim link is available from the note page.
+Open [the live Cachet app](https://near-cachet.nearlive.workers.dev), open a note, then choose **Show how it is checked**. The page reads its NEAR note, signer key and Bitcoin funding proof. A claim link is available from the note page.
 
 ## Why NEAR
 

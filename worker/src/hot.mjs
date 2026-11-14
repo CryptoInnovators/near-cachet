@@ -4,7 +4,7 @@
 // NEAR mainnet. Nothing is signed or sent on mainnet: this is a sign-in message, not a transaction.
 import { b58decode } from "./sponsor.mjs";
 
-export const HOT_RECIPIENT = "near-cachet.nearbuild.workers.dev";
+export const HOT_RECIPIENT = "near-cachet.nearlive.workers.dev";
 export const HOT_MESSAGE = "Connect HOT to Cachet";
 const MAINNET_RPCS = ["https://rpc.mainnet.fastnear.com", "https://near.drpc.org", "https://free.rpc.fastnear.com"];
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;

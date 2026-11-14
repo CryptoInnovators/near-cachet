@@ -13,10 +13,10 @@ test("extracts profile handles only from X profile routes", () => {
 });
 
 test("recognizes only same-site claim URLs with numeric note ids", () => {
-  assert.deepEqual(claimLink("https://near-cachet.nearbuild.workers.dev/claim?note=42"), {
-    id: "42", shareUrl: "https://near-cachet.nearbuild.workers.dev/e/42"
+  assert.deepEqual(claimLink("https://near-cachet.nearlive.workers.dev/claim?note=42"), {
+    id: "42", shareUrl: "https://near-cachet.nearlive.workers.dev/e/42"
   });
-  assert.equal(claimLink("https://near-cachet.nearbuild.workers.dev/claim?note=x"), null);
+  assert.equal(claimLink("https://near-cachet.nearlive.workers.dev/claim?note=x"), null);
   assert.equal(claimLink("https://evil.example/claim?note=42"), null);
 });
 

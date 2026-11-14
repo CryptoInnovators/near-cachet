@@ -6,7 +6,7 @@ import path from "node:path";
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const token = readFileSync(path.join(root, ".env"), "utf8").match(/^TELEGRAM_BOT_TOKEN=["']?([^"'\n]+)/m)?.[1];
 const secret = readFileSync(path.join(homedir(), ".config/cachet/tg-webhook.secret"), "utf8").trim();
-const url = process.argv[2] || "https://near-cachet.nearbuild.workers.dev/api/telegram";
+const url = process.argv[2] || "https://near-cachet.nearlive.workers.dev/api/telegram";
 if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not in .env");
 const call = async (method, body) => (await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) })).json();
 console.log("setWebhook", JSON.stringify(await call("setWebhook", { url, secret_token: secret, allowed_updates: ["message"], drop_pending_updates: false })));

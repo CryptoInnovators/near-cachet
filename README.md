@@ -10,7 +10,7 @@ How control passes on transfer: `mint_note` asks the NEAR MPC signer for a P2WPK
 
 ## Try it
 
-Live: https://near-cachet.nearbuild.workers.dev/ (Bitcoin testnet, no wallet, nothing to install). The product runs inside Telegram: the web page is the link preview a group sees, and the red envelope opens in the Mini App.
+Live: https://near-cachet.nearlive.workers.dev/ (Bitcoin testnet, no wallet, nothing to install). The product runs inside Telegram: the web page is the link preview a group sees, and the red envelope opens in the Mini App.
 
 1. In a Telegram group with @cachet_envelope_bot, the giver registers the heir once with `/heir <Bitcoin address> <name>`, then types `/envelope`. The bot answers in about six seconds with a red envelope and an **Open the red envelope** button.
 2. Open it. The Mini App reads the note live from `heir.cachet-ops.testnet`: "For <name>.", the sats, a lock line "Only <name> can open this" with the bound Bitcoin address, and a one-line proof that the Bitcoin funding is verified on NEAR.

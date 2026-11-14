@@ -10,7 +10,7 @@ from telethon import TelegramClient
 from telethon.tl import functions, types
 from telethon.sessions import StringSession
 
-ORIGIN = os.environ.get("CACHET_ORIGIN", "https://near-cachet.nearbuild.workers.dev")
+ORIGIN = os.environ.get("CACHET_ORIGIN", "https://near-cachet.nearlive.workers.dev")
 BOT = os.environ.get("CACHET_BOT", "cachet_envelope_bot")
 APP = os.environ.get("CACHET_APP", "envelope")
 GROUP = os.environ.get("CACHET_GROUP", "cachet-gate")

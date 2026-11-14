@@ -130,7 +130,7 @@ The sender's `cachet-ops.testnet` account added an Ed25519 function-call key wit
 
 ## Pass it on: a sealed note changes hands in chat, the Bitcoin output never moves (2026-11-13, live)
 
-Run: `node scripts/e2e-ui.mjs --base https://near-cachet.nearbuild.workers.dev --pass` (cold claim, then pass, take, replay). Note 11, Bitcoin output a90714ae…1d1242:0, 5,500 sats.
+Run: `node scripts/e2e-ui.mjs --base https://near-cachet.nearlive.workers.dev --pass` (cold claim, then pass, take, replay). Note 11, Bitcoin output a90714ae…1d1242:0, 5,500 sats.
 
 | Step | Result | Transaction |
 |---|---|---|
@@ -142,7 +142,7 @@ Sponsor guard (worker/src/sponsor.mjs) has a must-fail unit test: with the guard
 
 ## Claim inside the Telegram Mini App (2026-11-13, live)
 
-Run: `node scripts/e2e-ui.mjs --base https://near-cachet.nearbuild.workers.dev --claim --miniapp <launch url>`. The launch URL comes from Telegram's own `messages.RequestAppWebView` for the `t.me/cachet_envelope_bot/envelope?startapp=…` button that @cachet_envelope_bot posted in a real group after `/envelope 3400 2`, so the page opens with Telegram.WebApp.initData present and the envelope read from the start parameter. The key backup goes to Telegram CloudStorage (the page refuses to claim until it is saved); the harness answers that one host call the way the native client does.
+Run: `node scripts/e2e-ui.mjs --base https://near-cachet.nearlive.workers.dev --claim --miniapp <launch url>`. The launch URL comes from Telegram's own `messages.RequestAppWebView` for the `t.me/cachet_envelope_bot/envelope?startapp=…` button that @cachet_envelope_bot posted in a real group after `/envelope 3400 2`, so the page opens with Telegram.WebApp.initData present and the envelope read from the start parameter. The key backup goes to Telegram CloudStorage (the page refuses to claim until it is saved); the harness answers that one host call the way the native client does.
 
 | Step | Result | Transaction |
 |---|---|---|

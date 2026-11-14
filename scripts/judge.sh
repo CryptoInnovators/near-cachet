@@ -2,7 +2,7 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 account='heir.cachet-ops.testnet'
-page='https://near-cachet.nearbuild.workers.dev/'
+page='https://near-cachet.nearlive.workers.dev/'
 test_cmd='node --test web/web.test.mjs'
 pass=0
 rpc_log=$(mktemp)
