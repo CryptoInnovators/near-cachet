@@ -141,6 +141,14 @@ test("rpc override parameter replaces the provider list and must be https", () =
   assert.deepEqual(chain.network("?rpc=http://evil.example").rpcs, chain.NETWORKS.testnet.rpcs);
 });
 
+test("affordableRate keeps the default fee payable from the note and never rises above the wanted rate", () => {
+  assert.equal(outcome.affordableRate(1000, 22, 5), 4);
+  assert.equal(outcome.affordableRate(1100, 22, 5), 5);
+  assert.equal(outcome.affordableRate(50000, 22, 5), 5);
+  assert.equal(outcome.affordableRate(600, 22, 5), 1);
+  assert.equal(outcome.feeGuard(1000, outcome.affordableRate(1000, 22, 5), 22), null);
+});
+
 test("sweepVsize matches the contract formula for each script length", () => {
   assert.deepEqual([22, 25, 34].map(outcome.sweepVsize), [110, 113, 122]);
 });

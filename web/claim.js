@@ -721,8 +721,11 @@ async function stations(s) {
     if (heir && funds) fundsSlot.append(funds);
     out.push(station(heir ? "Try the lock" : "Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${who()} at ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), heir ? null : funds, stealBox, form));
     if (net.name === "testnet" && !heir) cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
-    feeIn.value = "5"; // a sane testnet rate is in the field at once, so a press before the explorer answers still signs
-    feeDefault(base).then((r) => { if (feeIn.value === "5") { feeIn.value = String(r); explain(); } }).catch(() => {});
+    // a sane testnet rate is in the field at once, so a press before the explorer answers still signs; the rate never exceeds what this note's sats can pay
+    const destLen = destinationScriptLen(heir || dest.value.trim().toLowerCase()) || 22;
+    const startRate = String(cachetOutcome.affordableRate(note.utxo.sats, destLen, 5));
+    feeIn.value = startRate;
+    feeDefault(base).then((r) => { if (feeIn.value === startRate) { feeIn.value = String(cachetOutcome.affordableRate(note.utxo.sats, destLen, r)); explain(); } }).catch(() => {});
     explain();
   } else if (note && ["Unsealing", "Resigning"].includes(note.state)) out.push(station("Unlock", "current", h("p", { class: "say" }, "The signer is producing the sweep signature.")));
   else if (!note || note.state !== "Sealed") out.push(station("Unlock", "done", h("p", { class: "say" }, "The seal is broken and the sweep is signed."), txLink(session.tx.unseal, "Unseal transaction")));

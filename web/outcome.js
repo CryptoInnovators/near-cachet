@@ -48,7 +48,12 @@ function feeGuard(sats, rate, destScriptLen) {
   return null;
 }
 
-const lib = { failureText, blockHashMismatch, outputMismatch, fundingAddressVisible, sweepVsize, feeGuard };
+// The highest whole fee rate, up to WANT, at which the sweep still leaves the 546 sat dust floor for the destination.
+function affordableRate(sats, destScriptLen, want) {
+  return Math.max(1, Math.min(want, Math.floor((sats - 546) / sweepVsize(destScriptLen))));
+}
+
+const lib = { failureText, blockHashMismatch, outputMismatch, fundingAddressVisible, sweepVsize, feeGuard, affordableRate };
 if (typeof module !== "undefined" && module.exports) module.exports = lib;
 if (typeof globalThis !== "undefined") globalThis.cachetOutcome = lib;
 
