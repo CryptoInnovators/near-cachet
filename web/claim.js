@@ -706,7 +706,7 @@ async function stations(s) {
     }).catch(() => { funds.textContent = ""; });
     const s2 = session.steal;
     const stealBox = !heir ? null : h("div", { class: "steal", id: "steal-box", "aria-live": "polite" },
-      h("p", { class: "say" }, `You hold the link, so try to steal it. The sweep goes to a thief address and the contract decides. Only ${who()} is paid.`),
+      h("p", { class: "say" }, `Anyone who finds this link can try to sweep it. Play the thief: send it to an address that is not ${who()}'s and watch the contract decide. Only ${who()} is paid.`),
       h("div", { class: "heir-actions" },
         h("button", { class: "btn btn-steal", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Sending the theft..." : outspend ? "Steal this link" : "Checking Bitcoin…"),
         go),

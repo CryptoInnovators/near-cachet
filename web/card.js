@@ -16,6 +16,12 @@ const PENDING = {
 // Holder as a reader sees it: "You" for this browser's claim account, else the short form.
 const holder = (owner, you) => (owner && owner === you ? "You" : short(owner || ""));
 
+// The named heir wears the same avatar as the header when the viewer is that person.
+function heirAvatar(name, address) {
+  const u = globalThis.cachetTma?.user();
+  if (name && u && (u.first || "").toLowerCase() === name.toLowerCase()) return { name: u.name, photo: u.photo, size: 22 };
+  return name ? { name, size: 22 } : { seed: address, size: 22 };
+}
 function consequence(note, you) {
   if (note.state === "Minted") return "Waiting for one funding output.";
   if (note.state === "Sealed") return "";
@@ -110,7 +116,7 @@ function envelope(slot, note, ctx) {
     sw ? h("p", { class: "consequence" }, `${int(sw.sats + sw.fee)} sat note, ${int(sw.fee)} sats network fee. `, link(sw.url, "View the Bitcoin transaction", "hexlink"))
       : consequence(note, ctx.you) ? h("p", { class: "consequence" }, consequence(note, ctx.you)) : null,
     note.heir
-      ? h("p", { class: "env-lock" }, t.icon(sw ? "check" : "lock"), h("span", null, sw ? "Sent to " : "Only ", t.avatar({ seed: note.heir, size: 22 }), h("strong", { class: "env-name" }, ctx.heirName || short(note.heir, 8, 5)), sw ? "" : " can open this", ctx.heirName ? h("span", { class: "env-addr" }, short(note.heir, 8, 5)) : null))
+      ? h("p", { class: "env-lock" }, t.icon(sw ? "check" : "lock"), h("span", null, sw ? "Sent to " : "Only ", t.avatar(heirAvatar(ctx.heirName, note.heir)), h("strong", { class: "env-name" }, ctx.heirName || short(note.heir, 8, 5)), sw ? "" : " can open this", ctx.heirName ? h("span", { class: "env-addr" }, short(note.heir, 8, 5)) : null))
       : null,
     h("dl", { class: "rows rows-plain env-holder" }, row("Holder", h("span", { class: "holder" }, holder(note.owner_id, ctx.you)))),
     note.utxo ? h("p", { class: "env-proof" }, t.icon("check"), h("span", null, "Bitcoin funding proven on NEAR ", link(`${cachetChain.mempoolBase(ctx.hrp)}/block/${note.utxo.block_hash}`, "View block", "hexlink"))) : null,
