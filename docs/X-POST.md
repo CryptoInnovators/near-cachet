@@ -1,58 +1,43 @@
-# X demo post, drafts
+# X demo post drafts
 
-`REPO_URL` is the public repo link, supplied by the human. X counts any URL, including a bare `mempool.space`, as 23 characters. Measured that way: A 275, B 272, C 278, long-form 1,283. Attach the 90-second video from docs/DEMO-SCRIPT.md to every variant.
+The human edits and posts these. Attach the demo video from `docs/DEMO-SCRIPT.md` to the post. X counts any link as 23 characters, and the counts below assume that.
 
-## Variant A (lead with the problem)
+## A (269 characters)
 
-```
-You can hand someone a bitcoin card. You can't send one by link without a custodian.
+```unknown
+A Bitcoin red envelope that only the named person can sweep.
 
-Cachet, built at NEAR HACKATHON: an NFT that owns a bc1q address. Only its holder can unseal it; NEAR Chain Signatures signs the sweep.
-
-@NEARProtocol #NEARHackathon REPO_URL
+Built at #NEARHackathon: Cachet, a NEP-171 NFT that owns a Bitcoin output. NEAR Chain Signatures signs the sweep only for the holder. A heir note pays one bound address. https://near-cachet.earn-shield-alerts.workers.dev/ @NEARProtocol
 ```
 
-## Variant B (lead with the moment)
+## B (262 characters)
 
-```
-Sending bitcoin by link means someone else holds the key.
+```unknown
+Sell the NFT and the Bitcoin goes with it. Each Cachet note is an NFT with its own Bitcoin address, and the contract holds no signing key and no upgrade key.
 
-Video: a bitcoin note changes owner on NEAR, a stranger's unseal fails, the new owner's sweep hits Bitcoin. The contract has zero keys.
-
-Built at NEAR HACKATHON @NEARProtocol #NEARHackathon REPO_URL
+Built at #NEARHackathon, running on Bitcoin testnet. Take a note: https://near-cachet.earn-shield-alerts.workers.dev/ @NEARProtocol
 ```
 
-## Variant C (offer a note)
+## C (216 characters)
 
-Needs the human's OK on the amount before posting, because it commits team bitcoin.
+```unknown
+Tap Take note. About ten seconds later you hold a Bitcoin note on NEAR. Press Pass it on and a link moves it to someone else in one transaction.
 
-```
-Bitcoin by link that the sender can't take back.
-
-Each Cachet note is a NEAR NFT with its own bitcoin address; NEAR Chain Signatures signs only for the holder. Built at NEAR HACKATHON.
-
-Reply with a .near account to get one.
-
-@NEARProtocol #NEARHackathon REPO_URL
+Built at #NEARHackathon: Cachet. https://near-cachet.earn-shield-alerts.workers.dev/ @NEARProtocol
 ```
 
-## Long-form
+## Long form (893 characters)
 
-```
-You can hand someone bitcoin in person on a sealed card. Over the internet there's no equivalent: send to their address and you need to ask for it first, use an ecash link and you're trusting a mint.
+```unknown
+Bitcoin held through an NFT usually sits in a token-bound account, and the seller can empty it while the NFT is being sold. The buyer receives an empty account.
 
-Cachet is my NEAR HACKATHON entry: a bitcoin note that is an NFT.
+We built Cachet at #NEARHackathon so the NFT is the Bitcoin. Each token is one native Bitcoin output. mint_note asks the NEAR MPC signer for a P2WPKH address, anyone funds it, and a Bitcoin light client verifies the funding proof. The contract holds no signing key and no upgrade key. Only the current owner can ask the signer to unseal, and nft_transfer or a one-use claim link is the only way the owner changes.
 
-Each note owns a real bc1q address. NEAR Chain Signatures derives it for the contract, so no bridge pool and no wrapped token. When you fund it, the contract hashes the raw bitcoin transaction itself to read the amount, and NEAR's MPC network confirms that transaction on Bitcoin (verify_foreign_transaction). No oracle.
+An heir note fixes one Bitcoin destination at creation. Unseal to any other address is refused on chain. It arrives as a red envelope in a Telegram Mini App.
 
-From then on the note moves like any NFT on NEAR, with no bitcoin transaction. Only the current holder can unseal it: the contract builds the sweep, NEAR Chain Signatures signs it, and the note freezes until the sweep confirms, then burns.
+Open the live page on Bitcoin testnet, press Take note, then Pass it on. No wallet.
 
-The contract has zero access keys. No admin, no upgrade. What you trust is the NEAR MPC signer threshold, and I'd rather say that than call it trustless.
+Try it: https://near-cachet.earn-shield-alerts.workers.dev/
 
-In the video: a stranger's unseal fails, the note changes hands, the new holder's sweep lands on mempool.space.
-
-Question for bitcoin people: what would you send by link first, and what would stop you?
-
-Repo: REPO_URL
-@NEARProtocol #NEARHackathon @NearBuilders @NearLegion
+@NEARProtocol @NearBuilders @NearLegion
 ```
