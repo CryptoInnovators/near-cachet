@@ -560,8 +560,11 @@ html.in-telegram .wallet-hot .btn { min-height: 30px; padding: 3px 12px; font-si
 .env-addr { font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; }
 .heir-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 8px; }
 .heir-actions .btn { width: 100%; min-height: 52px; font-size: 16px; font-weight: 700; }
-.btn-steal { background: transparent; color: #b3261e; border: 2px solid #b3261e; border-radius: 12px; cursor: pointer; font-family: inherit; }
-.btn-steal:hover:not(:disabled) { background: #b3261e; color: #fff; }
+.btn-steal { background: #b3261e; color: #fff; border: 2px solid #b3261e; border-radius: 12px; cursor: pointer; font-family: inherit; }
+.btn-steal:hover:not(:disabled) { filter: brightness(.92); }
+.heir-actions .btn-primary, html.in-telegram .heir-actions .btn-primary { background: transparent; color: var(--ink, inherit); border: 2px solid currentColor; border-radius: 12px; }
+.steal-resting { opacity: .72; }
+.steal-resting .receipt-tried dd { font-style: italic; }
 .btn-steal:disabled { opacity: .55; cursor: not-allowed; }
 @media (max-width: 420px) { .heir-actions { grid-template-columns: 1fr; } }
 

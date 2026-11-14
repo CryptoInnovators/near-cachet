@@ -80,7 +80,7 @@ const tma = () => (globalThis.cachetTma?.inTelegram() ? globalThis.cachetTma : n
 // Contract state to the one plain word the card shows. A Sealed note whose claim link is spent is a claimed share.
 function stateWord(note, ctx) {
   const t = globalThis.cachetTma;
-  if (note.state === "Sealed" && ctx.you && note.owner_id === ctx.you) return { word: "Yours", icon: "check" };
+  if (note.state === "Sealed" && ctx.you && note.owner_id === ctx.you) return { word: "Held", icon: "check" };
   if (note.state === "Sealed" && !note.claim) return { word: "Claimed", icon: "done" };
   return t ? t.status(note.state) : { word: note.state, icon: "check" };
 }

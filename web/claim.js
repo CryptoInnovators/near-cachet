@@ -23,7 +23,7 @@ async function loadHeirName(address) {
   try { heirName = (await (await fetch(`/api/heir-name?addr=${encodeURIComponent(address)}`)).json()).name || ""; } catch { heirName = ""; }
 }
 const session = { tx: {}, keySaved: null, keyFile: null, claimed: false, steal: null };
-// The thief's address in the "Steal this link" attempt: any valid witness address that is not the bound heir.
+// The thief's address in the "Take it anyway" attempt: any valid witness address that is not the bound heir.
 const THIEF_ADDRESS = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
 let frag = null;
 let pool = []; // [{ fragment, frag }] for this contract, from judge-links.json
@@ -706,11 +706,15 @@ async function stations(s) {
     }).catch(() => { funds.textContent = ""; });
     const s2 = session.steal;
     const stealBox = !heir ? null : h("div", { class: "steal", id: "steal-box", "aria-live": "polite" },
-      h("p", { class: "say" }, `Anyone who finds this link can try to sweep it. Play the thief: send it to an address that is not ${who()}'s and watch the contract decide. Only ${who()} is paid.`),
+      h("p", { class: "say" }, `You hold the link to ${who()}'s note. Take it anyway and the contract decides.`),
       h("div", { class: "heir-actions" },
-        h("button", { class: "btn btn-steal", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Sending the theft..." : outspend ? "Steal this link" : "Checking Bitcoin…"),
+        h("button", { class: "btn btn-steal", id: "steal-go", type: "button", disabled: Boolean(s2?.pending) || outspend?.spent !== false, onclick: () => steal(note, feeIn) }, s2?.pending ? "Asking the contract..." : outspend ? "Take it anyway" : "Checking Bitcoin…"),
         go),
-      !s2 || s2.pending ? null : s2.error ? h("p", { class: "consequence-box", id: "steal-result", dataset: { state: "error" } }, `The attempt did not reach the contract: ${s2.error}`)
+      !s2 || s2.pending ? h("div", { class: "consequence-box steal-receipt steal-resting", id: "steal-resting", dataset: { state: "resting" } },
+          h("dl", { class: "receipt" },
+            h("div", { class: "receipt-tried" }, h("dt", null, "Tried to send it to"), h("dd", null, "Nothing tried yet")),
+            h("div", { class: "receipt-bound" }, h("dt", null, "The note is bound to"), h("dd", null, short(heir, 10, 8)))))
+        : s2.error ? h("p", { class: "consequence-box", id: "steal-result", dataset: { state: "error" } }, `The attempt did not reach the contract: ${s2.error}`)
         : h("div", { class: "consequence-box steal-receipt", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
           s2.refused ? h("strong", { class: "refused-stamp" }, "Refused") : null,
           h("dl", { class: "receipt" },
@@ -719,7 +723,7 @@ async function stations(s) {
           h("p", { class: "receipt-why" }, s2.refused ? `No Bitcoin moved. ${String(s2.reason || "").replace(/^./, (c) => c.toUpperCase())}. ` : "The contract accepted a sweep to the thief address. ",
             s2.hash ? link(txUrl(s2.hash), "View the refusal on NEAR", "hexlink") : null)));
     if (heir && funds) fundsSlot.append(funds);
-    out.push(station(heir ? "Try the lock" : "Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${who()} at ${short(heir, 10, 8)}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), heir ? null : funds, stealBox, form));
+    out.push(station(heir ? "Try the lock" : "Unlock", "current", h("p", { class: "say" }, heir ? `This note pays only ${who()}. The sweep can go nowhere else.` : "Choose the Bitcoin address that receives the share and the fee."), heir ? null : funds, stealBox, form));
     if (net.name === "testnet" && !heir) cachetChain.defaultDestination(net).then((a) => { if (a && !dest.value) { dest.value = a; explain(); } }).catch(() => {});
     // a sane testnet rate is in the field at once, so a press before the explorer answers still signs; the rate never exceeds what this note's sats can pay
     const destLen = destinationScriptLen(heir || dest.value.trim().toLowerCase()) || 22;
