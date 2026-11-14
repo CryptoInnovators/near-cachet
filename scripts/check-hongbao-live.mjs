@@ -2,14 +2,24 @@ import assert from 'node:assert/strict';
 import { DEFAULT_WEB_URL } from '../bot/lib.mjs';
 
 const id = '4';
-const rpc = 'https://rpc.testnet.near.org';
+const rpcs = ['https://rpc.testnet.fastnear.com', 'https://near-testnet.drpc.org', 'https://archival-rpc.testnet.fastnear.com'];
 const request = async (url, options = {}) => fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
+const rpcCall = async (options) => {
+  let last;
+  for (let round = 0; round < 4; round += 1) {
+    for (const url of rpcs) {
+      try { last = await request(url, options); if (last.status === 200) return last; } catch (error) { last = { status: String(error) }; }
+    }
+    await new Promise((done) => setTimeout(done, 1500 * (round + 1)));
+  }
+  return last;
+};
 
-const read = await request(rpc, {
+const read = await rpcCall({
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ jsonrpc: '2.0', id: 'hongbao-live-check', method: 'query', params: {
-    request_type: 'call_function', finality: 'final', account_id: 'cachet.testnet', method_name: 'note',
+    request_type: 'call_function', finality: 'final', account_id: 'heir.cachet-ops.testnet', method_name: 'note',
     args_base64: Buffer.from(JSON.stringify({ token_id: id })).toString('base64'),
   } }),
 });

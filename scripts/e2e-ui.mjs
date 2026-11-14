@@ -336,7 +336,8 @@ try {
     const done = await evalJs(`({ rows: document.querySelector(".panel-rows")?.innerText.replace(/\\s+/g, " "), href: document.querySelector(".panel-rows a")?.href, holder: document.querySelector(".gift-card .holder")?.textContent, shares: document.querySelector(".shares-left")?.textContent, next: (document.querySelector("#heir-go") || document.querySelector("#move-go"))?.textContent })`);
     check("claim: the panel shows owner, claim transaction and key file", /Owner you, claim account/.test(done.rows || "") && (MINI ? /Saved as your Telegram cloud backup/ : /Saved as cachet-[0-9a-f]{8}\.key/).test(done.rows || "") && !!done.href, done.rows);
     check("claim: the card holder reads You", done.holder === "You", done.holder);
-    check("claim: envelopes left dropped by one", done.shares === `${open.length - 1} of ${reads.length} envelopes left`, done.shares);
+    const heirPool = reads.some((r) => r.note?.heir);
+    check(heirPool ? "claim: an heir note shows no share count" : "claim: envelopes left dropped by one", heirPool ? !done.shares : done.shares === `${open.length - 1} of ${reads.length} envelopes left`, done.shares);
     check("claim: the next action is offered", /^(Open as .+|Checking Bitcoin…)$/.test(done.next || "") || done.next === "Move it to a Bitcoin address", done.next);
     console.log(`claim: ${seconds}s from page load to the confirmed owner. progress labels seen: ${[...labels].join(" | ")}. claim tx ${done.href}`);
     await shot("claimed", 1440);
