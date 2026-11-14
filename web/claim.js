@@ -712,7 +712,6 @@ async function stations(s) {
         go),
       !s2 || s2.pending ? h("div", { class: "consequence-box steal-receipt steal-resting", id: "steal-resting", dataset: { state: "resting" } },
           h("dl", { class: "receipt" },
-            h("div", { class: "receipt-tried" }, h("dt", null, "Tried to send it to"), h("dd", null, "Nothing tried yet")),
             h("div", { class: "receipt-bound" }, h("dt", null, "The note is bound to"), h("dd", null, short(heir, 10, 8)))))
         : s2.error ? h("p", { class: "consequence-box", id: "steal-result", dataset: { state: "error" } }, `The attempt did not reach the contract: ${s2.error}`)
         : h("div", { class: "consequence-box steal-receipt", id: "steal-result", dataset: { state: s2.refused ? "refused" : "accepted" } },
