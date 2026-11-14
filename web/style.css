@@ -553,7 +553,9 @@ html.in-telegram .wallet-amount { justify-content: flex-end; margin-top: 0; gap:
 html.in-telegram .wallet-amount .ico-coin { width: 22px; height: 22px; }
 html.in-telegram .wallet-figure { font-size: 18px; }
 html.in-telegram .wallet-btc { display: none; }
-html.in-telegram .wallet-hot { margin-top: 0; flex-basis: 100%; }
+html.in-telegram .wallet-who { order: 1; }
+html.in-telegram .wallet-bal { order: 2; }
+html.in-telegram .wallet-hot { margin-top: 0; flex-basis: 100%; order: 3; }
 html.in-telegram .wallet-hot .btn { min-height: 30px; padding: 3px 12px; font-size: 13px; }
 .env-addr { font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; }
 .heir-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 8px; }

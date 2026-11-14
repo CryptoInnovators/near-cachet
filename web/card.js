@@ -113,7 +113,7 @@ function envelope(slot, note, ctx) {
       ? h("div", { class: "env-amount" }, t.icon("btc", "ico-coin"), h("p", { class: "figure" }, figure, h("span", { class: "figure-u" }, sw ? " sats sent" : " sats")))
       : h("p", { class: "figure figure-wait" }, "Not funded yet"),
     note.utxo ? h("p", { class: "figure-sub" }, btc(sw ? sw.sats : note.utxo.sats)) : null,
-    sw ? h("p", { class: "consequence" }, `${int(sw.sats + sw.fee)} sat note, ${int(sw.fee)} sats network fee. `, link(sw.url, "View the Bitcoin transaction", "hexlink"))
+    sw ? h("p", { class: "consequence" }, `${int(sw.sats)} of the ${int(sw.sats + sw.fee)} sat note arrive; ${int(sw.fee)} sats pay the Bitcoin miners. `, link(sw.url, "View the Bitcoin transaction", "hexlink"))
       : consequence(note, ctx.you) ? h("p", { class: "consequence" }, consequence(note, ctx.you)) : null,
     note.heir
       ? h("p", { class: "env-lock" }, t.icon(sw ? "check" : "lock"), h("span", null, sw ? "Sent to " : "Only ", t.avatar(heirAvatar(ctx.heirName, note.heir)), h("strong", { class: "env-name" }, ctx.heirName || short(note.heir, 8, 5)), sw ? "" : " can open this", ctx.heirName ? h("span", { class: "env-addr" }, short(note.heir, 8, 5)) : null))
