@@ -28,6 +28,7 @@ const HEADLINE = "A Bitcoin note that pays one person only.";
 const ACTION = "Take the note";
 const MIN_OPEN = Number(args["min-open"] ?? 3); // the pool must never run dry during judging
 const DO_UNSEAL = args.unseal === true; // claim, fund the claim account for gas, break the seal through the page (implies --claim)
+const W = Number(args.width ?? 1440); // the Mini App run width: 390 captures the phone layout Telegram shows
 const DO_PASS = args.pass === true; // after the claim: Pass it on, take it from the link in a clean browser, then replay the spent link (must fail)
 const DO_HEIR = args.heir === true; // claim, press Steal this link (the contract must refuse), press Open as the named heir, broadcast, read the sweep on Bitcoin testnet
 const DO_CLAIM = (args.claim === true || DO_UNSEAL || DO_PASS || DO_HEIR) && args.keep !== true; // spends one share of the pool: one cold walletless claim through the real page
@@ -281,7 +282,7 @@ try {
   } else
   // ---- one cold walletless claim through the real page ----
   if (DO_CLAIM) {
-    await open_(`${BASE}/index.html?network=testnet`, 1440);
+    await open_(`${BASE}/index.html?network=testnet`, W);
     await evalJs("localStorage.clear()");
     const t0 = Date.now();
     const pin = args.token ? links.find((e) => new URLSearchParams(e.fragment).get("token") === String(args.token)) : null;
@@ -312,6 +313,7 @@ try {
       check("miniapp: the claim action is the Telegram MainButton labelled Take the note", mb.visible === true && mb.text === ACTION && mb.inPage === "none", JSON.stringify(mb));
       check("miniapp: the wallet header shows the Telegram user and a Bitcoin balance", /^Hi, \S+/.test(mb.wallet || "") && /\d sats/.test(mb.wallet || ""), mb.wallet);
       check("miniapp: the envelope says who alone can open it, and the status is one plain word", /^Only .+ can open this/.test(mb.lock || "") && /^[A-Z][a-z]+$/.test((mb.status || "").trim()), `${mb.lock} / ${mb.status}`);
+      check("miniapp: a proof row is visible without opening any fold", await evalJs(`(() => { const e = document.querySelector(".env-proof"); const r = e?.getBoundingClientRect(); return !!r && r.width > 0 && r.bottom <= innerHeight * 1.6 && /Bitcoin funding proven on NEAR/.test(e.textContent) && !!e.querySelector("a[href]"); })()`), "no .env-proof row");
       check("miniapp: primary copy never says sealed", mb.sealedWord === false, "the word seal appears on the first screen");
       await evalJs(`Telegram.WebView.receiveEvent("main_button_pressed")`); // what the Telegram client sends when the native MainButton is tapped
     } else await click("#claim-go");
@@ -340,7 +342,7 @@ try {
     check(heirPool ? "claim: an heir note shows no share count" : "claim: envelopes left dropped by one", heirPool ? !done.shares : done.shares === `${open.length - 1} of ${reads.length} envelopes left`, done.shares);
     check("claim: the next action is offered", /^(Open as .+|Checking Bitcoin…)$/.test(done.next || "") || done.next === "Move it to a Bitcoin address", done.next);
     console.log(`claim: ${seconds}s from page load to the confirmed owner. progress labels seen: ${[...labels].join(" | ")}. claim tx ${done.href}`);
-    await shot("claimed", 1440);
+    await shot("claimed", W);
     if (DO_PASS) await runPass(target);
     if (DO_HEIR) {
       const noteNow = async () => view(CONTRACT, "note", { token_id: target });
@@ -356,7 +358,7 @@ try {
       console.log(`heir: refusal in ${((Date.now() - tSteal) / 1000).toFixed(1)}s, tx ${stolen.href}`);
       const afterSteal = await noteNow();
       check("heir: after the refused theft the note is still Sealed and owned by the claim account", afterSteal?.state === "Sealed" && (await view(CONTRACT, "nft_token", { token_id: target }))?.owner_id === account, String(afterSteal?.state));
-      await shot("steal-refused", 1440);
+      await shot("steal-refused", W);
       await waitFor("document.querySelector('#heir-go') && !document.querySelector('#heir-go').disabled", "Open as the named heir enabled", 60000);
       const tHeir = Date.now();
       await click("#heir-go");
@@ -376,7 +378,7 @@ try {
       for (let attempt = 0; sweepTxid && !btcTx && attempt < 12; attempt += 1) { btcTx = await (await fetch(`https://blockstream.info/testnet/api/tx/${sweepTxid}`).catch(() => ({ json: async () => null }))).json().catch(() => null); if (!btcTx?.vout) { btcTx = null; await sleep(5000); } }
       check("heir: the Bitcoin sweep pays only the bound heir address", !!btcTx && btcTx.vout.length === 1 && btcTx.vout[0].scriptpubkey_address === heir, `${sweepTxid} ${JSON.stringify(btcTx?.vout?.map((o) => o.scriptpubkey_address))}`);
       console.log(`heir: Bitcoin sweep https://blockstream.info/testnet/tx/${sweepTxid}`);
-      await shot("heir-swept", 1440);
+      await shot("heir-swept", W);
     }
     if (DO_UNSEAL) {
       const funded = spawnSync("near", ["tokens", "cachet-ops.testnet", "send-near", account, "0.1 NEAR", "network-config", process.env.NETCFG || "testnet-archfn", "sign-with-legacy-keychain", "send"], { encoding: "utf8" });

@@ -461,6 +461,9 @@ html.in-telegram .env .figure-sub { text-align: center; font-size: 14px; opacity
 html.in-telegram .env .consequence { text-align: center; font-size: 14px; }
 .env-lock { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 14px; background: rgba(0, 0, 0, .22); font-size: 14px; line-height: 1.35; position: relative; }
 .env-lock .ico { width: 18px; height: 18px; opacity: .95; }
+.env-proof { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; line-height: 1.35; color: #fff; position: relative; }
+.env-proof .ico { width: 16px; height: 16px; flex: none; color: #7fe3a0; }
+.env-proof a { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
 .env-lock span:last-child { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .env-name { font-variant-numeric: tabular-nums; font-weight: 700; }
 html.in-telegram .env .env-holder { display: none; }

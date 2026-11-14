@@ -113,6 +113,7 @@ function envelope(slot, note, ctx) {
       ? h("p", { class: "env-lock" }, t.icon(sw ? "check" : "lock"), h("span", null, sw ? "Sent to " : "Only ", t.avatar({ seed: note.heir, size: 22 }), h("strong", { class: "env-name" }, ctx.heirName || short(note.heir, 8, 5)), sw ? "" : " can open this", ctx.heirName ? h("span", { class: "env-addr" }, short(note.heir, 8, 5)) : null))
       : null,
     h("dl", { class: "rows rows-plain env-holder" }, row("Holder", h("span", { class: "holder" }, holder(note.owner_id, ctx.you)))),
+    note.utxo ? h("p", { class: "env-proof" }, t.icon("check"), h("span", null, "Bitcoin funding proven on NEAR ", link(`${cachetChain.mempoolBase(ctx.hrp)}/block/${note.utxo.block_hash}`, "View block", "hexlink"))) : null,
     proofBlock(note, ctx));
   if (play) card.dataset.play = "1";
   slot.replaceChildren(card);

@@ -14,5 +14,5 @@ redact() { sed -l -E 's/tgWebApp[A-Za-z]*=[^& "]*/tgWebApp…=<redacted>/g; s/ke
 {
   "$PY" -I scripts/gate-pre.py "$tmp/launch.url" 2>&1 | redact
   [ -s "$tmp/launch.url" ] || { echo "FAIL: no launch URL"; exit 1; }
-  node scripts/e2e-ui.mjs --base "$ORIGIN" --miniapp "$tmp/launch.url" --heir --min-open "${MIN_OPEN:-1}" --shots "$OUT/tma" 2>&1 | redact
+  node scripts/e2e-ui.mjs --base "$ORIGIN" --miniapp "$tmp/launch.url" --heir --min-open "${MIN_OPEN:-1}" --width "${WIDTH:-1440}" --shots "$OUT/tma" 2>&1 | redact
 } | tee "$OUT/tma-run.log"
