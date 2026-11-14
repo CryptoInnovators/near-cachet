@@ -564,3 +564,11 @@ html.in-telegram .wallet-hot .btn { min-height: 30px; padding: 3px 12px; font-si
 .btn-steal:hover:not(:disabled) { background: #b3261e; color: #fff; }
 .btn-steal:disabled { opacity: .55; cursor: not-allowed; }
 @media (max-width: 420px) { .heir-actions { grid-template-columns: 1fr; } }
+
+.env-arrival { display: flex; flex-direction: column; gap: 8px; position: relative; }
+.arrival-rows { margin: 0; display: grid; gap: 0; font-size: 14px; }
+.arrival-rows > div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid color-mix(in srgb, currentColor 25%, transparent); }
+.arrival-rows dt, .arrival-rows dd { margin: 0; }
+.arrival-rows dd { font-variant-numeric: tabular-nums; }
+.arrival-rows .arrival-total { border-bottom: 0; font-weight: 700; font-size: 16px; }
+.env-arrival a { color: inherit; text-decoration: underline; text-underline-offset: 2px; font-size: 13px; }

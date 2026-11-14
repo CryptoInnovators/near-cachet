@@ -1,28 +1,24 @@
 #!/bin/bash
-# check-claim-ready.sh [max_seconds] [base_url]: open an unclaimed judge claim link in the deepsurge
-# browser (own background tab) and fail unless the "Open this gift" button is present and enabled
-# within max_seconds. Read-only: never clicks. Closes its tab.
+# check-claim-ready.sh [min_open]: fail unless web/judge-links.json lists at least min_open (default 3)
+# notes that a Telegram judge can still take: the note is on-chain Sealed with an open claim key on the
+# live heir contract, and the Bitcoin output behind it is unspent. Read-only.
 set -u
-MAX=${1:-6}; BASE=${2:-https://near-cachet.nearbuild.workers.dev}
+MIN=${1:-3}; RPC=${NEARRPC:-https://archival-rpc.testnet.near.org}
 cd "$(dirname "$0")/.."
-port=$(jq -r .deepsurge.port ~/.local/share/bhn/ports.json)
-# first judge link whose note is still claimable (claim set, owner not yet an implicit account)
+open=0
 for fr in $(jq -r '.[].fragment' web/judge-links.json); do
-  tok=$(sed -E 's/.*token=([^&]+).*/\1/' <<<"$fr")
+  tok=$(sed -E 's/.*token=([^&]+).*/\1/' <<<"$fr"); con=$(sed -E 's/.*contract=([^&]+).*/\1/' <<<"$fr")
   args=$(printf '{"token_id":"%s"}' "$tok" | base64)
-  claim=$(for rpc in https://near-testnet.drpc.org https://test.rpc.fastnear.com; do curl -s -m 15 $rpc -H 'content-type: application/json' \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"query\",\"params\":{\"request_type\":\"call_function\",\"finality\":\"final\",\"account_id\":\"cachet.testnet\",\"method_name\":\"note\",\"args_base64\":\"$args\"}}" |
-    jq -r '(.result.result // empty) | implode | fromjson | .claim // empty' && break; done | head -1)
-  [ -n "$claim" ] && { FR=$fr; break; }
+  note=$(curl -s -m 20 "$RPC" -H 'content-type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"query\",\"params\":{\"request_type\":\"call_function\",\"finality\":\"final\",\"account_id\":\"$con\",\"method_name\":\"note\",\"args_base64\":\"$args\"}}" |
+    jq -c '(.result.result // empty) | implode | fromjson')
+  [ -n "$note" ] || { echo "FAIL: could not read note $tok on $con"; exit 1; }
+  state=$(jq -r .state <<<"$note"); claim=$(jq -r '.claim.key // empty' <<<"$note")
+  if [ "$state" = Sealed ] && [ -n "$claim" ]; then
+    spent=$(curl -s -m 20 "https://blockstream.info/testnet/api/tx/$(jq -r .utxo.txid <<<"$note")/outspend/$(jq -r .utxo.vout <<<"$note")" | jq -r .spent)
+    [ "$spent" = false ] && { open=$((open + 1)); echo "open: note $tok $(jq -r .utxo.sats <<<"$note") sats"; continue; }
+  fi
+  echo "taken: note $tok ($state)"
 done
-[ -n "${FR:-}" ] || { echo "FAIL: no unclaimed judge link left in web/judge-links.json"; exit 1; }
-id=$(curl -s -m 10 -X PUT "http://127.0.0.1:$port/json/new?$BASE/claim?v=$RANDOM%23$FR" | jq -r .id)
-[ -n "$id" ] && [ "$id" != null ] || { echo "FAIL: could not open a tab"; exit 1; }
-trap 'curl -s -m 5 "http://127.0.0.1:$port/json/close/$id" >/dev/null' EXIT
-start=$(date +%s)
-while [ $(( $(date +%s) - start )) -le "$MAX" ]; do
-  ok=$(bhn deepsurge use "$id" >/dev/null 2>&1 && bhn deepsurge eval "(()=>{const b=[...document.querySelectorAll('button')].find(x=>/open this gift/i.test(x.textContent));return !!(b&&!b.disabled&&b.offsetParent!==null)})()" 2>/dev/null | jq -r .value)
-  [ "$ok" = true ] && { echo "PASS: claim ready in $(( $(date +%s) - start ))s (token $tok)"; exit 0; }
-  sleep 1
-done
-echo "FAIL: 'Open this gift' not ready within ${MAX}s (token $tok)"; exit 1
+[ "$open" -ge "$MIN" ] && { echo "PASS: $open open notes (need $MIN)"; exit 0; }
+echo "FAIL: $open open notes in web/judge-links.json, need $MIN"; exit 1

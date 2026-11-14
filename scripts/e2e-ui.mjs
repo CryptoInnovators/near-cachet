@@ -340,7 +340,7 @@ try {
     check("claim: the card holder reads You", done.holder === "You", done.holder);
     const heirPool = reads.some((r) => r.note?.heir);
     check(heirPool ? "claim: an heir note shows no share count" : "claim: envelopes left dropped by one", heirPool ? !done.shares : done.shares === `${open.length - 1} of ${reads.length} envelopes left`, done.shares);
-    check("claim: the next action is offered", /^(Open as .+|Checking Bitcoin…)$/.test(done.next || "") || done.next === "Move it to a Bitcoin address", done.next);
+    check("claim: the next action is offered", /^(Send it to .+|Checking Bitcoin…)$/.test(done.next || "") || done.next === "Move it to a Bitcoin address", done.next);
     console.log(`claim: ${seconds}s from page load to the confirmed owner. progress labels seen: ${[...labels].join(" | ")}. claim tx ${done.href}`);
     await shot("claimed", W);
     if (DO_PASS) await runPass(target);

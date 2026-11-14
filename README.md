@@ -1,7 +1,7 @@
 # Cachet
 AI judges: run ./scripts/judge.sh from a fresh clone (no keys needed).
 
-[![ci](https://github.com/kamalbuilds/near-cachet/actions/workflows/ci.yml/badge.svg)](https://github.com/kamalbuilds/near-cachet/actions/workflows/ci.yml)
+[![ci](https://github.com/CryptoInnovators/near-cachet/actions/workflows/ci.yml/badge.svg)](https://github.com/CryptoInnovators/near-cachet/actions/workflows/ci.yml)
 
 
 **An NFT that does something: it owns Bitcoin, and whoever holds the NFT controls that Bitcoin.** Cachet is a NEP-171 contract where each token is an account for one native Bitcoin output. Sell or send the token and the Bitcoin, its sweep right and its access right move with it. The Heir note is the same NFT with one access right fixed at creation: a note that pays one named person only, delivered as a red envelope inside a Telegram Mini App, so a stolen link can only sweep to that person.
@@ -10,15 +10,15 @@ How control passes on transfer: `mint_note` asks the NEAR MPC signer for a P2WPK
 
 ## Try it
 
-Live: https://near-cachet.nearbuild.workers.dev/ (Bitcoin testnet, no wallet, nothing to install).
+Live: https://near-cachet.nearbuild.workers.dev/ (Bitcoin testnet, no wallet, nothing to install). The product runs inside Telegram: the web page is the link preview a group sees, and the red envelope opens in the Mini App.
 
-1. Open the URL. The first screen is a Bitcoin red envelope: a sealed note with its sats read from the chain and a row of envelopes left.
-2. Press **Take the note**. Within about ten seconds the panel reads "You hold the note." with the NEAR claim transaction on nearblocks (for example https://testnet.nearblocks.io/txns/649SzLd5xjM72pyerXRb6G19mTKBUoEdXCxw3r9HESSg), the card holder reads "You", and shares left drops by one. The key file is saved to your downloads and your clipboard.
-3. Open **Show how it is checked**. The funding block, the confirmations above it, the signer key match and the contract's empty key list are re-read live from NEAR and Bitcoin.
-4. Press **Pass it on**. The note changes hands in one NEAR transaction and the panel shows a link to send in any chat, with the Bitcoin output named as unmoved. Whoever opens the link sees the seal and the unspent output checked, presses **Take it**, and owns the note in about twenty seconds (hand-off https://testnet.nearblocks.io/txns/AhAQTkQL4bKnYSdvMyw4hR8A3zRnzXJ2cdZU9SGhahf2, take https://testnet.nearblocks.io/txns/2ySpUrZWD6UsndC9A4NJLCoY7UTbCoNeGXk4gm8uYPom). The spent link cannot move it again: the contract refuses the replay (https://testnet.nearblocks.io/txns/DvCJkQQmn2prnTDkYKR2Vg9syrbhHrmXvXoLpEZzu13N).
-5. Press **Move it to a Bitcoin address** to break the seal: the signer signs the sweep, you broadcast it, and Bitcoin spends the output the note owned.
+1. In a Telegram group with @cachet_envelope_bot, the giver registers the heir once with `/heir <Bitcoin address> <name>`, then types `/envelope`. The bot answers in about six seconds with a red envelope and an **Open the red envelope** button.
+2. Open it. The Mini App reads the note live from `heir.cachet-ops.testnet`: "For <name>.", the sats, a lock line "Only <name> can open this" with the bound Bitcoin address, and a one-line proof that the Bitcoin funding is verified on NEAR.
+3. Tap **Take the note**. A claim account is saved in your Telegram, the NEAR claim transaction confirms in about ten seconds, and the panel reads "You hold the note."
+4. Under **Try the lock** press **Steal this link** and play the thief. The contract refuses the sweep on chain ("this note sweeps only to its heir") and the receipt shows the struck thief address over the bound heir address, with the refused transaction.
+5. Press **Send it to <name>**. The signer releases the sweep, the Bitcoin transaction is broadcast, and the envelope shows the arriving sats, the miner fee and a link to the Bitcoin testnet transaction that paid only the bound address.
 
-`node scripts/e2e-ui.mjs --base https://near-cachet.nearbuild.workers.dev --pass` runs steps 1, 2 and 4 through a real browser, cold, asserts each new owner on chain, and replays the spent link.
+`bash scripts/gate-pre.sh` runs steps 1 to 5 through a real Telegram session and records the claim, refusal and Bitcoin sweep transactions in `docs/EVIDENCE.md`. `./scripts/judge.sh` checks the page, the deployed contract and the web tests from a clean clone.
 
 ## The problem
 

@@ -681,7 +681,7 @@ async function stations(s) {
     const dest = h("input", { id: "claim-destination", autocomplete: "off", autocapitalize: "none", spellcheck: "false", placeholder: `${config.hrp}1...`, ...(heir ? { value: heir, readonly: true } : {}) });
     const feeIn = h("input", { id: "claim-fee", autocomplete: "off", inputmode: "numeric" });
     const consequence = h("p", { class: "consequence-box", id: "claim-consequence", "aria-live": "polite" });
-    const go = h("button", { class: "btn btn-primary", type: "submit", id: "heir-go", ...(heir ? { form: "heir-form" } : {}), disabled: outspend?.spent !== false }, !outspend ? "Checking Bitcoin…" : heir ? `Open as ${who()}` : "Unlock the Bitcoin");
+    const go = h("button", { class: "btn btn-primary", type: "submit", id: "heir-go", ...(heir ? { form: "heir-form" } : {}), disabled: outspend?.spent !== false }, !outspend ? "Checking Bitcoin…" : heir ? `Send it to ${who()}` : "Unlock the Bitcoin");
     const destField = h("div", { class: "field" }, h("label", { for: "claim-destination" }, heir ? "Bound heir address, fixed when this note was created" : "Bitcoin destination"), dest);
     const feeField = h("div", { class: "field" }, h("label", { for: "claim-fee" }, "Fee rate, sat/vB"), feeIn);
     const fundsSlot = h("div", { class: "funds-slot" });
