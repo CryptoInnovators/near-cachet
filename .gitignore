@@ -8,3 +8,5 @@ node_modules/
 .progress/
 fixtures/wasm/
 mitm_mcp_traffic.db
+
+.agentctx/
